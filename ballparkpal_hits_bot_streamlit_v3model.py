@@ -8,8 +8,8 @@ def filter_batters(df, excluded_batters):
     return df[~df['Batter'].isin(excluded_batters)]
 
 # URL to the Excel files hosted on the web host
-url_probabilities = 'https://cdn.discordapp.com/attachments/779522546893586443/1224983971453210635/Ballpark_Pal.xlsx?ex=661f7a39&is=660d0539&hm=7e4298c10acba6f4e3720a9dd8d879815bd191be33a51ff375ac50f5460f12bf&'
-url_percent_change = 'https://cdn.discordapp.com/attachments/779522546893586443/1224983971071397888/Ballpark_Palmodel2.xlsx?ex=661f7a39&is=660d0539&hm=9b15b3fad75e92c412330d605bf46847116d6b3093001945cbd619e842324e3f&'
+url_probabilities = 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.xlsx'
+url_percent_change = 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.xlsx'
 
 # Download Excel files from the web host
 response_probabilities = requests.get(url_probabilities)
