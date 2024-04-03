@@ -1,32 +1,30 @@
 import streamlit as st
 import pandas as pd
 import requests
-from io import BytesIO
+from io import StringIO
 
 # Function to filter batters
 def filter_batters(df, excluded_batters):
     return df[~df['Batter'].isin(excluded_batters)]
 
-# URL to the Excel files hosted on the web host
-url_probabilities = 'https://cdn.discordapp.com/attachments/779522546893586443/1224983971453210635/Ballpark_Pal.xlsx?ex=661f7a39&is=660d0539&hm=7e4298c10acba6f4e3720a9dd8d879815bd191be33a51ff375ac50f5460f12bf&'
-url_percent_change = 'https://cdn.discordapp.com/attachments/779522546893586443/1224983971071397888/Ballpark_Palmodel2.xlsx?ex=661f7a39&is=660d0539&hm=9b15b3fad75e92c412330d605bf46847116d6b3093001945cbd619e842324e3f&'
+# URLs to the CSV files hosted on GitHub
+url_probabilities = 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv'
+url_percent_change = 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv'
 
-# Download Excel files from the web host
+# Download CSV files from GitHub
 response_probabilities = requests.get(url_probabilities)
 response_percent_change = requests.get(url_percent_change)
 
-# Read Excel Data
+# Read CSV Data
 if response_probabilities.status_code == 200:
-    with BytesIO(response_probabilities.content) as f:
-        df_probabilities = pd.read_excel(f)
+    df_probabilities = pd.read_csv(StringIO(response_probabilities.text))
 else:
-    st.error("Failed to download probabilities Excel file. Check the URL.")
+    st.error("Failed to download probabilities CSV file. Check the URL.")
 
 if response_percent_change.status_code == 200:
-    with BytesIO(response_percent_change.content) as f:
-        df_percent_change = pd.read_excel(f)
+    df_percent_change = pd.read_csv(StringIO(response_percent_change.text))
 else:
-    st.error("Failed to download percent change Excel file. Check the URL.")
+    st.error("Failed to download percent change CSV file. Check the URL.")
 
 # Merge DataFrames based on 'Batter' column
 df_merged = pd.merge(df_probabilities, df_percent_change, on='Batter', suffixes=('_prob', '_change'))
@@ -95,14 +93,4 @@ st.write(top_15_players[['Batter', '1B_prob', 'K_prob', 'BB_prob', 'XB_prob', 'v
                           'RC_prob', 'RC_change', 'Overall Score']])
 
 # Display additional information
-
-
-
-# Export results to Excel
-#if st.button("Export to Excel"):
-    #desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-   # export_path = os.path.join(desktop_path, "mlb_top_players.xlsx")
-    #top_15_players.to_excel(export_path, index=False)
-    #st.success("Results exported successfully!")
-
 st.write('Made With ♡ By FADED')
