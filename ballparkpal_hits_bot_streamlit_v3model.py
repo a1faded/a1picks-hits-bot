@@ -94,7 +94,7 @@ if excluded_player:
 
 # Display top players
 st.subheader("Top 15 Players based on Combined Data:")
-top_15_players = df_merged[(df_merged['K_prob'] <= 18) & (df_merged['BB_prob'] <= 18)].sort_values(by='Overall Score', ascending=False).head(15)
+top_15_players = df_merged[(df_merged['K_prob'] <= 18) & (df_merged['BB_prob'] <= 18)].sort_values(by='Overall Score', ascending=False).head(20)
 st.write(top_15_players[['Batter', '1B_prob', 'K_prob', 'BB_prob', 'XB_prob', 'vs_prob', 'HR_prob',
                           '1B_change', 'K_change', 'BB_change', 'XB_change', 'vs_change', 'HR_change',
                           'RC_prob', 'RC_change', 'Overall Score']])
