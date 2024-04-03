@@ -72,13 +72,13 @@ df_merged['Overall Score'] = update_overall_score(df_merged)
 st.title('A1PICKS HITS BOT ALPHA')
 
 # Display image at the top with medium size
-image_url = 'https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true'  # Replace with your image URL
+image_url = 'https://example.com/your_image.jpg'  # Replace with your image URL
 st.image(image_url, width=500)  # Adjust width as needed
 
-st.write('The algorithm selectively extracts high-quality data from BallparkPals Batter versus Pitcher (BvP) Matchups, leveraging comprehensive BvP models to provide an overarching assessment. '
-         'Additionally, it assigns a performance score aimed at forecasting the probability of a base hit.  '
-         'Its imperative to note that while these results offer valuable insights, they should not be interpreted in isolation. '
-         'Personal judgment, recent performance trends, and crucially, historical data against specific pitchers, as well as against left- and right-handed pitchers, must be considered for a comprehensive analysis. ')
+st.markdown("""<p style='color:red; font-weight:bold;'>The algorithm selectively extracts high-quality data from BallparkPals Batter versus Pitcher (BvP) Matchups, leveraging comprehensive BvP models to provide an overarching assessment. 
+         Additionally, it assigns a performance score aimed at forecasting the probability of a base hit.  
+         It's imperative to note that while these results offer valuable insights, they should not be interpreted in isolation. 
+         Personal judgment, recent performance trends, and crucially, historical data against specific pitchers, as well as against left- and right-handed pitchers, must be considered for a comprehensive analysis.</p>""", unsafe_allow_html=True)
          
 # Exclude player input
 excluded_player = st.text_input("Enter a batter's name to exclude them:")
