@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import requests
-import openpyxl
 from io import BytesIO
 
 # Function to filter batters
@@ -9,8 +8,8 @@ def filter_batters(df, excluded_batters):
     return df[~df['Batter'].isin(excluded_batters)]
 
 # URL to the Excel files hosted on the web host
-url_probabilities = 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.xlsx'
-url_percent_change = 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.xlsx'
+url_probabilities = 'https://cdn.discordapp.com/attachments/779522546893586443/1224983971453210635/Ballpark_Pal.xlsx?ex=661f7a39&is=660d0539&hm=7e4298c10acba6f4e3720a9dd8d879815bd191be33a51ff375ac50f5460f12bf&'
+url_percent_change = 'https://cdn.discordapp.com/attachments/779522546893586443/1224983971071397888/Ballpark_Palmodel2.xlsx?ex=661f7a39&is=660d0539&hm=9b15b3fad75e92c412330d605bf46847116d6b3093001945cbd619e842324e3f&'
 
 # Download Excel files from the web host
 response_probabilities = requests.get(url_probabilities)
@@ -94,7 +93,11 @@ top_15_players = df_merged[(df_merged['K_prob'] <= 16) & (df_merged['BB_prob'] <
 st.write(top_15_players[['Batter', '1B_prob', 'K_prob', 'BB_prob', 'XB_prob', 'vs_prob', 'HR_prob',
                           '1B_change', 'K_change', 'BB_change', 'XB_change', 'vs_change', 'HR_change',
                           'RC_prob', 'RC_change', 'Overall Score']])
-                          
+
+# Display additional information
+
+
+
 # Export results to Excel
 #if st.button("Export to Excel"):
     #desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
@@ -102,5 +105,4 @@ st.write(top_15_players[['Batter', '1B_prob', 'K_prob', 'BB_prob', 'XB_prob', 'v
     #top_15_players.to_excel(export_path, index=False)
     #st.success("Results exported successfully!")
 
-# Display additional information
 st.write('Made With ♡ By FADED')
