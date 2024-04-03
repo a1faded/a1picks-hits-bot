@@ -73,7 +73,7 @@ st.title('A1PICKS HITS BOT ALPHA')
 
 # Display image at the top with medium size
 image_url = 'https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true'  # Replace with your image URL
-st.image(image_url, width=500)  # Adjust width as needed
+st.image(image_url, width=250)  # Adjust width as needed
 
 st.markdown("""<p style='color:red; font-weight:bold;'>The algorithm selectively extracts high-quality data from BallparkPals Batter versus Pitcher (BvP) Matchups, leveraging comprehensive BvP models to provide an overarching assessment. 
          Additionally, it assigns a performance score aimed at forecasting the probability of a base hit.  
