@@ -71,9 +71,9 @@ df_merged['Overall Score'] = update_overall_score(df_merged)
 # Streamlit UI
 st.title('A1PICKS HITS BOT ALPHA')
 
-# Display image at the top
-image_url = 'https://github.com/a1faded/a1picks-hits-bot/blob/eff905edd4deccfe45ad08678f5bd44b0280f3b4/a1sports.png?raw=true'  # Replace with your image URL
-st.image(image_url, use_column_width=True)
+# Display image at the top with dimensions 2048 x 2048
+image_url = 'https://example.com/your_image.jpg'  # Replace with your image URL
+st.image(image_url, width=2048, height=2048, use_column_width=False)
 
 st.write('The algorithm selectively extracts high-quality data from BallparkPals Batter versus Pitcher (BvP) Matchups, leveraging comprehensive BvP models to provide an overarching assessment. '
          'Additionally, it assigns a performance score aimed at forecasting the probability of a base hit.  '
