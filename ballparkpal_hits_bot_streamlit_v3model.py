@@ -3,6 +3,9 @@ import pandas as pd
 import requests
 from io import StringIO
 
+# Set Streamlit app to always run in wide mode
+st.set_page_config(layout="wide")
+
 # Function to filter batters
 def filter_batters(df, excluded_batters):
     return df[~df['Batter'].isin(excluded_batters)]
