@@ -36,8 +36,8 @@ if response_percent_change.status_code == 200:
 else:
     st.error("Failed to download percent change CSV file. Check the URL.")
 
-# Merge DataFrames based on 'Batter' column
-df_merged = pd.merge(df_probabilities, df_percent_change, on='Batter', suffixes=('_prob', '_change'))
+# Merge DataFrames based on 'Batter' and 'Pitcher' columns
+df_merged = pd.merge(df_probabilities, df_percent_change, on=['Batter', 'Pitcher'], suffixes=('_prob', '_change'))
 
 # Define weights
 weights = {
@@ -123,48 +123,18 @@ st.markdown("""<p style='color:green; font-weight:bold;'>The algorithm selective
          It's imperative to note that while these results offer valuable insights, they should not be interpreted in isolation. 
          Personal judgment, recent performance trends, and crucially, historical data against specific pitchers, as well as against left- and right-handed pitchers, must be considered for a comprehensive analysis.</p>""", unsafe_allow_html=True)
 
-# Prompt for player input
-#player_input = st.text_input("Enter a baseball player's name if they are not playing (BETA MAY NOT WORK AS INTENDED) :")
-
-# Check if player input is provided
-#if player_input:
-    # Extract player name
-    #player_name = player_input.strip().upper()
-    
-    # Check if the player is in the DataFrame
-    #if player_name in df_merged['Batter'].str.upper().values:
-        # Find another player within predefined parameters
-       # replacement_player = df_merged[df_merged['Batter'].str.upper() != player_name].sample(n=1)
-        
-        # Exclude the original player and include the replacement player
-       # df_merged = filter_batters(df_merged, [player_name])
-       # df_merged = pd.concat([df_merged, replacement_player])
-        #df_merged['Overall Score'] = update_overall_score(df_merged)
-        
-        # Sort DataFrame by 'Overall Score' in descending order
-        #df_merged = df_merged.sort_values(by='Overall Score', ascending=False)
-        
-        # Display updated DataFrame
-       # st.success(f"{player_name} substituted successfully with {replacement_player['Batter'].values[0]}!")
-       # st.subheader("Updated Top Players based on Combined Data:")
-       # st.write(df_merged[['Batter', '1B_prob', 'K_prob', 'BB_prob', 'XB_prob', 'vs_prob', 'HR_prob',
-                         #   '1B_change', 'K_change', 'BB_change', #'XB_change', 'vs_change', 'HR_change',
-                          #  'RC_prob', 'RC_change', 'Overall Score']].head(15))
-   # else:
-      #  st.warning("Player not found. Please try again.")
-
 # Add buttons for selecting result type
-option = st.radio("Choose result type:", ("STRICT RESULTS (DEFAULT)", "WIDER RESULTS (MORE OPTIONS BUT MAY INTRODUCE MORE BAD PICKS OR DNP PLAYERS)"))
+option = st.radio("Choose result type:", ("STRICT RESULTS (DEFAULT)", "WIDER RESULTS (MORE OPTIONS BUT MAY LOWER INTRODUCE MORE BAD PICKS OR DNP PLAYERS)"))
 
 st.markdown("""<p style='color:red; font-weight:bold;'>"Utilizing the 'WIDER FILTER' provides more options, but it may yield different results from the default setting. With more parameters, there's an increase in data, potentially altering the overall percentage and introducing new variables. Currently, the hit rate ranges from 50% to 61.5%."</p>""", unsafe_allow_html=True)
 
 # Set values for K_prob and BB_prob based on the selected option
 if option == "STRICT RESULTS (DEFAULT)":
-    K_prob = 15.5
-    BB_prob = 15.5
+    K_prob = 15.0
+    BB_prob = 15.0
 else:
-    K_prob = 17.5
-    BB_prob = 17.5
+    K_prob = 16.9
+    BB_prob = 16.9
 
 # Add buttons for selecting number of top players
 num_players_option = st.radio("Choose number of top players:", ("TOP 5", "TOP 10", "TOP 15"))
@@ -182,7 +152,7 @@ top_players = df_merged[(df_merged['K_prob'] <= K_prob) & (df_merged['BB_prob'] 
 
 # Display the filtered DataFrame
 st.subheader("Top Players based on Combined Data:")
-st.write(top_players[['Batter', '1B_prob', 'K_prob', 'BB_prob', 'XB_prob', 'vs_prob', 'HR_prob',
+st.write(top_players[['Batter', 'Pitcher', '1B_prob', 'K_prob', 'BB_prob', 'XB_prob', 'vs_prob', 'HR_prob',
                       '1B_change', 'K_change', 'BB_change', 'XB_change', 'vs_change', 'HR_change',
                       'RC_prob', 'RC_change', 'Overall Score']])
 
