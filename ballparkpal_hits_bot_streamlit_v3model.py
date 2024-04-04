@@ -26,54 +26,56 @@ response_probabilities = requests.get(url_probabilities)
 response_percent_change = requests.get(url_percent_change)
 
 # Read CSV Data
-if response_probabilities.status_code == 200:
-    df_probabilities = pd.read_csv(StringIO(response_probabilities.text))
-else:
-    st.error("Failed to download probabilities CSV file. Check the URL.")
+@st.cache
+def load_data():
+    if response_probabilities.status_code == 200:
+        df_probabilities = pd.read_csv(StringIO(response_probabilities.text))
+    else:
+        st.error("Failed to download probabilities CSV file. Check the URL.")
 
-if response_percent_change.status_code == 200:
-    df_percent_change = pd.read_csv(StringIO(response_percent_change.text))
-else:
-    st.error("Failed to download percent change CSV file. Check the URL.")
+    if response_percent_change.status_code == 200:
+        df_percent_change = pd.read_csv(StringIO(response_percent_change.text))
+    else:
+        st.error("Failed to download percent change CSV file. Check the URL.")
+    
+    # Merge DataFrames based on 'Batter' and 'Pitcher' columns
+    df_merged = pd.merge(df_probabilities, df_percent_change, on=['Batter', 'Pitcher'], suffixes=('_prob', '_change'))
 
-# Merge DataFrames based on 'Batter' and 'Pitcher' columns
-df_merged = pd.merge(df_probabilities, df_percent_change, on=['Batter', 'Pitcher'], suffixes=('_prob', '_change'))
+    # Define weights
+    weights = {
+        '1B_prob': 0.5,
+        'K_prob': -0.3,
+        'BB_prob': -0.2,
+        'XB_prob': 0.4,
+        'vs_prob': 0.3,
+        '1B_change': 0.5,
+        'K_change': -0.3,
+        'BB_change': -0.2,
+        'XB_change': 0.4,
+        'vs_change': 0.3,
+        'HR_prob': 0.2,
+        'HR_change': 0.2
+    }
 
-# Define weights
-weights = {
-    '1B_prob': 0.5,
-    'K_prob': -0.3,
-    'BB_prob': -0.2,
-    'XB_prob': 0.4,
-    'vs_prob': 0.3,
-    '1B_change': 0.5,
-    'K_change': -0.3,
-    'BB_change': -0.2,
-    'XB_change': 0.4,
-    'vs_change': 0.3,
-    'HR_prob': 0.2,
-    'HR_change': 0.2
-}
-
-# Function to update overall score
-def update_overall_score(df):
-    return (
-        df['1B_prob'] * weights['1B_prob'] +
-        df['K_prob'] * weights['K_prob'] +
-        df['BB_prob'] * weights['BB_prob'] +
-        df['XB_prob'] * weights['XB_prob'] +
-        df['vs_prob'] * weights['vs_prob'] +
-        df['1B_change'] * weights['1B_change'] +
-        df['K_change'] * weights['K_change'] +
-        df['BB_change'] * weights['BB_change'] +
-        df['XB_change'] * weights['XB_change'] +
-        df['vs_change'] * weights['vs_change'] +
-        df['HR_prob'] * weights['HR_prob'] +
-        df['HR_change'] * weights['HR_change']
+    # Calculate overall quality score
+    df_merged['Overall Score'] = (
+        df_merged['1B_prob'] * weights['1B_prob'] +
+        df_merged['K_prob'] * weights['K_prob'] +
+        df_merged['BB_prob'] * weights['BB_prob'] +
+        df_merged['XB_prob'] * weights['XB_prob'] +
+        df_merged['vs_prob'] * weights['vs_prob'] +
+        df_merged['1B_change'] * weights['1B_change'] +
+        df_merged['K_change'] * weights['K_change'] +
+        df_merged['BB_change'] * weights['BB_change'] +
+        df_merged['XB_change'] * weights['XB_change'] +
+        df_merged['vs_change'] * weights['vs_change'] +
+        df_merged['HR_prob'] * weights['HR_prob'] +
+        df_merged['HR_change'] * weights['HR_change']
     )
 
-# Calculate overall quality score
-df_merged['Overall Score'] = update_overall_score(df_merged)
+    return df_merged
+
+df_merged = load_data()
 
 # Streamlit UI
 st.title('A1PICKS HITS BOT ALPHA')
@@ -148,11 +150,11 @@ else:
     num_players = 15
 
 # Filter DataFrame based on the selected options
-top_players = df_merged[(df_merged['K_prob'] <= K_prob) & (df_merged['BB_prob'] <= BB_prob)].sort_values(by='Overall Score', ascending=False).head(num_players)
+filtered_players = df_merged[(df_merged['K_prob'] <= K_prob) & (df_merged['BB_prob'] <= BB_prob)].sort_values(by='Overall Score', ascending=False).head(num_players)
 
 # Display the filtered DataFrame
 st.subheader("Top Players based on Combined Data:")
-st.write(top_players[['Batter', 'Pitcher', '1B_prob', 'K_prob', 'BB_prob', 'XB_prob', 'vs_prob', 'HR_prob',
+st.write(filtered_players[['Batter', 'Pitcher', '1B_prob', 'K_prob', 'BB_prob', 'XB_prob', 'vs_prob', 'HR_prob',
                       '1B_change', 'K_change', 'BB_change', 'XB_change', 'vs_change', 'HR_change',
                       'RC_prob', 'RC_change', 'Overall Score']])
 
