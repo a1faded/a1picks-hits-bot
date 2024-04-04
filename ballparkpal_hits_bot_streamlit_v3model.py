@@ -160,8 +160,8 @@ st.markdown("""<p style='color:red; font-weight:bold;'>"Utilizing the 'WIDER FIL
 
 # Set values for K_prob and BB_prob based on the selected option
 if option == "STRICT RESULTS (DEFAULT)":
-    K_prob = 14.9
-    BB_prob = 14.9
+    K_prob = 13.9
+    BB_prob = 13.9
 else:
     K_prob = 17
     BB_prob = 17
