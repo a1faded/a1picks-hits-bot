@@ -160,11 +160,11 @@ st.markdown("""<p style='color:red; font-weight:bold;'>"Utilizing the 'WIDER FIL
 
 # Set values for K_prob and BB_prob based on the selected option
 if option == "STRICT RESULTS (DEFAULT)":
-    K_prob = 13.9
-    BB_prob = 13.9
+    K_prob = 15.5
+    BB_prob = 15.5
 else:
-    K_prob = 17
-    BB_prob = 17
+    K_prob = 17.5
+    BB_prob = 17.5
 
 # Add buttons for selecting number of top players
 num_players_option = st.radio("Choose number of top players:", ("TOP 5", "TOP 10", "TOP 15"))
