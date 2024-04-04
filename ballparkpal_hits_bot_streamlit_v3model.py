@@ -154,7 +154,7 @@ st.markdown("""<p style='color:green; font-weight:bold;'>The algorithm selective
       #  st.warning("Player not found. Please try again.")
 
 # Add buttons for selecting result type
-option = st.radio("Choose result type:", ("STRICT RESULTS (DEFAULT)", "WIDER RESULTS (MORE OPTIONS BUT MAY LOWER INTRODUCE MORE BAD PICKS OR DNP PLAYERS)"))
+option = st.radio("Choose result type:", ("STRICT RESULTS (DEFAULT)", "WIDER RESULTS (MORE OPTIONS BUT MAY INTRODUCE MORE BAD PICKS OR DNP PLAYERS)"))
 
 st.markdown("""<p style='color:red; font-weight:bold;'>"Utilizing the 'WIDER FILTER' provides more options, but it may yield different results from the default setting. With more parameters, there's an increase in data, potentially altering the overall percentage and introducing new variables. Currently, the hit rate ranges from 50% to 61.5%."</p>""", unsafe_allow_html=True)
 
