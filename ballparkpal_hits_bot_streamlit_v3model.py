@@ -94,7 +94,7 @@ if excluded_player:
 
 # Display top players
 st.subheader("Top 15 Players based on Combined Data:")
-top_15_players = df_merged[(df_merged['K_prob'] <= 15) & (df_merged['BB_prob'] <= 15)].sort_values(by='Overall Score', ascending=False).head(15) #14.9 & 15 Paramaters is currently at 70% hit rate , if set to 16 & 17 currecntly at 61.5% rate
+top_15_players = df_merged[(df_merged['K_prob'] <= 15) & (df_merged['BB_prob'] <= 15)].sort_values(by='Overall Score', ascending=False).head(7) #14.9 & 15 Paramaters is currently at 70% hit rate , if set to 16 & 17 currecntly at 61.5% rate
 st.write(top_15_players[['Batter', '1B_prob', 'K_prob', 'BB_prob', 'XB_prob', 'vs_prob', 'HR_prob',
                           '1B_change', 'K_change', 'BB_change', 'XB_change', 'vs_change', 'HR_change',
                           'RC_prob', 'RC_change', 'Overall Score']])
