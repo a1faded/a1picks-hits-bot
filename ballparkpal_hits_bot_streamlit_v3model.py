@@ -135,8 +135,8 @@ if option == "STRICT RESULTS (DEFAULT)":
     K_prob = 15.0
     BB_prob = 15.0
 else:
-    K_prob = 16.9
-    BB_prob = 16.9
+    K_prob = 19.9
+    BB_prob = 19.9
 
 # Add buttons for selecting number of top players
 num_players_option = st.radio("Choose number of top players:", ("TOP 5", "TOP 10", "TOP 15"))
