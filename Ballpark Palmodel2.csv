@@ -1,8 +1,8 @@
 Tm,Batter,vs,Pitcher,RC,HR,XB,1B,BB,K
-TB,Randy Arozarena,10,Gomber,45,24,78,18,-5,-46
-TB,Brandon Lowe,10,Gomber,43,5,66,23,4,-48
+TB,Randy Arozarena,10,Gomber,45,23,78,17,-5,-46
+TB,Brandon Lowe,10,Gomber,42,5,66,21,4,-48
 HOU,Kyle Tucker,10,Bradford,42,188,-3,-15,-51,-11
-TB,Isaac Paredes,10,Gomber,29,23,26,12,0,-45
+TB,Isaac Paredes,10,Gomber,28,23,25,11,0,-45
 ATL,Ozzie Albies,10,Henry,27,4,39,20,-7,-21
 CIN,Jonathan India,10,Quintana,24,44,37,4,-12,-13
 ATL,Matt Olson,10,Henry,21,-5,-17,29,22,-19
@@ -23,8 +23,8 @@ TOR,Justin Turner,10,Stroman,-10,-33,-34,32,18,-11
 TOR,Vladimir Guerrero Jr.,10,Stroman,-12,-14,-29,6,12,-12
 ATL,Jarred Kelenic,9,Henry,30,24,-12,26,4,-17
 DET,Jake Rogers,9,Sears,28,23,28,3,4,-28
-TB,Yandy Diaz,9,Gomber,28,33,19,8,1,-41
-TB,Richie Palacios,9,Gomber,23,17,2,11,3,-40
+TB,Yandy Diaz,9,Gomber,28,33,18,7,1,-41
+TB,Richie Palacios,9,Gomber,22,16,1,10,3,-40
 ATL,Luis Guillorme,9,Henry,19,-29,-11,23,19,-16
 HOU,Yainer Diaz,9,Bradford,12,57,18,13,-55,-18
 CHW,Yoan Moncada,9,Singer,11,-29,31,11,-17,-30
@@ -40,7 +40,7 @@ BOS,Triston Casas,9,Canning,-6,14,-7,-5,-10,-5
 TEX,Corey Seager,9,Brown,-9,12,-28,5,3,12
 NYY,Alex Verdugo,9,Kikuchi,-12,-21,12,9,-14,8
 BOS,Rafael Devers,9,Canning,-13,4,-11,-11,-14,7
-TB,Harold Ramirez,8,Gomber,46,40,63,13,-24,-50
+TB,Harold Ramirez,8,Gomber,45,39,62,12,-24,-50
 ATL,Austin Riley,8,Henry,27,1,-14,29,26,-13
 CIN,Spencer Steer,8,Quintana,9,-5,13,19,-22,-20
 KC,Adam Frazier,8,Fedde,8,-37,-28,24,20,1
@@ -59,9 +59,9 @@ SD,Jurickson Profar,8,Hicks,-9,-60,-22,-11,37,3
 DET,Zach McKinstry,8,Sears,-10,-33,-13,11,-11,-6
 TOR,George Springer,8,Stroman,-12,-31,-11,8,12,-16
 HOU,Yordan Alvarez,8,Bradford,-12,18,5,5,-59,0
-TB,Jose Siri,7,Gomber,50,35,42,37,-15,-35
-TB,Jose Caballero,7,Gomber,48,1,77,22,8,-39
-TB,Ben Rortvedt,7,Gomber,42,20,39,40,-13,-42
+TB,Jose Siri,7,Gomber,49,35,41,36,-15,-35
+TB,Jose Caballero,7,Gomber,47,1,76,21,8,-39
+TB,Ben Rortvedt,7,Gomber,41,20,38,38,-13,-42
 CIN,Nick Martini,7,Quintana,14,-7,36,8,-4,-9
 DET,Gio Urshela,7,Sears,10,-21,24,6,-1,-20
 CIN,Santiago Espinal,7,Quintana,9,-9,19,15,-27,-17
@@ -85,7 +85,7 @@ SF,Tom Murphy,6,Cease,-3,-10,9,-2,-1,11
 SD,Jake Cronenworth,6,Hicks,-6,-53,-5,9,12,3
 HOU,Jose Altuve,6,Bradford,-9,24,6,-2,-56,9
 CHC,Seiya Suzuki,6,Miller,-13,-44,8,-6,-16,16
-TB,Amed Rosario,5,Gomber,32,18,21,17,-17,-46
+TB,Amed Rosario,5,Gomber,31,18,21,16,-17,-46
 NYM,Omar Narvaez,5,Greene,20,41,38,-22,34,7
 CHW,Luis Robert,5,Singer,16,-39,56,5,8,-24
 CIN,Jeimer Candelario,5,Quintana,14,8,4,21,-14,-14
@@ -94,7 +94,7 @@ DET,Colt Keith,5,Sears,7,-13,12,13,-6,-10
 ATL,Michael Harris II,5,Henry,7,-12,-15,19,-18,-9
 HOU,Chas McCormick,5,Bradford,6,61,-8,8,-40,-4
 KC,Nelson Velazquez,5,Fedde,6,-30,-35,17,17,-5
-COL,Nolan Jones,5,Littell,4,-2,6,11,-30,-21
+COL,Nolan Jones,5,Littell,3,-2,6,10,-30,-21
 PIT,Edward Olivares,5,Rodriguez,2,-13,8,-12,-12,21
 LAD,Jason Heyward,5,Hendricks,2,-52,10,11,-26,-38
 HOU,Mauricio Dubon,5,Bradford,1,20,11,1,-34,-14
@@ -113,8 +113,8 @@ TEX,Jonah Heim,4,Brown,-7,19,-30,3,2,8
 SD,Xander Bogaerts,4,Hicks,-14,-50,-25,10,6,8
 HOU,Alex Bregman,4,Bradford,-17,2,-2,12,-53,-2
 BOS,Pablo Reyes,4,Canning,-25,-23,-18,-16,-16,13
-COL,Charlie Blackmon,3,Littell,13,40,3,2,-39,-21
 NYM,DJ Stewart,3,Greene,13,35,-1,-17,8,12
+COL,Charlie Blackmon,3,Littell,12,40,3,1,-39,-21
 ATL,Travis d'Arnaud,3,Henry,12,-27,-12,29,6,-8
 DET,Javier Baez,3,Sears,11,-26,30,1,7,-28
 KC,Salvador Perez,3,Fedde,2,-31,-8,12,14,11
@@ -131,7 +131,7 @@ SD,Luis Campusano,3,Hicks,-12,-44,-3,-3,15,-8
 WAS,Keibert Ruiz,3,Nola,-15,-45,-12,-3,-36,11
 SF,Michael Conforto,3,Cease,-17,-34,4,-10,-7,24
 NYY,Trent Grisham,3,Kikuchi,-19,-26,-20,13,4,13
-TB,Curtis Mead,2,Gomber,39,59,19,14,-20,-46
+TB,Curtis Mead,2,Gomber,38,59,18,13,-20,-46
 CIN,Stuart Fairchild,2,Quintana,14,-6,16,17,-12,-11
 PIT,Ke'Bryan Hayes,2,Rodriguez,9,-26,39,-12,-4,20
 DET,Carson Kelly,2,Sears,6,4,6,2,0,-8
@@ -146,14 +146,14 @@ NYY,Jon Berti,2,Kikuchi,-14,-24,-1,16,-16,3
 NYY,Austin Wells,2,Kikuchi,-15,-11,-2,11,-12,5
 BOS,Jarren Duran,2,Canning,-17,-25,-2,-9,-10,-1
 LAA,Anthony Rendon,2,Crawford,-28,-26,-24,-21,-13,18
-TB,Rene Pinto,1,Gomber,48,23,73,20,-12,-30
+TB,Rene Pinto,1,Gomber,48,23,72,19,-12,-30
 ATL,Forrest Wall,1,Henry,29,-1,-21,27,23,-20
 ATL,Chadwick Tromp,1,Henry,17,-28,5,26,4,-14
 LAD,Enrique Hernandez,1,Hendricks,8,-33,22,3,-26,-37
 KC,Maikel Garcia,1,Fedde,6,-63,-26,9,27,6
 CIN,Luke Maile,1,Quintana,4,-8,-14,24,-20,-14
 ARI,Gabriel Moreno,1,Strider,1,4,-20,-5,0,24
-COL,Ryan McMahon,1,Littell,-1,19,-21,7,-30,-3
+COL,Ryan McMahon,1,Littell,-1,18,-22,6,-30,-3
 HOU,Jon Singleton,1,Bradford,-2,25,7,11,-45,-8
 ARI,Christian Walker,1,Strider,-5,1,-25,-6,-13,34
 ARI,Lourdes Gurriel Jr.,1,Strider,-5,-26,-8,-3,-3,22
@@ -188,7 +188,7 @@ SD,Manny Machado,-1,Hicks,-20,-45,-32,-6,16,4
 BOS,Masataka Yoshida,-1,Canning,-20,-4,-18,-10,-18,5
 TOR,Davis Schneider,-1,Stroman,-23,-43,-14,0,19,-6
 PIT,Connor Joe,-2,Rodriguez,2,-31,25,-13,-16,25
-CHC,Nick Madrigal,-2,Miller,-6,-47,-18,6,-16,7
+CHC,Nick Madrigal,-2,Miller,-6,-47,-18,5,-16,7
 SF,Thairo Estrada,-2,Cease,-8,-7,-7,-2,-9,24
 SF,Luis Matos,-2,Cease,-15,-21,-1,-17,0,28
 CIN,Elly De La Cruz,-3,Quintana,18,11,22,5,-9,-19
@@ -202,7 +202,7 @@ HOU,Victor Caratini,-3,Bradford,-10,-2,4,10,-50,1
 MIL,Andruw Monasterio,-3,Gilbert,-14,16,-7,-5,-28,18
 TOR,Ernie Clement,-3,Stroman,-20,-19,-43,5,6,-11
 LAA,Brandon Drury,-3,Crawford,-27,-30,-32,-13,-1,6
-COL,Michael Toglia,-4,Littell,33,57,16,12,-26,-26
+COL,Michael Toglia,-4,Littell,32,57,16,11,-26,-26
 PIT,Andrew McCutchen,-4,Rodriguez,5,-18,8,-21,2,28
 NYM,Starling Marte,-4,Greene,5,13,1,-18,34,14
 NYM,Harrison Bader,-4,Greene,-2,11,-1,-19,18,28
@@ -219,17 +219,17 @@ TOR,Brian Serven,-4,Stroman,-23,-39,-22,7,4,-13
 LAA,Luis Rengifo,-4,Crawford,-23,-10,-18,-21,-10,12
 SEA,J.P. Crawford,-4,Peralta,-28,3,-14,-14,-39,53
 LAA,Aaron Hicks,-4,Crawford,-29,-13,-28,-20,-24,11
-TB,Austin Shenton,-5,Gomber,54,43,60,27,-8,-27
-COL,Brenton Doyle,-5,Littell,18,26,18,5,-32,-20
+TB,Austin Shenton,-5,Gomber,53,43,59,25,-8,-27
+COL,Brenton Doyle,-5,Littell,17,26,17,4,-32,-20
 PHI,Johan Rojas,-5,Corbin,10,-36,-1,1,-15,-38
 NYM,Brett Baty,-5,Greene,7,7,25,-27,26,16
-COL,Elias Diaz,-5,Littell,7,-9,-8,16,-22,-24
+COL,Elias Diaz,-5,Littell,6,-9,-8,14,-22,-24
 PIT,Jack Suwinski,-5,Rodriguez,1,-17,30,-15,-25,37
 CHW,Korey Lee,-5,Singer,1,-50,22,4,-17,-25
 PIT,Rowdy Tellez,-5,Rodriguez,1,-25,19,-25,-6,28
 TEX,Ezequiel Duran,-5,Brown,-2,9,-20,3,0,2
 ARI,Eugenio Suarez,-5,Strider,-4,-13,-21,6,-10,34
-COL,Kris Bryant,-5,Littell,-5,-1,7,-2,-36,-2
+COL,Kris Bryant,-5,Littell,-6,-2,6,-3,-36,-2
 BAL,Gunnar Henderson,-5,Jones,-8,-35,10,-27,0,36
 SF,Jung Hoo Lee,-5,Cease,-9,-32,4,5,-14,18
 SF,Nick Ahmed,-5,Cease,-9,-20,-2,-7,1,16
@@ -241,8 +241,8 @@ CHC,Mike Tauchman,-5,Miller,-28,-61,-12,-20,-23,38
 LAA,Mike Trout,-5,Crawford,-28,-4,-14,-27,-27,22
 LAA,Nolan Schanuel,-5,Crawford,-29,-27,-42,-16,-7,24
 LAA,Taylor Ward,-5,Crawford,-29,-20,-23,-25,-18,5
-COL,Ezequiel Tovar,-6,Littell,23,-2,61,7,-36,-21
-COL,Brendan Rodgers,-6,Littell,9,25,6,2,-40,-20
+COL,Ezequiel Tovar,-6,Littell,22,-2,60,6,-36,-21
+COL,Brendan Rodgers,-6,Littell,8,25,6,1,-40,-20
 PIT,Bryan Reynolds,-6,Rodriguez,-6,-15,7,-27,-17,43
 WAS,Jesse Winker,-6,Nola,-9,-31,-9,14,-44,0
 WAS,Jacob Young,-6,Nola,-10,-16,-7,-14,-30,11
@@ -287,10 +287,10 @@ ARI,Alek Thomas,-8,Strider,-3,-13,-6,-2,-17,24
 ARI,Jake McCarthy,-8,Strider,-3,-21,-20,9,-16,31
 BAL,Jorge Mateo,-8,Jones,-5,-46,28,-27,-10,34
 BAL,Cedric Mullins,-8,Jones,-7,-32,23,-23,-31,22
-COL,Jake Cave,-8,Littell,-8,8,-5,8,-38,7
 PIT,Oneil Cruz,-8,Rodriguez,-8,-29,5,-20,-21,37
-COL,Alan Trejo,-8,Littell,-9,-2,10,-6,-34,12
-COL,Jacob Stallings,-8,Littell,-12,1,-1,-4,-39,10
+COL,Jake Cave,-8,Littell,-9,8,-6,7,-38,7
+COL,Alan Trejo,-8,Littell,-10,-2,9,-7,-34,12
+COL,Jacob Stallings,-8,Littell,-13,1,-1,-4,-39,10
 CHW,Martin Maldonado,-8,Singer,-17,-52,12,-3,-20,0
 BOS,Connor Wong,-8,Canning,-21,-9,-20,-14,-17,5
 SEA,Dylan Moore,-8,Peralta,-24,16,-12,-18,-27,32
@@ -330,7 +330,7 @@ OAK,Tyler Nevin,-9,Skubal,-48,-41,-28,-16,-43,49
 TEX,Justin Foscue,-10,Brown,6,5,-17,-14,33,15
 CHW,Braden Shewmake,-10,Singer,-5,-46,6,-6,-17,-4
 BOS,Bobby Dalbec,-10,Canning,-13,-7,-7,-8,-16,5
-COL,Elehuris Montero,-10,Littell,-13,0,14,0,-44,6
+COL,Elehuris Montero,-10,Littell,-13,0,14,-1,-44,6
 WAS,Nasim Nu�ez,-10,Nola,-14,-32,11,-15,-48,11
 SD,Eguy Rosario,-10,Hicks,-18,-48,-25,2,0,5
 ARI,Tucker Barnhart,-10,Strider,-18,-42,-28,-5,-14,37
