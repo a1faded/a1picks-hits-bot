@@ -1,353 +1,353 @@
-Tm,Batter,vs,Pitcher,RC,PA,AB,H,HR,XB,BB,K,AVG
-HOU,Kyle Tucker,10,Bradford,42,6,6,1.4,0.2,0.4,0,0,0.235
-TEX,Marcus Semien,10,Brown,-9,12,12,4.7,0.2,1,0,1,0.391
-PHI,Bryce Harper,10,Corbin,5,18,14,4.3,0.1,0.7,4,2,0.308
-PHI,Kyle Schwarber,10,Corbin,10,16,12,7,2,1.3,4,0,0.58
-KC,Vinnie Pasquantino,10,Fedde,0,0,0,0,0,0,0,0,0
-TB,Brandon Lowe,10,Gomber,42,3,3,0.7,0.3,0.1,0,0,0.248
-TB,Isaac Paredes,10,Gomber,28,3,2,0.5,0.5,0.1,1,1,0.272
-TB,Randy Arozarena,10,Gomber,45,3,3,0.6,0.5,0.1,0,1,0.208
-LAD,Mookie Betts,10,Hendricks,-3,4,4,1,0,0,0,0,0.254
-ATL,Matt Olson,10,Henry,21,0,0,0,0,0,0,0,0
-ATL,Ozzie Albies,10,Henry,28,0,0,0,0,0,0,0,0
-ATL,Ronald Acuna Jr.,10,Henry,12,0,0,0,0,0,0,0,0
-NYY,Aaron Judge,10,Kikuchi,-1,21,17,4.5,1.7,2,4,8,0.267
-NYY,Gleyber Torres,10,Kikuchi,-9,18,17,7,1.9,1.9,1,1,0.414
-NYY,Juan Soto,10,Kikuchi,-10,0,0,0,0,0,0,0,0
-CIN,Jonathan India,10,Quintana,21,6,6,1,0,0.3,0,1,0.175
-DET,Andy Ibanez,10,Sears,16,6,6,1.4,0.1,0.2,0,1,0.231
-DET,Matt Vierling,10,Sears,18,6,5,1.6,0,0.1,1,0,0.314
-DET,Spencer Torkelson,10,Sears,9,6,6,2.3,0,0.4,0,1,0.378
-TOR,Alejandro Kirk,10,Stroman,-8,0,0,0,0,0,0,0,0
-TOR,Justin Turner,10,Stroman,-10,6,6,0.9,0,0.8,0,0,0.142
-TOR,Vladimir Guerrero Jr.,10,Stroman,-12,3,3,0.7,0,0,0,0,0.222
-HOU,Jeremy Pena,9,Bradford,8,3,3,1.2,0,0.2,0,1,0.391
-HOU,Yainer Diaz,9,Bradford,13,3,3,0.3,0,0,0,1,0.103
-TEX,Corey Seager,9,Brown,-9,8,8,2.8,0.5,1,0,2,0.348
-TEX,Evan Carter,9,Brown,5,2,2,1.1,0.2,0.6,0,0,0.542
-BOS,Rafael Devers,9,Canning,-13,6,6,2.3,0.1,0.7,0,1,0.386
-BOS,Triston Casas,9,Canning,-5,3,2,0.2,0,0,1,1,0.096
-TB,Richie Palacios,9,Gomber,22,0,0,0,0,0,0,0,0
-TB,Yandy Diaz,9,Gomber,28,3,2,0.7,0,0,1,0,0.351
-LAD,Max Muncy,9,Hendricks,-2,3,3,0,0,0,0,2,0
-LAD,Miguel Rojas,9,Hendricks,1,0,0,0,0,0,0,0,0
-ATL,Jarred Kelenic,9,Henry,30,0,0,0,0,0,0,0,0
-ATL,Luis Guillorme,9,Henry,19,0,0,0,0,0,0,0,0
-ATL,Marcell Ozuna,9,Henry,10,0,0,0,0,0,0,0,0
-ATL,Orlando Arcia,9,Henry,10,0,0,0,0,0,0,0,0
-NYY,Alex Verdugo,9,Kikuchi,-12,14,14,4.5,0.2,1.7,0,2,0.319
-WAS,C.J. Abrams,9,Nola,-6,7,7,2.2,0,0.1,0,1,0.309
-DET,Jake Rogers,9,Sears,28,6,6,0.6,0.1,0.2,0,2,0.093
-DET,Mark Canha,9,Sears,6,5,5,0.5,0,0.1,0,0,0.104
-CHW,Yoan Moncada,9,Singer,11,21,19,3.8,1.4,1,2,9,0.2
-HOU,Jose Abreu,8,Bradford,4,5,5,1.8,1,0.1,0,1,0.359
-HOU,Yordan Alvarez,8,Bradford,-12,3,3,0.9,0.8,0,0,0,0.293
-TEX,Josh H. Smith,8,Brown,-3,3,3,0.9,0,0,0,0,0.305
-SF,Wilmer Flores,8,Cease,-6,2,1,0,0,0,1,0,0.021
-PHI,J.T. Realmuto,8,Corbin,1,14,12,4.2,0.9,0.7,2,1,0.353
-KC,Adam Frazier,8,Fedde,8,4,4,1.4,0,0,0,0,0.347
-KC,Bobby Witt Jr.,8,Fedde,4,0,0,0,0,0,0,0,0
-KC,Michael Massey,8,Fedde,8,0,0,0,0,0,0,0,0
-TB,Harold Ramirez,8,Gomber,45,3,3,0.1,0,0,0,1,0.019
-LAD,Shohei Ohtani,8,Hendricks,0,0,0,0,0,0,0,0,0
-ATL,Austin Riley,8,Henry,27,0,0,0,0,0,0,0,0
-SD,Jurickson Profar,8,Hicks,-9,2,2,0.1,0,0,0,0,0.071
-CIN,Spencer Steer,8,Quintana,7,7,6,1,0,0,1,2,0.159
-DET,Kerry Carpenter,8,Sears,5,0,0,0,0,0,0,0,0
-DET,Parker Meadows,8,Sears,8,2,2,1.3,0,0.3,0,0,0.626
-DET,Riley Greene,8,Sears,-1,0,0,0,0,0,0,0,0
-DET,Zach McKinstry,8,Sears,-10,0,0,0,0,0,0,0,0
-ARI,Corbin Carroll,8,Strider,2,7,6,0.1,0,0,1,3,0.02
-TOR,George Springer,8,Stroman,-12,3,2,0.2,0,0,1,0,0.101
-TEX,Adolis Garcia,7,Brown,6,9,9,4.4,1.3,0.9,0,1,0.488
-SF,LaMonte Wade Jr,7,Cease,-12,8,5,1,0.9,0,3,2,0.2
-PHI,Alec Bohm,7,Corbin,-9,21,18,5.9,0.6,2.2,3,3,0.326
-PHI,Trea Turner,7,Corbin,-7,3,3,1.2,0,0.1,0,0,0.409
-KC,Freddy Fermin,7,Fedde,8,0,0,0,0,0,0,0,0
-KC,MJ Melendez,7,Fedde,-6,0,0,0,0,0,0,0,0
-TB,Ben Rortvedt,7,Gomber,41,0,0,0,0,0,0,0,0
-TB,Jose Caballero,7,Gomber,47,0,0,0,0,0,0,0,0
-TB,Jose Siri,7,Gomber,49,3,3,0,0,0,0,1,0.012
-NYM,Brandon Nimmo,7,Greene,3,9,9,3.8,0.9,0.2,0,2,0.426
-LAD,Will Smith,7,Hendricks,-3,0,0,0,0,0,0,0,0
-WAS,Ildemaro Vargas,7,Nola,-3,4,4,0.6,0,0.2,0,1,0.148
-CIN,Nick Martini,7,Quintana,11,0,0,0,0,0,0,0,0
-CIN,Santiago Espinal,7,Quintana,6,2,2,1.3,0,0.2,0,0,0.659
-DET,Gio Urshela,7,Sears,10,2,2,0,0,0,0,1,0.024
-ARI,Joc Pederson,7,Strider,7,11,10,2.1,0.8,0.4,1,2,0.211
-TOR,Cavan Biggio,7,Stroman,-9,0,0,0,0,0,0,0,0
-TOR,Daniel Vogelbach,7,Stroman,-12,3,3,0.2,0,0,0,1,0.055
-HOU,Jose Altuve,6,Bradford,-9,2,2,0,0,0,0,1,0
-TEX,Josh Jung,6,Brown,7,6,6,0.4,0,0,0,5,0.064
-SF,Tom Murphy,6,Cease,-3,2,1,1,0,0.8,1,0,0.965
-SD,Jake Cronenworth,6,Hicks,-6,2,2,1.7,0.1,0.7,0,0,0.826
-BAL,Adley Rutschman,6,Jones,-3,0,0,0,0,0,0,0,0
-CHC,Seiya Suzuki,6,Miller,-13,0,0,0,0,0,0,0,0
-CIN,Tyler Stephenson,6,Quintana,12,3,3,1.1,0.1,0.2,0,0,0.352
-CHW,Kevin Pillar,6,Singer,17,2,2,0.6,0,0,0,0,0.292
-HOU,Chas McCormick,5,Bradford,6,3,3,0,0,0,0,1,0.005
-HOU,Mauricio Dubon,5,Bradford,1,5,5,1.2,0,0,0,0,0.241
-BOS,Tyler O'Neill,5,Canning,-12,3,3,0.2,0,0,0,1,0.079
-KC,Nelson Velazquez,5,Fedde,6,0,0,0,0,0,0,0,0
-TB,Amed Rosario,5,Gomber,31,9,9,4,0.9,0.4,0,0,0.439
-NYM,Jeff McNeil,5,Greene,-4,8,8,3,0.1,0.8,0,2,0.374
-NYM,Omar Narvaez,5,Greene,18,8,8,0.5,0,0,0,6,0.068
-LAD,Freddie Freeman,5,Hendricks,-14,6,5,3.4,1,1.3,1,0,0.673
-LAD,Jason Heyward,5,Hendricks,2,0,0,0,0,0,0,0,0
-ATL,Michael Harris II,5,Henry,7,0,0,0,0,0,0,0,0
-BAL,Tony Kemp,5,Jones,-1,0,0,0,0,0,0,0,0
-COL,Nolan Jones,5,Littell,3,3,3,0,0,0,0,1,0.012
-SEA,Mitch Garver,5,Peralta,-14,3,3,0,0,0,0,2,0.001
-CIN,Jake Fraley,5,Quintana,6,0,0,0,0,0,0,0,0
-CIN,Jeimer Candelario,5,Quintana,11,3,3,1.9,0.7,0.9,0,0,0.638
-PIT,Edward Olivares,5,Rodriguez,2,0,0,0,0,0,0,0,0
-DET,Colt Keith,5,Sears,7,0,0,0,0,0,0,0,0
-CHW,Andrew Vaughn,5,Singer,-7,25,24,7.2,0.9,0.3,1,6,0.298
-CHW,Luis Robert,5,Singer,17,15,14,4,0,0.4,1,1,0.284
-TOR,Daulton Varsho,5,Stroman,-14,3,3,1.2,0.7,0.2,0,0,0.416
-HOU,Alex Bregman,4,Bradford,-17,5,5,0.9,0,0.1,0,1,0.183
-HOU,Jake Meyers,4,Bradford,5,0,0,0,0,0,0,0,0
-TEX,Jonah Heim,4,Brown,-7,10,10,2.7,0,0.9,0,0,0.271
-BOS,Pablo Reyes,4,Canning,-25,0,0,0,0,0,0,0,0
-KC,Kyle Isbel,4,Fedde,10,0,0,0,0,0,0,0,0
-LAD,James Outman,4,Hendricks,1,0,0,0,0,0,0,0,0
-SD,Xander Bogaerts,4,Hicks,-14,3,3,0.7,0,0,0,1,0.226
-CHW,Gavin Sheets,4,Singer,14,19,19,2.6,0.6,0.3,0,5,0.136
-TEX,Leody Taveras,3,Brown,-7,9,9,3.1,0,0.8,0,2,0.35
-SF,Jorge Soler,3,Cease,-12,13,10,1.3,0.9,0,3,7,0.135
-SF,Michael Conforto,3,Cease,-17,5,4,0.4,0,0.3,1,2,0.088
-PHI,Bryson Stott,3,Corbin,-11,10,10,3.6,1,0.2,0,1,0.355
-PHI,Garrett Stubbs,3,Corbin,-4,0,0,0,0,0,0,0,0
-KC,Hunter Renfroe,3,Fedde,1,5,4,1.4,0,0.8,1,1,0.356
-KC,Salvador Perez,3,Fedde,2,0,0,0,0,0,0,0,0
-NYM,DJ Stewart,3,Greene,11,3,3,0.2,0,0.1,0,1,0.075
-ATL,Travis d'Arnaud,3,Henry,12,0,0,0,0,0,0,0,0
-SD,Luis Campusano,3,Hicks,-12,0,0,0,0,0,0,0,0
-NYY,Trent Grisham,3,Kikuchi,-19,0,0,0,0,0,0,0,0
-COL,Charlie Blackmon,3,Littell,12,5,4,1.2,0,1.1,1,1,0.301
-WAS,Eddie Rosario,3,Nola,-2,23,23,3.4,0,1.4,0,11,0.147
-WAS,Keibert Ruiz,3,Nola,-15,14,12,3,0,0.5,2,5,0.254
-DET,Javier Baez,3,Sears,11,5,5,0.5,0,0,0,2,0.106
-CHW,Andrew Benintendi,3,Singer,-1,12,11,2.8,0,1.1,1,1,0.255
-ARI,Ketel Marte,3,Strider,-2,8,6,1.5,0.2,0.4,2,3,0.258
-TOR,Isiah Kiner-Falefa,3,Stroman,-10,0,0,0,0,0,0,0,0
-TEX,Travis Jankowski,2,Brown,-8,5,5,2.4,0,0,0,1,0.479
-BOS,Jarren Duran,2,Canning,-16,3,3,0.4,0,0,0,1,0.131
-PHI,Nick Castellanos,2,Corbin,-1,12,11,2.2,0,0.4,1,4,0.203
-LAA,Anthony Rendon,2,Crawford,-28,0,0,0,0,0,0,0,0
-TB,Curtis Mead,2,Gomber,38,3,3,0.5,0,0,0,0,0.169
-NYM,Pete Alonso,2,Greene,-2,9,6,3.2,1.9,0.4,3,1,0.532
-LAD,Gavin Lux,2,Hendricks,-2,3,3,1.1,0,0,0,0,0.357
-SD,Fernando Tatis Jr.,2,Hicks,-13,3,3,0.4,0,0.1,0,0,0.144
-NYY,Austin Wells,2,Kikuchi,-15,0,0,0,0,0,0,0,0
-NYY,Giancarlo Stanton,2,Kikuchi,-1,16,15,1.9,0,0.7,1,6,0.129
-NYY,Jon Berti,2,Kikuchi,-14,2,2,0.2,0,0,0,1,0.079
-CIN,Stuart Fairchild,2,Quintana,11,5,5,1.8,0,0.8,0,1,0.353
-PIT,Ke'Bryan Hayes,2,Rodriguez,9,0,0,0,0,0,0,0,0
-DET,Carson Kelly,2,Sears,6,0,0,0,0,0,0,0,0
-TOR,Kevin Kiermaier,2,Stroman,-13,2,2,0,0,0,0,1,0.023
-HOU,Jon Singleton,1,Bradford,-2,0,0,0,0,0,0,0,0
-PHI,Whit Merrifield,1,Corbin,-8,3,3,0.4,0,0,0,1,0.144
-KC,Maikel Garcia,1,Fedde,6,0,0,0,0,0,0,0,0
-TB,Rene Pinto,1,Gomber,48,0,0,0,0,0,0,0,0
-LAD,Enrique Hernandez,1,Hendricks,8,0,0,0,0,0,0,0,0
-ATL,Chadwick Tromp,1,Henry,18,0,0,0,0,0,0,0,0
-ATL,Forrest Wall,1,Henry,29,0,0,0,0,0,0,0,0
-NYY,Anthony Volpe,1,Kikuchi,-18,5,5,0.9,0,0.3,0,0,0.177
-COL,Ryan McMahon,1,Littell,-1,5,5,1,0,0.1,0,3,0.198
-CHC,Ian Happ,1,Miller,-12,0,0,0,0,0,0,0,0
-WAS,Lane Thomas,1,Nola,-9,13,13,3.8,1.6,1.5,0,3,0.291
-CIN,Luke Maile,1,Quintana,1,0,0,0,0,0,0,0,0
-ARI,Christian Walker,1,Strider,-5,3,3,0,0,0,0,2,0
-ARI,Gabriel Moreno,1,Strider,1,2,2,0.2,0,0,0,1,0.077
-ARI,Lourdes Gurriel Jr.,1,Strider,-5,3,2,0,0,0,1,2,0
-TOR,Bo Bichette,1,Stroman,-13,2,2,1.1,0,0.9,0,0,0.557
-KC,Dairon Blanco,0,Fedde,17,0,0,0,0,0,0,0,0
-KC,Nick Loftin,0,Fedde,12,0,0,0,0,0,0,0,0
-BAL,Ryan O'Hearn,0,Jones,3,0,0,0,0,0,0,0,0
-TEX,Wyatt Langford,-1,Brown,10,0,0,0,0,0,0,0,0
-BOS,Enmanuel Valdez,-1,Canning,-19,3,3,0.3,0,0,0,0,0.116
-BOS,Masataka Yoshida,-1,Canning,-19,3,3,0.2,0.1,0.1,0,0,0.056
-PHI,Brandon Marsh,-1,Corbin,-6,0,0,0,0,0,0,0,0
-KC,Garrett Hampson,-1,Fedde,8,0,0,0,0,0,0,0,0
-MIL,Gary Sanchez,-1,Gilbert,-7,8,8,1.4,0,0.8,0,3,0.176
-MIL,Willy Adames,-1,Gilbert,-14,3,3,1.9,0.8,0.9,0,0,0.626
-NYM,Francisco Lindor,-1,Greene,-7,9,9,1.2,0.9,0.1,0,2,0.13
-LAD,Austin Barnes,-1,Hendricks,0,3,3,0.6,0,0,0,1,0.196
-SD,Ha-seong Kim,-1,Hicks,-11,2,2,0,0,0,0,1,0.003
-SD,Manny Machado,-1,Hicks,-20,2,2,0.1,0,0,0,0,0.057
-NYY,Anthony Rizzo,-1,Kikuchi,-16,12,10,3.3,1,1,2,1,0.332
-NYY,Jose Trevino,-1,Kikuchi,-19,2,2,0.1,0,0,0,0,0.033
-NYY,Oswaldo Cabrera,-1,Kikuchi,-8,5,5,0.9,0.5,0.2,0,1,0.175
-CHC,Cody Bellinger,-1,Miller,-16,0,0,0,0,0,0,0,0
-WAS,Joey Meneses,-1,Nola,-13,4,4,1.7,0,0.1,0,0,0.435
-CIN,Christian En-Strand,-1,Quintana,21,3,3,1.8,0,0.5,0,0,0.605
-CIN,Will Benson,-1,Quintana,-2,0,0,0,0,0,0,0,0
-PIT,Jared Triolo,-1,Rodriguez,19,0,0,0,0,0,0,0,0
-CHW,Eloy Jimenez,-1,Singer,-7,18,18,6.4,0,0.3,0,3,0.354
-ARI,Geraldo Perdomo,-1,Strider,-5,7,6,0.3,0,0.2,1,1,0.054
-TOR,Davis Schneider,-1,Stroman,-23,0,0,0,0,0,0,0,0
-SF,Luis Matos,-2,Cease,-15,0,0,0,0,0,0,0,0
-SF,Thairo Estrada,-2,Cease,-8,2,2,0,0,0,0,0,0.013
-CHC,Nick Madrigal,-2,Miller,-6,0,0,0,0,0,0,0,0
-PIT,Connor Joe,-2,Rodriguez,2,0,0,0,0,0,0,0,0
-CHW,Robbie Grossman,-2,Singer,-8,11,11,0.1,0,0.1,0,7,0.011
-HOU,Victor Caratini,-3,Bradford,-10,0,0,0,0,0,0,0,0
-LAA,Brandon Drury,-3,Crawford,-27,3,3,0.6,0,0.1,0,0,0.195
-MIL,Andruw Monasterio,-3,Gilbert,-14,0,0,0,0,0,0,0,0
-NYM,Tyrone Taylor,-3,Greene,-3,9,9,1.6,1,0.2,0,4,0.178
-LAD,Chris Taylor,-3,Hendricks,2,3,3,0.9,0,0,0,1,0.305
-LAD,Teoscar Hernandez,-3,Hendricks,5,0,0,0,0,0,0,0,0
-BAL,Ryan Mountcastle,-3,Jones,5,0,0,0,0,0,0,0,0
-WAS,Luis Garcia,-3,Nola,-11,14,13,2.8,0.8,0.7,1,3,0.213
-WAS,Victor Robles,-3,Nola,-5,9,9,0.2,0,0.1,0,2,0.022
-CIN,Elly De La Cruz,-3,Quintana,15,3,3,0.6,0,0,0,1,0.194
-TOR,Ernie Clement,-3,Stroman,-20,0,0,0,0,0,0,0,0
-PHI,Cristian Pache,-4,Corbin,-4,0,0,0,0,0,0,0,0
-PHI,Edmundo Sosa,-4,Corbin,-4,4,4,1.6,0.2,0.4,0,0,0.395
-LAA,Aaron Hicks,-4,Crawford,-28,7,6,0.9,0.7,0.2,1,2,0.152
-LAA,Luis Rengifo,-4,Crawford,-23,1,1,0,0,0,0,0,0.005
-MIL,Brice Turang,-4,Gilbert,-9,2,2,0,0,0,0,2,0
-MIL,Christian Yelich,-4,Gilbert,-19,3,3,1.6,0.8,0.3,0,0,0.536
-NYM,Harrison Bader,-4,Greene,-4,5,5,1.5,0.9,0.5,0,0,0.299
-NYM,Starling Marte,-4,Greene,2,6,6,0.2,0,0.1,0,1,0.042
-SD,Jose Azocar,-4,Hicks,-9,0,0,0,0,0,0,0,0
-COL,Michael Toglia,-4,Littell,32,2,2,1,0.9,0.1,0,0,0.499
-CHC,Nico Hoerner,-4,Miller,-16,0,0,0,0,0,0,0,0
-WAS,Riley Adams,-4,Nola,-10,0,0,0,0,0,0,0,0
-SEA,J.P. Crawford,-4,Peralta,-28,0,0,0,0,0,0,0,0
-SEA,Ty France,-4,Peralta,-20,0,0,0,0,0,0,0,0
-PIT,Andrew McCutchen,-4,Rodriguez,5,0,0,0,0,0,0,0,0
-CHW,Nicky Lopez,-4,Singer,-14,0,0,0,0,0,0,0,0
-TOR,Brian Serven,-4,Stroman,-23,2,2,0.2,0,0,0,0,0.09
-TEX,Ezequiel Duran,-5,Brown,-2,4,4,0.9,0,0.3,0,1,0.225
-SF,Jung Hoo Lee,-5,Cease,-9,3,3,1.4,0,0.7,0,0,0.473
-SF,Nick Ahmed,-5,Cease,-9,2,2,0.6,0,0,0,0,0.285
-PHI,Johan Rojas,-5,Corbin,10,2,2,0,0,0,0,1,0.007
-LAA,Logan O'Hoppe,-5,Crawford,-23,2,2,0.1,0,0,0,0,0.044
-LAA,Mike Trout,-5,Crawford,-28,1,0,0,0,0,1,0,0
-LAA,Nolan Schanuel,-5,Crawford,-29,0,0,0,0,0,0,0,0
-LAA,Taylor Ward,-5,Crawford,-28,4,4,0.7,0,0,0,1,0.177
-TB,Austin Shenton,-5,Gomber,53,0,0,0,0,0,0,0,0
-NYM,Brett Baty,-5,Greene,5,3,3,0.3,0,0.2,0,0,0.116
-SD,Kyle Higashioka,-5,Hicks,-19,4,4,0.1,0,0,0,3,0.025
-BAL,Gunnar Henderson,-5,Jones,-8,0,0,0,0,0,0,0,0
-COL,Brenton Doyle,-5,Littell,17,2,2,0.7,0,0,0,0,0.359
-COL,Elias Diaz,-5,Littell,6,6,6,2.5,0.6,0.1,0,0,0.419
-COL,Kris Bryant,-5,Littell,-6,2,2,0.1,0,0,0,0,0.029
-CHC,Mike Tauchman,-5,Miller,-28,0,0,0,0,0,0,0,0
-CHC,Miles Mastrobuoni,-5,Miller,-14,0,0,0,0,0,0,0,0
-CHC,Yan Gomes,-5,Miller,-18,0,0,0,0,0,0,0,0
-PIT,Jack Suwinski,-5,Rodriguez,1,0,0,0,0,0,0,0,0
-PIT,Rowdy Tellez,-5,Rodriguez,1,0,0,0,0,0,0,0,0
-CHW,Korey Lee,-5,Singer,1,4,4,2.2,1,0.7,0,0,0.547
-ARI,Eugenio Suarez,-5,Strider,-3,0,0,0,0,0,0,0,0
-BOS,Reese McGuire,-6,Canning,-14,2,2,0,0,0,0,2,0
-BOS,Wilyer Abreu,-6,Canning,-20,0,0,0,0,0,0,0,0
-PIT,Joey Bart,-6,Cease,-11,0,0,0,0,0,0,0,0
-SF,Matt Chapman,-6,Cease,-15,7,7,1.3,0.9,0,0,4,0.184
-MIL,William Contreras,-6,Gilbert,-23,0,0,0,0,0,0,0,0
-SD,Jackson Merrill,-6,Hicks,-11,2,2,0.7,0,0,0,1,0.351
-PIT,Joey Bart,-6,Hicks,-13,2,2,0.1,0,0,0,1,0.028
-SD,Tyler Wade,-6,Hicks,-20,2,1,0,0,0,1,1,0
-COL,Brendan Rodgers,-6,Littell,8,5,4,1.2,0,0.1,1,2,0.31
-COL,Ezequiel Tovar,-6,Littell,22,3,3,0,0,0,0,1,0.004
-WAS,Jacob Young,-6,Nola,-11,0,0,0,0,0,0,0,0
-WAS,Jesse Winker,-6,Nola,-10,11,11,1.9,0,0.4,0,1,0.175
-SEA,Jorge Polanco,-6,Peralta,-23,0,0,0,0,0,0,0,0
-SEA,Josh Rojas,-6,Peralta,-26,6,4,0,0,0,2,3,0.001
-PIT,Bryan Reynolds,-6,Rodriguez,-6,0,0,0,0,0,0,0,0
-HOU,Grae Kessinger,-7,Bradford,18,0,0,0,0,0,0,0,0
-TEX,Andrew Knizner,-7,Brown,-13,0,0,0,0,0,0,0,0
-BOS,Ceddanne Rafaela,-7,Canning,-19,0,0,0,0,0,0,0,0
-BOS,Trevor Story,-7,Canning,-20,0,0,0,0,0,0,0,0
-SF,Patrick Bailey,-7,Cease,-22,0,0,0,0,0,0,0,0
-LAA,Matt Thaiss,-7,Crawford,-26,1,1,0,0,0,0,1,0
-LAA,Miguel Sano,-7,Crawford,-27,1,1,0,0,0,0,0,0.016
-LAA,Zach Neto,-7,Crawford,-28,4,4,0.1,0,0,0,0,0.026
-BOS,Luis Urias,-7,Gilbert,-27,0,0,0,0,0,0,0,0
-MIL,Rhys Hoskins,-7,Gilbert,-18,2,2,1,1,0,0,1,0.5
-MIL,Sal Frelick,-7,Gilbert,-22,0,0,0,0,0,0,0,0
-NYM,Francisco Alvarez,-7,Greene,-19,2,1,0,0,0,1,0,0.044
-NYM,Joey Wendle,-7,Greene,-4,7,7,2.4,0,0.2,0,1,0.337
-ATL,Adam Duvall,-7,Henry,4,0,0,0,0,0,0,0,0
-BAL,Anthony Santander,-7,Jones,-5,0,0,0,0,0,0,0,0
-WAS,Nick Senzel,-7,Nola,-23,7,6,2.8,0,0.9,1,1,0.461
-BOS,Luis Urias,-7,Peralta,-30,0,0,0,0,0,0,0,0
-SEA,Mitch Haniger,-7,Peralta,-25,2,2,1.5,0.5,0.9,0,0,0.769
-CIN,Bubba Thompson,-7,Quintana,21,0,0,0,0,0,0,0,0
-PIT,Henry Davis,-7,Rodriguez,-2,0,0,0,0,0,0,0,0
-CHW,Dominic Fletcher,-7,Singer,-7,0,0,0,0,0,0,0,0
-CHW,Paul DeJong,-7,Singer,0,0,0,0,0,0,0,0,0
-OAK,Nick Allen,-7,Skubal,-24,5,5,1.2,0,0.1,0,2,0.237
-ARI,Jace Peterson,-7,Strider,-11,1,1,0.6,0,0,0,0,0.625
-BOS,Connor Wong,-8,Canning,-20,0,0,0,0,0,0,0,0
-SF,Mike Yastrzemski,-8,Cease,-32,5,4,0.6,0,0,1,2,0.149
-LAA,Mickey Moniak,-8,Crawford,-29,1,1,1,1,0,0,0,1
-MIL,Jake Bauers,-8,Gilbert,-24,4,4,0.8,0,0.2,0,1,0.2
-BAL,Cedric Mullins,-8,Jones,-7,0,0,0,0,0,0,0,0
-BAL,Colton Cowser,-8,Jones,6,0,0,0,0,0,0,0,0
-BAL,Jorge Mateo,-8,Jones,-5,0,0,0,0,0,0,0,0
-BAL,Ramon Urias,-8,Jones,2,0,0,0,0,0,0,0,0
-NYY,Jahmai Jones,-8,Kikuchi,-33,0,0,0,0,0,0,0,0
-COL,Alan Trejo,-8,Littell,-10,0,0,0,0,0,0,0,0
-COL,Jacob Stallings,-8,Littell,-13,2,2,0.2,0,0,0,0,0.084
-COL,Jake Cave,-8,Littell,-9,0,0,0,0,0,0,0,0
-CHC,Christopher Morel,-8,Miller,-25,0,0,0,0,0,0,0,0
-CHC,Dansby Swanson,-8,Miller,-25,0,0,0,0,0,0,0,0
-CHC,Miguel Amaya,-8,Miller,-25,0,0,0,0,0,0,0,0
-WAS,Trey Lipscomb,-8,Nola,4,0,0,0,0,0,0,0,0
-SEA,Cal Raleigh,-8,Peralta,-35,0,0,0,0,0,0,0,0
-SEA,Dylan Moore,-8,Peralta,-24,0,0,0,0,0,0,0,0
-SEA,Julio Rodriguez,-8,Peralta,-30,0,0,0,0,0,0,0,0
-PIT,Oneil Cruz,-8,Rodriguez,-8,0,0,0,0,0,0,0,0
-CHW,Martin Maldonado,-8,Singer,-17,4,4,0.3,0.2,0,0,2,0.079
-ARI,Alek Thomas,-8,Strider,-3,4,4,0.7,0,0.1,0,1,0.165
-ARI,Jake McCarthy,-8,Strider,-3,4,4,0,0,0,0,4,0
-TEX,Jared Walsh,-9,Brown,-6,0,0,0,0,0,0,0,0
-SF,Austin Slater,-9,Cease,-30,0,0,0,0,0,0,0,0
-MIL,Joey Ortiz,-9,Gilbert,-24,0,0,0,0,0,0,0,0
-NYM,Zack Short,-9,Greene,-27,0,0,0,0,0,0,0,0
-LAD,Taylor Trammell,-9,Hendricks,-4,0,0,0,0,0,0,0,0
-SD,Graham Pauley,-9,Hicks,-11,0,0,0,0,0,0,0,0
-BAL,Austin Hays,-9,Jones,-9,0,0,0,0,0,0,0,0
-BAL,James McCann,-9,Jones,-13,0,0,0,0,0,0,0,0
-BAL,Jordan Westburg,-9,Jones,-11,0,0,0,0,0,0,0,0
-CHC,Garrett Cooper,-9,Miller,-27,0,0,0,0,0,0,0,0
-CHC,Michael Busch,-9,Miller,-27,0,0,0,0,0,0,0,0
-WAS,Joey Gallo,-9,Nola,-17,0,0,0,0,0,0,0,0
-SEA,Dominic Canzone,-9,Peralta,-25,0,0,0,0,0,0,0,0
-SEA,Samad Taylor,-9,Peralta,-32,0,0,0,0,0,0,0,0
-PIT,Alika Williams,-9,Rodriguez,5,0,0,0,0,0,0,0,0
-PIT,Jason Delay,-9,Rodriguez,1,0,0,0,0,0,0,0,0
-PIT,Joey Bart,-9,Rodriguez,-8,0,0,0,0,0,0,0,0
-PIT,Michael A. Taylor,-9,Rodriguez,-3,0,0,0,0,0,0,0,0
-OAK,Esteury Ruiz,-9,Skubal,-34,7,6,0.2,0,0,1,3,0.033
-OAK,J.D. Davis,-9,Skubal,-38,2,2,0,0,0,0,2,0
-OAK,Ryan Noda,-9,Skubal,-48,1,1,0,0,0,0,1,0
-OAK,Seth Brown,-9,Skubal,-45,2,2,0,0,0,0,0,0.01
-OAK,Shea Langeliers,-9,Skubal,-45,3,3,0,0,0,0,3,0
-OAK,Tyler Nevin,-9,Skubal,-48,2,2,0.6,0,0.4,0,1,0.287
-OAK,Zack Gelof,-9,Skubal,-45,3,3,0.3,0,0,0,1,0.084
-TEX,Justin Foscue,-10,Brown,6,0,0,0,0,0,0,0,0
-BOS,Bobby Dalbec,-10,Canning,-12,2,1,0,0,0,1,1,0
-SF,Tyler Fitzgerald,-10,Cease,-21,0,0,0,0,0,0,0,0
-LAA,Jo Adell,-10,Crawford,-31,0,0,0,0,0,0,0,0
-MIL,Blake Perkins,-10,Gilbert,-33,0,0,0,0,0,0,0,0
-MIL,Jackson Chourio,-10,Gilbert,-21,0,0,0,0,0,0,0,0
-MIL,Oliver Dunn,-10,Gilbert,-34,0,0,0,0,0,0,0,0
-SD,Eguy Rosario,-10,Hicks,-18,0,0,0,0,0,0,0,0
-COL,Elehuris Montero,-10,Littell,-13,1,1,0.1,0,0,0,0,0.108
-WAS,Nasim Nu�ez,-10,Nola,-14,0,0,0,0,0,0,0,0
-SEA,Luke Raley,-10,Peralta,-40,2,2,0,0,0,0,1,0.001
-SEA,Seby Zavala,-10,Peralta,-33,0,0,0,0,0,0,0,0
-CHW,Braden Shewmake,-10,Singer,-5,0,0,0,0,0,0,0,0
-OAK,Abraham Toro,-10,Skubal,-46,3,3,0,0,0,0,3,0
-OAK,Brent Rooker,-10,Skubal,-50,7,7,0.2,0.2,0.1,0,3,0.033
-OAK,Darell Hernaiz,-10,Skubal,-72,0,0,0,0,0,0,0,0
-OAK,JJ Bleday,-10,Skubal,-61,0,0,0,0,0,0,0,0
-OAK,Kyle McCann,-10,Skubal,-71,0,0,0,0,0,0,0,0
-OAK,Lawrence Butler,-10,Skubal,-64,0,0,0,0,0,0,0,0
-ARI,Blaze Alexander,-10,Strider,-22,0,0,0,0,0,0,0,0
-ARI,Jorge Barrosa,-10,Strider,-29,0,0,0,0,0,0,0,0
-ARI,Tucker Barnhart,-10,Strider,-18,0,0,0,0,0,0,0,0
+AVG
+0.333
+0.5
+0.286
+0.417
+0
+0
+0.5
+0.333
+0.5
+0
+0
+0
+0.176
+0.412
+0
+0.167
+0.333
+0.2
+0.333
+0
+0.333
+0.667
+0.333
+0
+0.375
+0
+0.167
+0.5
+0
+0.5
+0
+0
+0
+0
+0
+0
+0.357
+0.286
+0.167
+0.2
+0.211
+0.4
+0
+0.333
+0
+0.5
+0.25
+0
+0
+0
+0
+0
+0.5
+0.167
+0
+1
+0
+0
+0
+0
+0.222
+0.2
+0.389
+0
+0
+0
+0
+0
+0.333
+0.556
+0
+0
+0
+1
+0
+0.1
+0
+0
+0
+0
+1
+0.5
+0
+0
+0.333
+0
+0
+0
+0
+0
+0.333
+0.5
+0
+0.8
+0
+0
+0
+0.333
+0
+0
+0.667
+0
+0
+0.333
+0.286
+0.333
+0.2
+0
+0.2
+0
+0
+0
+0
+0.105
+0.222
+0
+0.25
+0.4
+0
+0.5
+0
+0.333
+0
+0
+0
+0.25
+0.087
+0.25
+0
+0.273
+0.333
+0
+0.6
+0
+0.182
+0
+0.333
+0.333
+0.667
+0
+0
+0.067
+0
+0.4
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0.2
+0.2
+0
+0.308
+0
+0
+0
+0
+0.5
+0
+0
+0
+0
+0.333
+0
+0
+0
+0.125
+0.667
+0.111
+0.333
+0
+0.5
+0.1
+0
+0.2
+0
+0.5
+0.333
+0
+0
+0.444
+0
+0
+0
+0
+0
+0
+0
+0
+0.333
+0
+0.222
+0.333
+0
+0
+0.154
+0
+0
+0
+0
+0.5
+0.167
+0
+0
+0.667
+0.2
+0
+0
+0.5
+0
+0
+0
+0
+0
+0
+0
+0.25
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0.5
+0.333
+0
+0
+0
+0
+0
+0
+0.5
+0
+0
+0
+0
+0.286
+0
+0
+0
+0
+0.25
+0
+0
+0.091
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0.5
+0
+0
+0.286
+0
+0
+0.5
+0
+1
+0
+0
+0
+0
+0.2
+1
+0
+0
+1
+0.25
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0.25
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0.5
+0
+0.5
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0.143
+0
+0
+0
+0
+0
+0
+0
