@@ -135,7 +135,7 @@ if option == "STRICT RESULTS (DEFAULT)":
     K_prob = 15.0
     BB_prob = 10.9
 else:
-    K_prob = 19.9
+    K_prob = 24.9
     BB_prob = 10.9
 
 # Add buttons for selecting number of top players
