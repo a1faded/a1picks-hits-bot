@@ -5,7 +5,7 @@ MIN,Matt Wallner,10,Carrasco,36,28,3,14,43,-37
 KC,Nelson Velazquez,10,Flexen,35,0,2,22,27,-38
 COL,Elehuris Montero,-2,Alexander,31,15,118,7,-48,-18
 TB,Jose Caballero,5,Feltner,30,-28,8,18,49,-23
-TB,Amed Rosario,4,Feltner,29,-28,6,22,19,-32
+TB,Amed Rosario,4,Feltner,28,-28,6,22,19,-32
 TB,Curtis Mead,-1,Feltner,28,-16,24,13,37,-18
 TEX,Josh Jung,10,France,28,73,-14,19,3,-30
 BAL,Ryan Mountcastle,9,Falter,28,-8,75,-1,-13,-25
@@ -133,6 +133,7 @@ DET,Carson Kelly,0,Blackburn,4,-26,4,23,-9,-12
 LAD,Chris Taylor,0,Wicks,4,-37,4,-4,10,-16
 PHI,J.T. Realmuto,8,Irvin,4,-41,8,1,9,-18
 TEX,Leody Taveras,9,France,4,12,-9,9,14,-33
+ARI,Randal Grichuk,4,Fried,4,-26,-23,31,-4,6
 MIL,Blake Perkins,-5,Miller,3,-5,8,9,1,-5
 PHI,Bryson Stott,5,Irvin,3,-44,-17,0,14,-16
 ARI,Corbin Carroll,8,Fried,3,-22,-24,11,15,2
@@ -180,13 +181,13 @@ PHI,Edmundo Sosa,-3,Irvin,-2,-45,-9,4,-3,-3
 LAD,Gavin Lux,-4,Wicks,-2,-66,-9,9,0,-24
 NYM,Jeff McNeil,7,Martinez,-2,-12,-6,3,-15,0
 WAS,Jesse Winker,-2,Suarez,-2,-45,-27,-6,5,8
-ARI,Joc Pederson,6,Fried,-2,-30,-27,29,-5,7
+ARI,Joc Pederson,6,Fried,-2,-31,-27,29,-5,7
 PIT,Ke'Bryan Hayes,1,Wells,-2,-35,5,-25,18,2
 CHW,Luis Robert,-6,Wacha,-2,-29,26,-6,-2,9
 BOS,Luis Urias,3,Hall,-2,-1,-14,7,4,8
 BOS,Luis Urias,3,Miller,-2,-11,6,22,-19,-3
 HOU,Mauricio Dubon,4,Gray,-2,-9,4,13,-13,-2
-DET,Riley Greene,7,Blackburn,-2,-37,-8,33,-8,-10
+DET,Riley Greene,7,Blackburn,-2,-37,-8,33,-9,-10
 PHI,Trea Turner,8,Irvin,-2,-35,-19,1,13,-14
 MIL,Andruw Monasterio,3,Miller,-3,-3,0,7,-12,1
 NYM,Brett Baty,-6,Martinez,-3,-11,-1,-5,-5,8
@@ -233,7 +234,6 @@ BOS,Bobby Dalbec,-10,Detmers,-8,-3,-27,-13,10,0
 SF,Jung Hoo Lee,-1,King,-8,-38,-4,1,10,18
 OAK,Lawrence Butler,-1,Maeda,-8,-36,-20,6,19,-13
 LAD,Mookie Betts,10,Wicks,-8,-34,-13,-2,1,-16
-STL,Victor Scott II,-5,Rogers,-8,-41,-3,12,2,-2
 LAA,Zach Neto,-1,Whitlock,-8,-14,-2,2,-4,-3
 TOR,Bo Bichette,-1,Schmidt,-9,-34,19,16,-23,-21
 STL,Ivan Herrera,5,Rogers,-9,-37,-11,8,12,-2
@@ -242,7 +242,9 @@ SF,Luis Matos,3,King,-9,-29,-20,7,0,30
 OAK,Nick Allen,-2,Maeda,-9,-24,-13,-1,-14,1
 BOS,Rafael Devers,10,Detmers,-9,-6,-7,-2,1,-15
 SF,Tom Murphy,5,King,-9,-9,-13,-5,0,19
+STL,Victor Scott II,-5,Rogers,-9,-41,-3,12,2,-2
 TOR,Cavan Biggio,4,Schmidt,-10,12,5,17,-27,-13
+ATL,Chadwick Tromp,-8,Pfaadt,-10,-18,-7,-7,-36,14
 PIT,Edward Olivares,1,Wells,-10,-34,-3,-26,7,-4
 OAK,Esteury Ruiz,-3,Maeda,-10,-51,-12,8,-6,2
 ATL,Forrest Wall,-9,Pfaadt,-10,-11,-7,-9,-34,12
@@ -255,7 +257,6 @@ TOR,Vladimir Guerrero Jr.,9,Schmidt,-10,-11,10,7,-17,-17
 HOU,Yordan Alvarez,9,Gray,-10,5,-26,11,-7,-2
 DET,Zach McKinstry,7,Blackburn,-10,-55,-15,13,13,-5
 ATL,Austin Riley,-7,Pfaadt,-11,-9,-15,-10,-30,20
-ATL,Chadwick Tromp,-8,Pfaadt,-11,-18,-7,-7,-36,14
 BOS,Connor Wong,-7,Detmers,-11,-19,-7,-11,4,-12
 WAS,Ildemaro Vargas,3,Suarez,-11,-45,-10,-10,-20,25
 NYM,Joey Wendle,-7,Martinez,-11,-21,-23,-1,-9,11
@@ -268,7 +269,7 @@ NYY,Jon Berti,1,Rogers,-12,-44,-12,7,1,-1
 WAS,Lane Thomas,-5,Suarez,-12,-34,-15,-12,-9,7
 SD,Luis Campusano,2,Winn,-12,-27,-33,1,-5,-14
 CHW,Martin Maldonado,-8,Wacha,-12,-33,7,-14,-8,9
-BOS,Masataka Yoshida,4,Detmers,-12,-23,-32,3,17,-14
+BOS,Masataka Yoshida,4,Detmers,-12,-24,-32,3,17,-14
 STL,Masyn Winn,1,Rogers,-12,-50,-9,12,-4,1
 WAS,Trey Lipscomb,-9,Suarez,-12,-40,-22,-12,-4,14
 CHC,Yan Gomes,-2,Yamamoto,-12,-30,-20,-19,24,22
