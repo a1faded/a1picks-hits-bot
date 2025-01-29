@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import requests
 from io import StringIO
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg') 
 import numpy as np
 
 # Configure Streamlit page
