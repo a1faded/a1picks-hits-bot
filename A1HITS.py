@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide",
     page_icon="⚾",
     menu_items={
-        'Get Help': 'mailto:erg-racers-0a@icloud.com',
+        'Get Help': 'mailto:your@email.com',
         'Report a bug': "https://github.com/yourrepo/issues",
     }
 )
@@ -37,6 +37,12 @@ st.markdown("""
     .expanderHeader {
         font-size: 1.1em !important;
         font-weight: bold !important;
+    }
+    .color-legend {
+        margin: 1rem 0;
+        padding: 0.5rem;
+        background: #f0f2f6;
+        border-radius: 5px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -145,11 +151,31 @@ def main_page():
     
     styled_df = filtered[show_cols.keys()].rename(columns=show_cols)
     styled_df = styled_df.style.format({
-        'Score': "{:.1f}", '1B%': "{:.1f}%", 'XB%': "{:.1f}%", 
-        'vs Pitcher%': "{:.1f}%", 'K Risk%': "{:.1f}%", 'BB Risk%': "{:.1f}%"
-    })
+        'Score': "{:.1f}", 
+        '1B%': "{:.1f}%", 
+        'XB%': "{:.1f}%", 
+        'vs Pitcher%': "{:.1f}%", 
+        'K Risk%': "{:.1f}%", 
+        'BB Risk%': "{:.1f}%"
+    }).background_gradient(
+        subset=['Score'],
+        cmap='RdYlGn',  # Red-Yellow-Green gradient
+        vmin=0,
+        vmax=100
+    )
     
     st.dataframe(styled_df, use_container_width=True)
+    
+    # Add color legend
+    st.markdown("""
+    <div class="color-legend">
+        <strong>Score Color Guide:</strong><br>
+        <span style="display: inline-block; width: 30px; height: 20px; background: #d7191c; margin: 5px 10px 5px 0;"></span>Low (0-49)  
+        <span style="display: inline-block; width: 30px; height: 20px; background: #fdae61; margin: 5px 10px 5px 0;"></span>Medium (50-69)  
+        <span style="display: inline-block; width: 30px; height: 20px; background: #1a9641; margin: 5px 10px 5px 0;"></span>High (70-100)  
+    </div>
+    """, unsafe_allow_html=True)
+    
     visualize_results(df)
     
     st.markdown("---")
@@ -168,54 +194,6 @@ def info_page():
         ### **Overview**
         This tool analyzes 300+ MLB batters daily to identify players with the highest probability 
         of getting a base hit while minimizing strikeout and walk risks.
-
-        ### **How It Works**
-
-        #### Data Sources
-        - **Probability Model**: Base chances of outcomes (1B, HR, K, BB)
-        - **% Change Model**: Performance vs player's average
-        
-        #### Scoring System
-        We prioritize:
-        - 🟢 **High** 1B & Extra Base (XB) probabilities
-        - 🔴 **Low** Strikeout (K) & Walk (BB) risks
-        - 🟡 Pitcher matchup performance (vs)
-
-        | Factor | Weight     | Impact    |
-        |--------|------------|-----------|
-        | 1B%    | ★★★★★      | Positive  |
-        | XB%    | ★★★★☆      | Positive  |
-        | K%     | ★★★☆☆      | Negative  |
-        | BB%    | ★★☆☆☆      | Negative  |
-
-        ---
-
-        ### **Using the Tool**
-        #### Filters Panel (Left Sidebar)
-        - *Strict Mode*: Limits max K% ≤15 and BB% ≤10
-        - *Wider Mode*: Allows higher risks for more options
-        - Adjust minimum 1B% threshold
-
-        #### Main Results
-        - **Score**: 0-100 rating (Higher = Better)
-        - **Color Coding**:
-          - 🟩 Green = Favorable metrics
-          - 🟥 Red = Risk indicators
-        - **Tooltips**: Hover over columns for definitions
-
-        #### Visualizations
-        - Score distribution shows how players compare
-        - Historical trends available via date selector
-
-        ---
-
-        ### **Interpretation Guide**
-        | Score Range | Recommendation       |
-        |-------------|-----------------------|
-        | 70-100      | ⭐⭐⭐⭐⭐ Elite play    |
-        | 50-70       | ⭐⭐⭐⭐ Strong option  |
-        | 30-50       | ⭐⭐ Situational use   |
-        | <30         | ⚠️ High risk         |
         
         ### **Key Features**
         - **Smart Filters** - Customize risk thresholds
@@ -247,26 +225,20 @@ def info_page():
         | **XB%** | Chance of extra-base hit |
         | **K Risk%** | Strikeout probability |
         | **Score** | Overall matchup quality (0-100) |
-
-        #### Adjusted Metrics
-        ```python
-        Adjusted 1B% = Base 1B% × (1 + % Change/100)
-        ```
-        *Example*: If a batter normally has 20% 1B chance (+25% today) → **25% actual**
         """)
     
     st.markdown("---")
     st.markdown("""
-    *Made with ❤️ by A1FADED*  
+    *Made with ❤️ by [Your Name]*  
     *Data Source: BallparkPal Analytics*  
-    *Version 2.0 | Updated: March 2024*
+    *Version 1.0 | Updated: March 2024*
     """)
 
 def main():
     st.sidebar.title("Navigation")
     app_mode = st.sidebar.radio(
         "Choose Section",
-        ["🏠 Main App", "📚 Guide/FAQ"],
+        ["🏠 Main App", "📚 Documentation"],
         index=0
     )
 
