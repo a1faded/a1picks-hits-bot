@@ -2,12 +2,18 @@ import streamlit as st
 import pandas as pd
 import requests
 from io import StringIO
-import altair as alt  # Replaced matplotlib with Altair
-import matplotlib  # Required for pandas styling
-matplotlib.use('Agg')  # Needed for headless environments
+import altair as alt
 
 # Configure Streamlit page
-st.set_page_config(page_title="A1PICKS MLB Hit Predictor", layout="wide", page_icon="⚾")
+st.set_page_config(
+    page_title="A1PICKS MLB Hit Predictor",
+    layout="wide",
+    page_icon="⚾",
+    menu_items={
+        'Get Help': 'erg-racers-0a@icloud.com',
+        'Report a bug': "https://github.com/yourrepo/issues",
+    }
+)
 
 # Constants
 CSV_URLS = {
@@ -15,19 +21,36 @@ CSV_URLS = {
     'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv'
 }
 
+# Custom CSS
+st.markdown("""
+<style>
+    .reportview-container .main .block-container {
+        padding-top: 2rem;
+    }
+    .sidebar .sidebar-content {
+        padding-top: 2.5rem;
+    }
+    .stRadio [role=radiogroup] {
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .expanderHeader {
+        font-size: 1.1em !important;
+        font-weight: bold !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Data Loading and Processing
 @st.cache_data(ttl=3600)
 def load_and_process_data():
-    # Load datasets
     prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text))
     pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text))
     
-    # Merge datasets
     merged = pd.merge(prob, pct, 
                      on=['Tm', 'Batter', 'Pitcher'],
                      suffixes=('_prob', '_pct'))
     
-    # Calculate adjusted metrics
     metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
     for metric in metrics:
         base_col = f'{metric}_prob'
@@ -37,11 +60,10 @@ def load_and_process_data():
     
     return merged
 
-# Score Calculation
 def calculate_scores(df):
     weights = {
-        'adj_1B': 1.7,    'adj_XB': 1.3,    'adj_vs': 1.1,    
-        'adj_RC': 0.9,    'adj_HR': 0.5,    'adj_K': -1.4,    
+        'adj_1B': 1.7, 'adj_XB': 1.3, 'adj_vs': 1.1,
+        'adj_RC': 0.9, 'adj_HR': 0.5, 'adj_K': -1.4,
         'adj_BB': -1.0   
     }
     
@@ -49,7 +71,6 @@ def calculate_scores(df):
     df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
     return df.round(1)
 
-# Visualization with Altair
 def visualize_results(df):
     chart = alt.Chart(df).mark_bar(
         color='#1f77b4',
@@ -65,7 +86,6 @@ def visualize_results(df):
     )
     st.altair_chart(chart)
 
-# UI Components
 def create_header():
     col1, col2 = st.columns([1, 4])
     with col1:
@@ -73,12 +93,6 @@ def create_header():
                 width=200)
     with col2:
         st.title("MLB Daily Hit Predictor Pro")
-        st.markdown("""
-        **Algorithm Features:**
-        - Advanced BvP (Batter vs Pitcher) modeling
-        - Park-factor adjusted projections
-        - Real-time matchup quality scoring
-        """)
 
 def create_filters():
     st.sidebar.header("Filter Options")
@@ -95,8 +109,7 @@ def create_filters():
     
     return filters
 
-# Main Application
-def main():
+def main_page():
     create_header()
     
     with st.spinner('Crunching matchup data...'):
@@ -132,30 +145,81 @@ def main():
     
     styled_df = filtered[show_cols.keys()].rename(columns=show_cols)
     styled_df = styled_df.style.format({
-    'Score': "{:.1f}",
-    '1B%': "{:.1f}%",
-    'XB%': "{:.1f}%",
-    'vs Pitcher%': "{:.1f}%",
-    'K Risk%': "{:.1f}%",
-    'BB Risk%': "{:.1f}%"
-}).set_properties(**{
-    'background-color': '#f7f7f7',
-    'color': '#333333'
-})
+        'Score': "{:.1f}", '1B%': "{:.1f}%", 'XB%': "{:.1f}%", 
+        'vs Pitcher%': "{:.1f}%", 'K Risk%': "{:.1f}%", 'BB Risk%': "{:.1f}%"
+    })
     
     st.dataframe(styled_df, use_container_width=True)
-    
     visualize_results(df)
     
+    st.markdown("---")
     st.markdown("""
-    <div style='border-left: 4px solid #ff6961; padding-left: 1rem; margin-top: 2rem;'>
-    <p style='color: #666; font-size: 0.9rem;'>
-    <strong>Note:</strong> These predictions combine historical performance and matchup analytics. 
-    Always check lineups and weather conditions before finalizing selections. 
-    Scores above 70 indicate elite matchups, 50-70 good matchups, below 50 marginal matchups.
-    </p>
-    </div>
-    """, unsafe_allow_html=True)
+    *Scores above 70 indicate elite matchups, 50-70 good matchups, below 50 marginal matchups.*  
+    *Always verify lineups and weather conditions before finalizing picks.*
+    """)
+
+def info_page():
+    st.title("Guide & FAQ 📚")
+    
+    with st.expander("📖 Full Guide", expanded=True):
+        st.markdown("""
+        ## MLB Hit Predictor Pro Guide 🔍⚾
+
+        ### **Overview**
+        This tool analyzes 300+ MLB batters daily to identify players with the highest probability 
+        of getting a base hit while minimizing strikeout and walk risks.
+        
+        ### **Key Features**
+        - **Smart Filters** - Customize risk thresholds
+        - **Live Updates** - Data refreshes hourly
+        - **Matchup Scoring** - 0-100 rating system
+        """)
+    
+    with st.expander("❓ Frequently Asked Questions"):
+        st.markdown("""
+        ### FAQ
+        
+        ❓ *How often does data update?*  
+        → Every 15 minutes from 9AM ET until first pitch
+        
+        ❓ *Why different scores for same player?*  
+        → Adjusts for ballpark factors and pitcher handedness
+        
+        ❓ *Can I trust these picks blindly?*  
+        → No! Use as one input in your research
+        """)
+    
+    with st.expander("📊 Understanding Metrics"):
+        st.markdown("""
+        ### Metric Definitions
+        
+        | Term | Description |
+        |------|-------------|
+        | **1B%** | Probability of getting a single |
+        | **XB%** | Chance of extra-base hit |
+        | **K Risk%** | Strikeout probability |
+        | **Score** | Overall matchup quality (0-100) |
+        """)
+    
+    st.markdown("---")
+    st.markdown("""
+    *Made with ❤️ by [Your Name]*  
+    *Data Source: BallparkPal Analytics*  
+    *Version 1.0 | Updated: March 2024*
+    """)
+
+def main():
+    st.sidebar.title("Navigation")
+    app_mode = st.sidebar.radio(
+        "Choose Section",
+        ["🏠 Main App", "📚 Documentation"],
+        index=0
+    )
+
+    if app_mode == "🏠 Main App":
+        main_page()
+    else:
+        info_page()
 
 if __name__ == "__main__":
     main()
