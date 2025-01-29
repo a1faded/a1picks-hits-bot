@@ -174,13 +174,7 @@ def info_page():
         #### Data Sources
         - **Probability Model**: Base chances of outcomes (1B, HR, K, BB)
         - **% Change Model**: Performance vs player's average
-
-        #### Adjusted Metrics
-        ```python
-        Adjusted 1B% = Base 1B% × (1 + % Change/100)
-        ```
-        *Example*: If a batter normally has 20% 1B chance (+25% today) → **25% actual**
-
+        
         #### Scoring System
         We prioritize:
         - 🟢 **High** 1B & Extra Base (XB) probabilities
@@ -253,6 +247,12 @@ def info_page():
         | **XB%** | Chance of extra-base hit |
         | **K Risk%** | Strikeout probability |
         | **Score** | Overall matchup quality (0-100) |
+
+        #### Adjusted Metrics
+        ```python
+        Adjusted 1B% = Base 1B% × (1 + % Change/100)
+        ```
+        *Example*: If a batter normally has 20% 1B chance (+25% today) → **25% actual**
         """)
     
     st.markdown("---")
