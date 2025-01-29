@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide",
     page_icon="⚾",
     menu_items={
-        'Get Help': 'erg-racers-0a@icloud.com',
+        'Get Help': 'mailto:erg-racers-0a@icloud.com',
         'Report a bug': "https://github.com/yourrepo/issues",
     }
 )
