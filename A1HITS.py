@@ -3,6 +3,8 @@ import pandas as pd
 import requests
 from io import StringIO
 import altair as alt  # Replaced matplotlib with Altair
+import matplotlib  # Required for pandas styling
+matplotlib.use('Agg')  # Needed for headless environments
 
 # Configure Streamlit page
 st.set_page_config(page_title="A1PICKS MLB Hit Predictor", layout="wide", page_icon="⚾")
@@ -129,12 +131,17 @@ def main():
     }
     
     styled_df = filtered[show_cols.keys()].rename(columns=show_cols)
-    styled_df = styled_df.style \
-        .background_gradient(subset=['Score'], cmap='YlGn') \
-        .bar(subset=['1B%', 'XB%'], color='#5fba7d') \
-        .bar(subset=['K Risk%', 'BB Risk%'], color='#ff6961') \
-        .format({'Score': "{:.1f}", '1B%': "{:.1f}%", 'XB%': "{:.1f}%", 
-                'vs Pitcher%': "{:.1f}%", 'K Risk%': "{:.1f}%", 'BB Risk%': "{:.1f}%"})
+    styled_df = styled_df.style.format({
+    'Score': "{:.1f}",
+    '1B%': "{:.1f}%",
+    'XB%': "{:.1f}%",
+    'vs Pitcher%': "{:.1f}%",
+    'K Risk%': "{:.1f}%",
+    'BB Risk%': "{:.1f}%"
+}).set_properties(**{
+    'background-color': '#f7f7f7',
+    'color': '#333333'
+})
     
     st.dataframe(styled_df, use_container_width=True)
     
