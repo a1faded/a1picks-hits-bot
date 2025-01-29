@@ -203,16 +203,16 @@ def info_page():
     
     st.markdown("---")
     st.markdown("""
-    *Made with ❤️ by [Your Name]*  
+    *Made with ❤️ by A1FADED*  
     *Data Source: BallparkPal Analytics*  
-    *Version 1.0 | Updated: March 2024*
+    *Version 2.0 | Updated: March 2024*
     """)
 
 def main():
     st.sidebar.title("Navigation")
     app_mode = st.sidebar.radio(
         "Choose Section",
-        ["🏠 Main App", "📚 Documentation"],
+        ["🏠 Main App", "📚 Guide/FAQ"],
         index=0
     )
 
