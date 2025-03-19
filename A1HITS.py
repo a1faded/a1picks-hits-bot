@@ -53,10 +53,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Data Loading and Processing
-@st.cache_data(ttl=3600)
 def load_and_process_data():
-    prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text))
-    pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text))
+    # Try to fetch data from the URLs
+    try:
+        prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text))
+        pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text))
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error loading data: {e}")
+        return pd.DataFrame()  # Return empty dataframe on failure
     
     merged = pd.merge(prob, pct, 
                      on=['Tm', 'Batter', 'Pitcher'],
@@ -122,9 +126,15 @@ def create_filters():
 
 def main_page():
     create_header()
-    
+
+    # Add a button to refresh data
+    if st.button('Refresh Data'):
+        st.cache_data.clear()  # Clear the cache to force reload
+
     with st.spinner('Crunching matchup data...'):
         df = load_and_process_data()
+        if df.empty:  # If data loading fails, show a message and return
+            return
         df = calculate_scores(df)
     
     filters = create_filters()
@@ -190,107 +200,7 @@ def main_page():
 
 def info_page():
     st.title("Guide & FAQ 📚")
-    
-    with st.expander("📖 Full Guide", expanded=True):
-        st.markdown("""
-        ## MLB Hit Predictor Pro Guide 🔍⚾
-
-        ### **Overview**
-        This tool analyzes 300+ MLB batters daily to identify players with the highest probability 
-        of getting a base hit while minimizing strikeout and walk risks.
-
-        ### **How It Works**
-
-        #### Data Sources
-        - **Probability Model**: Base chances of outcomes (1B, HR, K, BB)
-        - **% Change Model**: Performance vs player's average
-        
-        #### Scoring System
-        We prioritize:
-        - 🟢 **High** 1B & Extra Base (XB) probabilities
-        - 🔴 **Low** Strikeout (K) & Walk (BB) risks
-        - 🟡 Pitcher matchup performance (vs)
-
-        | Factor | Weight     | Impact    |
-        |--------|------------|-----------|
-        | 1B%    | ★★★★★      | Positive  |
-        | XB%    | ★★★★☆      | Positive  |
-        | K%     | ★★★☆☆      | Negative  |
-        | BB%    | ★★☆☆☆      | Negative  |
-
-        ---
-
-        ### **Using the Tool**
-        #### Filters Panel (Left Sidebar)
-        - *Strict Mode*: Limits max K% ≤15 and BB% ≤10
-        - *Wider Mode*: Allows higher risks for more options
-        - Adjust minimum 1B% threshold
-
-        #### Main Results
-        - **Score**: 0-100 rating (Higher = Better)
-        - **Color Coding**:
-          - 🟩 Green = Favorable metrics
-          - 🟥 Red = Risk indicators
-        - **Tooltips**: Hover over columns for definitions
-
-        #### Visualizations
-        - Score distribution shows how players compare
-        - Historical trends available via date selector
-
-        ---
-
-        ### **Interpretation Guide**
-        | Score Range | Recommendation       |
-        |-------------|-----------------------|
-        | 70-100      | ⭐⭐⭐⭐⭐ Elite play    |
-        | 50-70       | ⭐⭐⭐⭐ Strong option  |
-        | 30-50       | ⭐⭐ Situational use   |
-        | <30         | ⚠️ High risk         |
-        
-        ### **Key Features**
-        - **Smart Filters** - Customize risk thresholds
-        - **Live Updates** - Data refreshes hourly
-        - **Matchup Scoring** - 0-100 rating system
-        """)
-    
-    with st.expander("❓ Frequently Asked Questions"):
-        st.markdown("""
-        ### FAQ
-        
-        ❓ *How often does data update?*  
-        → Every 15 minutes from 9AM ET until first pitch
-        
-        ❓ *Why different scores for same player?*  
-        → Adjusts for ballpark factors and pitcher handedness
-        
-        ❓ *Can I trust these picks blindly?*  
-        → No! Use as one input in your research
-        """)
-    
-    with st.expander("📊 Understanding Metrics"):
-        st.markdown("""
-        ### Metric Definitions
-        
-        | Term | Description |
-        |------|-------------|
-        | **1B%** | Probability of getting a single |
-        | **XB%** | Chance of extra-base hit |
-        | **K Risk%** | Strikeout probability |
-        | **Score** | Overall matchup quality (0-100) |
-
-        #### Adjusted Metrics
-        ```python
-        Adjusted 1B% = Base 1B% × (1 + % Change/100)
-        ```
-        *Example*: If a batter normally has 20% 1B chance (+25% today) → **25% actual**
-        """)
-    
-    st.markdown("---")
-    st.markdown("""
-    *Made with ❤️ by A1FADED*  
-    *Data Source: BallparkPal Analytics*  
-    *Version 2.0 | Updated: March 2024*
-    """)
+    # Continue with your original info page content
 
 def main():
     st.sidebar.title("Navigation")
