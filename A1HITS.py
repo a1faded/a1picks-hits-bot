@@ -53,7 +53,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Data Loading and Processing
-@st.cache_data(ttl=3600)
 def load_and_process_data():
     prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text))
     pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text))
