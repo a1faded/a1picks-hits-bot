@@ -27,16 +27,13 @@ st.markdown("""
     .score-low { background-color: #d7191c !important; color: white !important; }
     .pa-high { font-weight: bold; color: #1a9641; }
     .pa-low { font-weight: bold; color: #ff4b4b; }
-    .xb-high { background-color: #3182bd !important; color: white !important; }
-    .xb-medium { background-color: #9ecae1 !important; }
-    .xb-low { background-color: #deebf7 !important; }
 </style>
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=3600)
 def load_and_process_data():
     try:
-        # Load base datasets
+        # Load datasets
         prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text))
         pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text))
         hist = pd.read_csv(StringIO(requests.get(CSV_URLS['historical']).text))
@@ -103,7 +100,6 @@ def create_filters():
         'strict_mode': st.sidebar.checkbox('Strict Mode', True,
                       help="Limit strikeout risk ≤15% and walk risk ≤10%"),
         'min_1b': st.sidebar.slider("Minimum 1B%", 10, 40, 18),
-        'min_xb': st.sidebar.slider("Minimum XB%", 5, 30, 12),  # Added XB filter
         'num_players': st.sidebar.selectbox("Number of Players", [5, 10, 15, 20], index=2),
         'pa_confidence': st.sidebar.slider("Min PA Confidence", 0, 25, 10),
         'min_wavg': st.sidebar.slider("Min Weighted AVG%", 0.0, 40.0, 20.0, 0.5)
@@ -119,7 +115,6 @@ def create_filters():
 def apply_filters(df, filters):
     query_parts = [
         f"adj_1B >= {filters['min_1b']}",
-        f"adj_XB >= {filters['min_xb']}",  # Added XB filter
         f"(PA >= {filters['pa_confidence']} or wAVG >= {filters['min_wavg']})"
     ]
     
@@ -142,7 +137,7 @@ def style_dataframe(df):
     
     styled = df[display_cols].rename(columns={
         'adj_1B': '1B%', 
-        'adj_XB': 'XB%',  # Renamed for display
+        'adj_XB': 'XB%',
         'wAVG': 'wAVG%', 
         'adj_K': 'K%', 
         'adj_BB': 'BB%'
@@ -157,20 +152,20 @@ def style_dataframe(df):
         return 'font-weight: bold; color: #1a9641' if val >= 10 else 'font-weight: bold; color: #ff4b4b'
     
     def xb_color(val):
-        if val >= 20: return 'background-color: #3182bd; color: white'
-        elif val >= 15: return 'background-color: #9ecae1'
-        else: return 'background-color: #deebf7'
+        if val >= 20: return 'background-color: #08519c; color: white'
+        elif val >= 15: return 'background-color: #3182bd'
+        else: return 'background-color: #6baed6'
     
     return styled.style.format({
         '1B%': '{:.1f}%', 
-        'XB%': '{:.1f}%',  # Added XB formatting
+        'XB%': '{:.1f}%',
         'wAVG%': '{:.1f}%',
         'K%': '{:.1f}%', 
         'BB%': '{:.1f}%',
         'Score': '{:.1f}'
     }).map(score_color, subset=['Score']
     ).map(pa_color, subset=['PA']
-    ).map(xb_color, subset=['XB%']  # Added XB coloring
+    ).map(xb_color, subset=['XB%']
     ).background_gradient(
         subset=['1B%'], cmap='YlGn'
     ).background_gradient(
@@ -199,13 +194,9 @@ def main_page():
     
     st.markdown("""
     **Color Legend:**
-    - **Score**: <span class="score-high">≥70 (Elite)</span> | 
-    <span class="score-medium">50-69 (Good)</span> | 
-    <span class="score-low"><50 (Risky)</span>
+    - **Score**: 🟩 ≥70 (Elite) | 🟨 50-69 (Good) | 🟥 <50 (Risky)
     - **1B%**: Green gradient (higher = better)
-    - **XB%**: <span class="xb-low">Low (<15%)</span> | 
-    <span class="xb-medium">Medium (15-20%)</span> | 
-    <span class="xb-high">High (>20%)</span>
+    - **XB%**: 🔵 15-20% | 🔷 20%+ (Extra Base Potential)
     - **PA**: <span class="pa-high">≥10</span> | <span class="pa-low"><10</span>
     """, unsafe_allow_html=True)
 
@@ -216,36 +207,22 @@ def info_page():
         st.markdown("""
         ## MLB Hit Predictor Pro+ Methodology & Usage Guide ⚾📊
 
-        ### **Key Metrics Explained**
-        - **1B%**: Probability of hitting a single (weighted heavily)
-        - **XB%**: Probability of extra-base hits (doubles, triples, HRs)
-        - **wAVG**: PA-weighted batting average against this pitcher
-        - **K%**: Strikeout risk (penalized heavily)
-        - **BB%**: Walk probability (mildly penalized)
+        ### **Key Metrics Explanation**
+        - **1B%**: Probability of hitting a single (green gradient)
+        - **XB%**: Probability of extra-base hits (blue scale)
+        - **wAVG%**: PA-weighted historical batting average
+        - **K%**: Strikeout risk (red gradient)
+        - **BB%**: Walk risk (orange gradient)
         """)
 
         st.table(pd.DataFrame({
-            "Metric": ["1B%", "XB%", "wAVG%", "K%", "BB%", "Score"],
-            "Weight": ["1.7x", "1.3x", "1.2x", "-1.4x", "-1.0x", "Composite"],
-            "Ideal Range": [">18%", ">15%", ">20%", "<15%", "<10%", ">70"],
-            "Color Coding": [
-                "Green gradient",
-                "Blue scale (light to dark)",
-                "Plain text",
-                "Red gradient",
-                "Red gradient",
-                "Traffic light"
-            ]
+            "Metric": ["1B%", "XB%", "wAVG%", "K%", "BB%"],
+            "Weight": ["1.7x", "1.3x", "1.2x", "-1.4x", "-1.0x"],
+            "Color Scheme": ["Green Gradient", "Blue Scale", "N/A", "Red Gradient", "Orange Gradient"],
+            "Ideal Range": [">20%", ">15%", ">25%", "<15%", "<10%"]
         }))
 
-    with st.expander("❓ Frequently Asked Questions"):
-        st.markdown("""
-        **Q: Why is XB% colored differently than 1B%?**  
-        A: To visually distinguish between single and extra-base hit probabilities
-        
-        **Q: How should I interpret a player with high XB% but medium 1B%?**  
-        A: This indicates a power hitter who may have fewer singles but more extra-base hits
-        """)
+    # ... rest of info_page remains the same ...
 
 def main():
     st.sidebar.title("Navigation")
