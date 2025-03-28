@@ -44,15 +44,33 @@ def load_and_process_data():
         hist['wAVG'] = hist['AVG'] * hist['PA_weight']
         hist['wXB%'] = (hist['XB'] / hist['AB'].replace(0, 1)) * 100 * hist['PA_weight']
         
-        # Merge data
+        # Merge probability and percent change data first
         merged = pd.merge(
-            pd.merge(prob, pct, on=['Tm', 'Batter', 'Pitcher'], suffixes=('_prob', '_pct')),
+            prob, 
+            pct, 
+            on=['Tm', 'Batter', 'Pitcher'], 
+            suffixes=('_prob', '_pct')
+        )
+        
+        # Then merge with historical data
+        merged = pd.merge(
+            merged,
             hist[['Tm','Batter','Pitcher','PA','H','HR','wAVG','wXB%','AVG']],
             on=['Tm','Batter','Pitcher'],
             how='left'
-        ).fillna({'wAVG': merged['AVG'].mean(), 'wXB%': 0, 'PA': 0})
+        )
+        
+        # Calculate league average for imputation
+        league_avg = merged['AVG'].mean() if 'AVG' in merged.columns else 25.0
+        
+        # Fill missing values
+        merged['wAVG'] = merged['wAVG'].fillna(league_avg)
+        merged['wXB%'] = merged['wXB%'].fillna(0)
+        merged['PA'] = merged['PA'].fillna(0)
+        merged['AVG'] = merged['AVG'].fillna(league_avg)
         
         return merged
+    
     except Exception as e:
         st.error(f"Data loading failed: {str(e)}")
         st.stop()
@@ -61,7 +79,10 @@ def calculate_scores(df):
     # Calculate adjusted metrics
     metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
     for metric in metrics:
-        df[f'adj_{metric}'] = df[f'{metric}_prob'] * (1 + df[f'{metric}_pct']/100).clip(0, 100)
+        if f'{metric}_prob' in df.columns and f'{metric}_pct' in df.columns:
+            df[f'adj_{metric}'] = df[f'{metric}_prob'] * (1 + df[f'{metric}_pct']/100).clip(0, 100)
+        else:
+            df[f'adj_{metric}'] = 0
     
     # Apply weights
     weights = {
@@ -70,8 +91,18 @@ def calculate_scores(df):
         'adj_BB': -1.0, 'wAVG': 1.2, 'wXB%': 0.9, 'PA': 0.05
     }
     
-    df['Score'] = sum(df[col]*weight for col, weight in weights.items())
-    df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
+    # Only use weights for columns that exist
+    df['Score'] = 0
+    for col, weight in weights.items():
+        if col in df.columns:
+            df['Score'] += df[col] * weight
+    
+    # Normalize score
+    if df['Score'].nunique() > 1:
+        df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
+    else:
+        df['Score'] = 50
+    
     return df.round(1)
 
 def create_filters():
@@ -114,6 +145,9 @@ def style_dataframe(df):
         'Batter', 'Pitcher', 'adj_1B', 'wAVG', 'PA',
         'adj_K', 'adj_BB', 'Score'
     ]
+    
+    # Only include columns that exist in the dataframe
+    display_cols = [col for col in display_cols if col in df.columns]
     
     styled = df[display_cols].rename(columns={
         'adj_1B': '1B%', 'wAVG': 'wAVG%', 'adj_K': 'K%', 'adj_BB': 'BB%'
