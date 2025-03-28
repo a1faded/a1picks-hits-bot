@@ -172,6 +172,34 @@ def style_dataframe(df):
         subset=['K%', 'BB%'], cmap='YlOrRd_r'
     )
 
+def main_page():
+    st.title("MLB Daily Hit Predictor Pro+")
+    st.image('https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true', width=200)
+    
+    with st.spinner('Loading and analyzing data...'):
+        df = load_and_process_data()
+        df = calculate_scores(df)
+    
+    filters = create_filters()
+    filtered = apply_filters(df, filters)
+    
+    st.subheader(f"Top {min(filters['num_players'], len(filtered))} Recommended Batters")
+    st.dataframe(
+        style_dataframe(
+            filtered.sort_values('Score', ascending=False).head(filters['num_players'])
+        ),
+        use_container_width=True,
+        height=800
+    )
+    
+    st.markdown("""
+    **Color Legend:**
+    - **Score**: 🟩 ≥70 (Elite) | 🟨 50-69 (Good) | 🟥 <50 (Risky)
+    - **1B%**: Green gradient (higher = better)
+    - **XB%**: 🔵 15-20% | 🔷 20%+ (Extra Base Potential)
+    - **PA**: <span class="pa-high">≥10</span> | <span class="pa-low"><10</span>
+    """, unsafe_allow_html=True)
+
 def info_page():
     st.title("Guide & FAQ 📚")
     
@@ -184,35 +212,8 @@ def info_page():
         1. **Predictive Models** (Probability of outcomes)
         2. **Recent Performance Trends** (% Change from baseline)
         3. **Historical Matchup Data** (Actual batter vs pitcher history)
-
-        ### **Key Components**
-        #### 1. Data Integration Engine
-        ```python
-        Final Score = 
-          (1B Probability * 1.7) +
-          (XB Probability * 1.3) + 
-          (Historical wAVG * 1.2) -
-          (Strikeout Risk * 1.4) + 
-          (Walk Risk * 1.0) +
-          ... # Other weighted factors
-        ```
-
-        #### 2. PA-Weighted Historical Analysis
-        - **Weighting Formula**: 
-          ```python
-          PA_weight = log(PA + 1) / log(25)  # Caps at 25 PA
-          wAVG = AVG * PA_weight
-          wXB% = XB% * PA_weight
-          ```
-        - **Sample Size Protection**: Diminishes impact of small sample sizes
-
-        #### 3. Dynamic Risk Management
-        - Strikeout/Walk risk penalties scale exponentially
-        - Auto-normalized 0-100 scoring system
-
-        ### **Score Calculation Breakdown**
         """)
-        
+
         st.table(pd.DataFrame({
             "Metric": ["1B Probability", "XB Probability", "Historical wAVG",
                       "Strikeout Risk", "Walk Risk", "Pitcher Matchup"],
