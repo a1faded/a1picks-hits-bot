@@ -203,41 +203,31 @@ def info_page():
         1. **Predictive Models** (Probability of outcomes)
         2. **Recent Performance Trends** (% Change from baseline)
         3. **Historical Matchup Data** (Actual batter vs pitcher history)
+        """)
 
-        ### **Key Components**
-        #### 1. Data Integration Engine
-        ```python
-        Final Score = 
-          (1B Probability * 1.7) +
-          (XB Probability * 1.3) + 
-          (Historical wAVG * 1.2) -
-          (Strikeout Risk * 1.4) + 
-          ... # and 6 other weighted factors
-        ```
-
-        #### 2. PA-Weighted Historical Analysis
-        - **Weighting Formula**: 
-          ```python
-          PA_weight = log(PA + 1) / log(25)  # Caps at 25 PA
-          wAVG = AVG * PA_weight
-          ```
-        - **Sample Size Protection**: Diminishes impact of small sample sizes
-
-        #### 3. Dynamic Risk Management
-        - Strikeout/Walk risk penalties scale exponentially
-        - Auto-normalized 0-100 scoring system
-
+        # Score Calculation Breakdown Table
+        st.markdown("""
         ### **Score Calculation Breakdown**
-        <table class="methodology-table">
-          <tr><th>Metric</th><th>Weight</th><th>Type</th><th>Calculation Example</th></tr>
-          <tr><td>1B Probability</td><td>1.7x</td><td>Positive</td><td>20% base + 25% trend → 25% adj</td></tr>
-          <tr><td>XB Probability</td><td>1.3x</td><td>Positive</td><td>15% base + 20% trend → 18% adj</td></tr>
-          <tr><td>Historical wAVG</td><td>1.2x</td><td>Positive</td><td>.300 avg * 0.8 PA_weight = .240</td></tr>
-          <tr><td>Strikeout Risk</td><td>-1.4x</td><td>Negative</td><td>25% risk → -35 points</td></tr>
-          <tr><td>Walk Risk</td><td>-1.0x</td><td>Negative</td><td>15% risk → -15 points</td></tr>
-          <tr><td>Pitcher Matchup</td><td>1.1x</td><td>Context</td><td>+10% vs pitcher's average</td></tr>
-        </table>
+        """, unsafe_allow_html=True)
+        
+        # Using Streamlit's native table instead of HTML
+        st.table(pd.DataFrame({
+            "Metric": ["1B Probability", "XB Probability", "Historical wAVG", 
+                      "Strikeout Risk", "Walk Risk", "Pitcher Matchup"],
+            "Weight": ["1.7x", "1.3x", "1.2x", "-1.4x", "-1.0x", "1.1x"],
+            "Type": ["Positive", "Positive", "Positive", 
+                    "Negative", "Negative", "Context"],
+            "Calculation Example": [
+                "20% base + 25% trend → 25% adj",
+                "15% base + 20% trend → 18% adj",
+                ".300 avg * 0.8 PA_weight = .240",
+                "25% risk → -35 points",
+                "15% risk → -15 points",
+                "+10% vs pitcher's average"
+            ]
+        }))
 
+        st.markdown("""
         ### **Step-by-Step Usage Guide**
         1. **Set Baseline Filters**  
            - *Strict Mode*: Conservative risk thresholds (Recommended for new users)
