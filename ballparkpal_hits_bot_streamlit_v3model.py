@@ -70,8 +70,8 @@ def validate_historical_data(df):
 @st.cache_data(ttl=3600)
 def load_and_process_data():
     try:
-        # Load base datasets
-        prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text)
+        # Load base datasets - FIXED: Added missing closing parentheses
+        prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text))
         pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text))
         
         # Load and validate historical data
