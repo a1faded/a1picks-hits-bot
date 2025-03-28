@@ -33,7 +33,7 @@ st.markdown("""
 @st.cache_data(ttl=3600)
 def load_and_process_data():
     try:
-        # Load datasets
+        # Load base datasets
         prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text))
         pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text))
         hist = pd.read_csv(StringIO(requests.get(CSV_URLS['historical']).text))
@@ -44,35 +44,63 @@ def load_and_process_data():
         hist['wAVG'] = hist['AVG'] * hist['PA_weight']
         hist['wXB%'] = (hist['XB'] / hist['AB'].replace(0, 1)) * 100 * hist['PA_weight']
         
-        # Merge data
+        # Merge probability and percent change data first
         merged = pd.merge(
-            pd.merge(prob, pct, on=['Tm', 'Batter', 'Pitcher'], suffixes=('_prob', '_pct')),
+            prob, 
+            pct, 
+            on=['Tm', 'Batter', 'Pitcher'], 
+            suffixes=('_prob', '_pct')
+        )
+        
+        # Then merge with historical data
+        merged = pd.merge(
+            merged,
             hist[['Tm','Batter','Pitcher','PA','H','HR','wAVG','wXB%','AVG']],
             on=['Tm','Batter','Pitcher'],
             how='left'
-        ).fillna({'wAVG': merged['AVG'].mean(), 'wXB%': 0, 'PA': 0})
+        )
+        
+        # Calculate league average after merging
+        league_avg = merged['AVG'].mean() if 'AVG' in merged.columns else 25.0
+        
+        # Fill missing values safely
+        merged = merged.fillna({
+            'wAVG': league_avg,
+            'wXB%': 0,
+            'PA': 0,
+            'AVG': league_avg
+        })
         
         return merged
+    
     except Exception as e:
         st.error(f"Data loading failed: {str(e)}")
         st.stop()
 
 def calculate_scores(df):
-    # Calculate adjusted metrics
-    metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
-    for metric in metrics:
-        df[f'adj_{metric}'] = df[f'{metric}_prob'] * (1 + df[f'{metric}_pct']/100).clip(0, 100)
+    try:
+        metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
+        for metric in metrics:
+            base_col = f'{metric}_prob'
+            pct_col = f'{metric}_pct'
+            if base_col in df.columns and pct_col in df.columns:
+                df[f'adj_{metric}'] = df[base_col] * (1 + df[pct_col]/100).clip(0, 100)
+            else:
+                df[f'adj_{metric}'] = 0
+        
+        weights = {
+            'adj_1B': 1.7, 'adj_XB': 1.3, 'adj_vs': 1.1,
+            'adj_RC': 0.9, 'adj_HR': 0.5, 'adj_K': -1.4,
+            'adj_BB': -1.0, 'wAVG': 1.2, 'wXB%': 0.9, 'PA': 0.05
+        }
+        
+        df['Score'] = sum(df[col]*weight for col, weight in weights.items() if col in df.columns)
+        df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
+        return df.round(1)
     
-    # Apply weights
-    weights = {
-        'adj_1B': 1.7, 'adj_XB': 1.3, 'adj_vs': 1.1,
-        'adj_RC': 0.9, 'adj_HR': 0.5, 'adj_K': -1.4,
-        'adj_BB': -1.0, 'wAVG': 1.2, 'wXB%': 0.9, 'PA': 0.05
-    }
-    
-    df['Score'] = sum(df[col]*weight for col, weight in weights.items())
-    df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
-    return df.round(1)
+    except Exception as e:
+        st.error(f"Score calculation failed: {str(e)}")
+        st.stop()
 
 def create_filters():
     st.sidebar.header("Advanced Filters")
@@ -109,33 +137,24 @@ def apply_filters(df, filters):
     return df.query(" and ".join(query_parts))
 
 def style_dataframe(df):
-    # Reorder columns with Score last
     display_cols = [
         'Batter', 'Pitcher', 'adj_1B', 'wAVG', 'PA',
         'adj_K', 'adj_BB', 'Score'
     ]
-    
-    # Only include columns that exist in the dataframe
     display_cols = [col for col in display_cols if col in df.columns]
     
     styled = df[display_cols].rename(columns={
-        'adj_1B': '1B%', 'wAVG': 'wAVG%', 'adj_K': 'K%', 'adj_BB': 'BB%'
+        'adj_1B': '1B%', 'wAVG': 'wAVG%', 
+        'adj_K': 'K%', 'adj_BB': 'BB%'
     })
     
-    # Updated styling using Styler.map instead of deprecated applymap
     def score_color(val):
-        if val >= 70:
-            return 'background-color: #1a9641; color: white'
-        elif val >= 50:
-            return 'background-color: #fdae61'
-        else:
-            return 'background-color: #d7191c; color: white'
+        if val >= 70: return 'background-color: #1a9641; color: white'
+        elif val >= 50: return 'background-color: #fdae61'
+        else: return 'background-color: #d7191c; color: white'
     
     def pa_color(val):
-        if val >= 10:
-            return 'font-weight: bold; color: #1a9641'
-        else:
-            return 'font-weight: bold; color: #ff4b4b'
+        return 'font-weight: bold; color: #1a9641' if val >= 10 else 'font-weight: bold; color: #ff4b4b'
     
     return styled.style.format({
         '1B%': '{:.1f}%', 'wAVG%': '{:.1f}%',
@@ -144,11 +163,9 @@ def style_dataframe(df):
     }).map(score_color, subset=['Score']
     ).map(pa_color, subset=['PA']
     ).background_gradient(
-        subset=['1B%', 'wAVG%'],
-        cmap='YlGn'
+        subset=['1B%', 'wAVG%'], cmap='YlGn'
     ).background_gradient(
-        subset=['K%', 'BB%'],
-        cmap='YlOrRd_r'
+        subset=['K%', 'BB%'], cmap='YlOrRd_r'
     )
 
 def main_page():
