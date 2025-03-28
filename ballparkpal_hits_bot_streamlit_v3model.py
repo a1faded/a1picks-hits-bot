@@ -28,6 +28,7 @@ st.markdown("""
     .score-low { background-color: #d7191c !important; color: white !important; }
     .pa-high { font-weight: bold; color: #1a9641; }
     .pa-low { font-weight: bold; color: #ff4b4b; }
+    .music-warning { color: #ff4b4b; font-size: 0.9em; margin-top: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -98,9 +99,9 @@ def create_filters():
             'max_bb': st.sidebar.slider("Max BB Risk%", 10, 30, 15)
         })
     
-    # Add music controls
+    # Music controls
     st.sidebar.markdown("---")
-    mute_music = st.sidebar.checkbox("🔇 Mute Music", value=False)
+    mute_music = st.sidebar.checkbox("🔇 Mute Music", value=st.session_state.get('mute_music', False))
     
     return filters, mute_music
 
@@ -121,23 +122,21 @@ def apply_filters(df, filters):
     return df.query(" and ".join(query_parts))
 
 def style_dataframe(df):
-    # Reorder columns with Score last
     display_cols = [
         'Batter', 'Pitcher', 'adj_1B', 'wAVG', 'PA',
         'adj_K', 'adj_BB', 'Score'
     ]
+    display_cols = [col for col in display_cols if col in df.columns]
     
     styled = df[display_cols].rename(columns={
-        'adj_1B': '1B%', 'wAVG': 'wAVG%', 'adj_K': 'K%', 'adj_BB': 'BB%'
+        'adj_1B': '1B%', 'wAVG': 'wAVG%', 
+        'adj_K': 'K%', 'adj_BB': 'BB%'
     })
     
     def score_color(val):
-        if val >= 70:
-            return 'background-color: #1a9641; color: white'
-        elif val >= 50:
-            return 'background-color: #fdae61'
-        else:
-            return 'background-color: #d7191c; color: white'
+        if val >= 70: return 'background-color: #1a9641; color: white'
+        elif val >= 50: return 'background-color: #fdae61'
+        else: return 'background-color: #d7191c; color: white'
     
     def pa_color(val):
         return 'font-weight: bold; color: #1a9641' if val >= 10 else 'font-weight: bold; color: #ff4b4b'
@@ -157,27 +156,57 @@ def style_dataframe(df):
 def main_page():
     st.title("MLB Daily Hit Predictor Pro+")
     st.image('https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true', width=200)
-    
-    # Music player
+
+    # Initialize music state
+    if 'mute_music' not in st.session_state:
+        st.session_state.mute_music = False
+
+    # Music player with autoplay handling
     audio_url = "https://github.com/a1faded/a1picks-hits-bot/raw/main/Take%20Me%20Out%20to%20the%20Ballgame%20-%20Nancy%20Bea%20-%20Dodger%20Stadium%20Organ.mp3"
     components.html(f"""
-        <audio id="bgMusic" {'muted' if st.session_state.get('mute_music', False) else ''} autoplay loop style="display: none;">
+        <audio id="bgMusic" {'muted' if st.session_state.mute_music else ''} loop style="display: none;">
             <source src="{audio_url}" type="audio/mpeg">
         </audio>
         <script>
             document.addEventListener('DOMContentLoaded', function() {{
                 var audio = document.getElementById('bgMusic');
                 audio.volume = 0.3;
+                
+                // Autoplay with user gesture fallback
+                function handlePlay() {{
+                    audio.play().catch(error => {{
+                        // Show play button if autoplay blocked
+                        audio.controls = true;
+                        audio.style.display = 'block';
+                    }});
+                }}
+                
+                // Initial play attempt
+                handlePlay();
+                
+                // Enable click-to-play anywhere on the page
+                document.body.addEventListener('click', function() {{
+                    if (audio.paused) {{
+                        handlePlay();
+                    }}
+                }});
             }});
         </script>
     """, height=0)
-    
+
+    # Get filters and handle music state
+    filters, mute_music = create_filters()
+    if mute_music != st.session_state.mute_music:
+        st.session_state.mute_music = mute_music
+        components.html(f"""
+            <script>
+                document.getElementById('bgMusic').muted = {str(mute_music).lower()};
+            </script>
+        """, height=0)
+
     with st.spinner('Loading and analyzing data...'):
         df = load_and_process_data()
         df = calculate_scores(df)
-    
-    filters, mute_music = create_filters()
-    st.session_state.mute_music = mute_music
     
     filtered = apply_filters(df, filters)
     
@@ -197,6 +226,13 @@ def main_page():
     <span class="score-low">Low (<50)</span>
     - <span class="pa-high">≥10 PA</span> | 
     <span class="pa-low"><10 PA</span>
+    """, unsafe_allow_html=True)
+    
+    # Add music play instructions
+    st.markdown("""
+    <div class="music-warning">
+        Note: If music doesn't play automatically, click anywhere on the page to start it.
+    </div>
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
