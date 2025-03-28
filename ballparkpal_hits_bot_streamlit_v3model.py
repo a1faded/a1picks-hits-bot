@@ -37,8 +37,8 @@ st.markdown("""
 @st.cache_data(ttl=3600)
 def load_and_process_data():
     # Load base datasets
-    prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text)
-    pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text)
+    prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text))
+    pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text))
     
     # Load and process historical data
     hist = pd.read_csv(StringIO(requests.get(CSV_URLS['historical']).text))
