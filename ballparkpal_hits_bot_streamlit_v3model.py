@@ -4,7 +4,6 @@ import numpy as np
 import requests
 from io import StringIO
 import altair as alt
-import streamlit.components.v1 as components
 
 # Configure Streamlit page
 st.set_page_config(
@@ -28,14 +27,13 @@ st.markdown("""
     .score-low { background-color: #d7191c !important; color: white !important; }
     .pa-high { font-weight: bold; color: #1a9641; }
     .pa-low { font-weight: bold; color: #ff4b4b; }
-    .music-warning { color: #ff4b4b; font-size: 0.9em; margin-top: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=3600)
 def load_and_process_data():
     try:
-        # Load datasets
+        # Load base datasets
         prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text))
         pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text))
         hist = pd.read_csv(StringIO(requests.get(CSV_URLS['historical']).text))
@@ -54,33 +52,47 @@ def load_and_process_data():
             how='left'
         )
         
-        # Fill missing values
+        # Calculate league average after merging
         league_avg = merged['AVG'].mean() if 'AVG' in merged.columns else 25.0
-        merged['wAVG'] = merged['wAVG'].fillna(league_avg)
-        merged['wXB%'] = merged['wXB%'].fillna(0)
-        merged['PA'] = merged['PA'].fillna(0)
+        
+        # Fill missing values
+        merged = merged.fillna({
+            'wAVG': league_avg,
+            'wXB%': 0,
+            'PA': 0,
+            'AVG': league_avg
+        })
         
         return merged
+    
     except Exception as e:
         st.error(f"Data loading failed: {str(e)}")
         st.stop()
 
 def calculate_scores(df):
-    # Calculate adjusted metrics
-    metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
-    for metric in metrics:
-        df[f'adj_{metric}'] = df[f'{metric}_prob'] * (1 + df[f'{metric}_pct']/100).clip(0, 100)
+    try:
+        metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
+        for metric in metrics:
+            base_col = f'{metric}_prob'
+            pct_col = f'{metric}_pct'
+            if base_col in df.columns and pct_col in df.columns:
+                df[f'adj_{metric}'] = df[base_col] * (1 + df[pct_col]/100).clip(0, 100)
+            else:
+                df[f'adj_{metric}'] = 0
+        
+        weights = {
+            'adj_1B': 1.7, 'adj_XB': 1.3, 'adj_vs': 1.1,
+            'adj_RC': 0.9, 'adj_HR': 0.5, 'adj_K': -1.4,
+            'adj_BB': -1.0, 'wAVG': 1.2, 'wXB%': 0.9, 'PA': 0.05
+        }
+        
+        df['Score'] = sum(df[col]*weight for col, weight in weights.items() if col in df.columns)
+        df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
+        return df.round(1)
     
-    # Apply weights
-    weights = {
-        'adj_1B': 1.7, 'adj_XB': 1.3, 'adj_vs': 1.1,
-        'adj_RC': 0.9, 'adj_HR': 0.5, 'adj_K': -1.4,
-        'adj_BB': -1.0, 'wAVG': 1.2, 'wXB%': 0.9, 'PA': 0.05
-    }
-    
-    df['Score'] = sum(df[col]*weight for col, weight in weights.items())
-    df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
-    return df.round(1)
+    except Exception as e:
+        st.error(f"Score calculation failed: {str(e)}")
+        st.stop()
 
 def create_filters():
     st.sidebar.header("Advanced Filters")
@@ -98,12 +110,7 @@ def create_filters():
             'max_k': st.sidebar.slider("Max K Risk%", 15, 40, 25),
             'max_bb': st.sidebar.slider("Max BB Risk%", 10, 30, 15)
         })
-    
-    # Music controls
-    st.sidebar.markdown("---")
-    mute_music = st.sidebar.checkbox("🔇 Mute Music", value=st.session_state.get('mute_music', False))
-    
-    return filters, mute_music
+    return filters
 
 def apply_filters(df, filters):
     query_parts = [
@@ -156,58 +163,12 @@ def style_dataframe(df):
 def main_page():
     st.title("MLB Daily Hit Predictor Pro+")
     st.image('https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true', width=200)
-
-    # Initialize music state
-    if 'mute_music' not in st.session_state:
-        st.session_state.mute_music = False
-
-    # Music player with autoplay handling
-    audio_url = "https://github.com/a1faded/a1picks-hits-bot/raw/main/Take%20Me%20Out%20to%20the%20Ballgame%20-%20Nancy%20Bea%20-%20Dodger%20Stadium%20Organ.mp3"
-    components.html(f"""
-        <audio id="bgMusic" {'muted' if st.session_state.mute_music else ''} loop style="display: none;">
-            <source src="{audio_url}" type="audio/mpeg">
-        </audio>
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {{
-                var audio = document.getElementById('bgMusic');
-                audio.volume = 0.3;
-                
-                // Autoplay with user gesture fallback
-                function handlePlay() {{
-                    audio.play().catch(error => {{
-                        // Show play button if autoplay blocked
-                        audio.controls = true;
-                        audio.style.display = 'block';
-                    }});
-                }}
-                
-                // Initial play attempt
-                handlePlay();
-                
-                // Enable click-to-play anywhere on the page
-                document.body.addEventListener('click', function() {{
-                    if (audio.paused) {{
-                        handlePlay();
-                    }}
-                }});
-            }});
-        </script>
-    """, height=0)
-
-    # Get filters and handle music state
-    filters, mute_music = create_filters()
-    if mute_music != st.session_state.mute_music:
-        st.session_state.mute_music = mute_music
-        components.html(f"""
-            <script>
-                document.getElementById('bgMusic').muted = {str(mute_music).lower()};
-            </script>
-        """, height=0)
-
+    
     with st.spinner('Loading and analyzing data...'):
         df = load_and_process_data()
         df = calculate_scores(df)
     
+    filters = create_filters()
     filtered = apply_filters(df, filters)
     
     st.subheader(f"Top {min(filters['num_players'], len(filtered))} Recommended Batters")
@@ -227,13 +188,40 @@ def main_page():
     - <span class="pa-high">≥10 PA</span> | 
     <span class="pa-low"><10 PA</span>
     """, unsafe_allow_html=True)
+
+def info_page():
+    st.title("Guide & FAQ 📚")
     
-    # Add music play instructions
-    st.markdown("""
-    <div class="music-warning">
-        Note: If music doesn't play automatically, click anywhere on the page to start it.
-    </div>
-    """, unsafe_allow_html=True)
+    with st.expander("📖 Full Guide", expanded=True):
+        st.markdown("""
+        ## MLB Hit Predictor Pro+ Guide
+        ### **How It Works**
+        - Combines predictive models with historical matchup data
+        - Weighted scoring system emphasizes recent performance
+        - PA-weighted averages ensure meaningful sample sizes
+        """)
+    
+    with st.expander("❓ FAQ"):
+        st.markdown("""
+        **Q: How often is the data updated?**  
+        A: Data refreshes hourly during game days
+        
+        **Q: What does PA Confidence mean?**  
+        A: Minimum plate appearances against the pitcher to consider historical data reliable
+        """)
+
+def main():
+    st.sidebar.title("Navigation")
+    app_mode = st.sidebar.radio(
+        "Choose Section",
+        ["🏠 Main App", "📚 Documentation"],
+        index=0
+    )
+    
+    if app_mode == "🏠 Main App":
+        main_page()
+    else:
+        info_page()
 
 if __name__ == "__main__":
-    main_page()
+    main()
