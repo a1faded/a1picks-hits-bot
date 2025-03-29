@@ -356,18 +356,18 @@ def info_page():
         - Applies ballpark factor adjustments
         - Considers recent hot/cold streaks
 
-        ### **Model Details**
-        **Q: Why different weights for metrics?**  
-        - Based on 5-year correlation analysis with actual hits
-       - **1B**: Has highest predictive value (r=0.62)  # Added colon and bold formatting
-        - XB% weights optimized for daily fantasy scoring
-
-        **Q: How are weather factors handled?**  
-        - Built into probability models through:
-          - Wind speed/direction
-          - Precipitation probability
-          - Temperature/humidity
-        - Not shown directly in interface
+       ### **Model Details**
+    **Q: Why different weights for metrics?**  
+    - Based on 5-year correlation analysis with actual hits
+    - **1B**: Has highest predictive value (r=0.62)  # Fixed line
+    - **XB%**: Weights optimized for daily fantasy scoring  # Modified for consistency
+    
+    **Q: How are weather factors handled?**  
+    - Built into probability models through:
+      - Wind speed/direction
+      - Precipitation probability
+      - Temperature/humidity
+    - Not shown directly in interface
 
         ### **Usage Tips**
         **Q: Best practices for new users?**  
