@@ -359,7 +359,7 @@ def info_page():
         ### **Model Details**
         **Q: Why different weights for metrics?**  
         - Based on 5-year correlation analysis with actual hits
-        - 1B has highest predictive value (r=0.62)
+       - **1B**: Has highest predictive value (r=0.62)  # Added colon and bold formatting
         - XB% weights optimized for daily fantasy scoring
 
         **Q: How are weather factors handled?**  
@@ -383,11 +383,11 @@ def info_page():
         """)
 
     st.markdown("""
-    ---
-    **Model Version**: 3.2 | **Data Sources**: BallparkPal, MLB Statcast, WeatherAPI  
-    **Last Updated**: June 2024 | **Created By**: A1FADED Analytics  
-    **Key Changes**: Added XB% tracking, enhanced weather integration
-    """)
+---
+**Model Version**: 3.3 | **Data Sources**: BallparkPal, MLB Statcast, WeatherAPI  
+**Last Updated**: June 2024 | **Created By**: A1FADED Analytics  
+**Key Changes**: Added dynamic risk modeling, PA confidence tiers
+""")
 
 def main():
     st.sidebar.title("Navigation")
