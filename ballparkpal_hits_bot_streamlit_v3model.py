@@ -313,22 +313,23 @@ def info_page():
         """)
 
     with st.expander("🔍 Advanced Methodology Details"):
-        st.markdown("""
-        ### **Algorithm Deep Dive**
-        ```python
-        # Full scoring formula
-        Score = sum(
-            adj_1B * 1.7,  # Singles probability
-            adj_XB * 1.3,  # Extra bases probability
-            wAVG * 1.2,    # Weighted historical average
-            adj_vs * 1.1,  # Performance vs pitcher
-            adj_RC * 0.9,  # Runs created
-            adj_HR * 0.5,  # Home run probability
-            adj_K * -1.4,  # Strikeout risk
-            adj_BB * -1.0, # Walk risk
-            PA * 0.05      # Plate appearance bonus
-        )
-        ```
+    st.markdown("""
+    ### **Algorithm Deep Dive**
+    ```python
+    # Full scoring formula
+    Score = sum(
+        adj_1B * 1.7,  # Singles probability
+        adj_XB * 1.3,  # Extra bases probability
+        wAVG * 1.2,    # Weighted historical average
+        adj_vs * 1.1,  # Performance vs pitcher
+        adj_RC * 0.9,  # Runs created
+        adj_HR * 0.5,  # Home run probability
+        adj_K * -1.4,  # Strikeout risk
+        adj_BB * -1.0, # Walk risk
+        PA * 0.05      # Plate appearance bonus
+    )
+    \```
+    """)
 
         #### **Data Processing Pipeline**
         1. Merge probability models with % change data
