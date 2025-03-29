@@ -359,7 +359,7 @@ def info_page():
        ### **Model Details**
     **Q: Why different weights for metrics?**  
     - Based on 5-year correlation analysis with actual hits
-    - **1B**: Has highest predictive value (r≈62%)  # Percentage format
+    - **1B**: Has highest predictive value   # Percentage format
     - **XB%**: Weights optimized for daily fantasy scoring  # Modified for consistency
     
     **Q: How are weather factors handled?**  
