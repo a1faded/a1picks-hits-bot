@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import requests
 from io import StringIO
-import altair as alt
 
 # Configure Streamlit page
 st.set_page_config(
@@ -25,17 +24,20 @@ st.markdown("""
     .score-high { background-color: #1a9641 !important; color: white !important; }
     .score-medium { background-color: #fdae61 !important; }
     .score-low { background-color: #d7191c !important; color: white !important; }
-    .pa-high { font-weight: bold; color: #1a9641; }
-    .pa-low { font-weight: bold; color: #ff4b4b; }
+    .pa-tier-0 { color: #ff4b4b; font-weight: bold; }
+    .pa-tier-1 { color: #fdae61; font-weight: bold; }
+    .pa-tier-2 { color: #a1d99b; font-weight: bold; }
+    .pa-tier-3 { color: #31a354; font-weight: bold; }
+    .pa-tier-4 { color: #006d2c; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=3600)
 def load_and_process_data():
     try:
-        # Load datasets with error handling
+        # Enhanced data loading with error handling
         def fetch_data(url):
-            response = requests.get(url)
+            response = requests.get(url, timeout=10)
             response.raise_for_status()
             return pd.read_csv(StringIO(response.text))
         
@@ -45,28 +47,25 @@ def load_and_process_data():
         
         # Process historical data
         hist['AVG'] = (hist['H'] / hist['AB'].replace(0, 1)) * 100
-        hist['PA_weight'] = np.log1p(hist['PA']) / np.log1p(25)
-        hist['wAVG'] = hist['AVG'] * hist['PA_weight']
-        hist['wXB%'] = (hist['XB'] / hist['AB'].replace(0, 1)) * 100 * hist['PA_weight']
+        hist['wXB%'] = (hist['XB'] / hist['AB'].replace(0, 1)) * 100
         
         # Merge data with validation
         merged = pd.merge(
-            pd.merge(prob, pct, on=['Tm', 'Batter', 'Pitcher'], suffixes=('_prob', '_pct')),
-            hist[['Tm','Batter','Pitcher','PA','H','HR','wAVG','wXB%','AVG']],
+            pd.merge(prob, pct, on=['Tm', 'Batter', 'Pitcher'], suffixes=('_prob', '_pct'), validate='one_to_one'),
+            hist[['Tm','Batter','Pitcher','PA','H','HR','AVG','wXB%']],
             on=['Tm','Batter','Pitcher'],
-            how='left',
-            validate='one_to_one'
+            how='left'
         )
         
-        # Calculate league average after merging
+        # Calculate league averages
         league_avg = merged['AVG'].mean() if 'AVG' in merged.columns else 25.0
+        league_xb = merged['wXB%'].mean() if 'wXB%' in merged.columns else 8.0
         
         # Fill missing values
         merged = merged.fillna({
-            'wAVG': league_avg,
-            'wXB%': 0,
-            'PA': 0,
-            'AVG': league_avg
+            'AVG': league_avg,
+            'wXB%': league_xb,
+            'PA': 0
         })
         
         return merged
@@ -88,10 +87,13 @@ def calculate_scores(df):
                 df[f'adj_{metric}'] = 0
 
         # Create PA confidence tiers
-        pa_bins = [-1, 0, 5, 15, 25, np.inf]
-        pa_labels = [0, 1, 3, 5, 7]
-        df['PA_tier'] = pd.cut(df['PA'], bins=pa_bins, labels=pa_labels).astype(int)
+        df['PA_tier'] = pd.cut(df['PA'], 
+                              bins=[-1, 0, 5, 15, 25, np.inf],
+                              labels=[0, 1, 2, 3, 4]).astype(int)
 
+        # Calculate 1B/K ratio
+        df['1B_K_ratio'] = df['adj_1B'] / df['adj_K'].replace(0, 1)
+        
         # Non-linear penalties
         df['K_penalty'] = np.where(
             df['adj_K'] > 15,
@@ -99,23 +101,16 @@ def calculate_scores(df):
             0
         )
         
-        df['BB_penalty'] = np.where(
-            df['adj_BB'] > 12,
-            (df['adj_BB'] - 12) ** 1.2,
-            0
-        )
-
         # Updated weights
         weights = {
             'adj_1B': 2.0,    # Increased emphasis on singles
-            'adj_XB': 1.2,     # Slightly reduced XB weight
-            'wAVG': 1.5,       # More historical emphasis
-            'adj_vs': 1.0,     # Matchup history
-            'PA_tier': 3.0,    # Tiered PA bonus
+            'adj_XB': 1.2,    # Extra bases
+            'AVG': 1.5,       # Historical average
+            'adj_vs': 1.0,    # Matchup history
+            'PA_tier': 3.0,   # Tiered PA bonus
             'K_penalty': -0.3, # Exponential K penalty
-            'adj_BB': -0.7,    # Adjusted walk impact
-            'adj_HR': 0.4,     # Reduced HR weight
-            'adj_RC': 0.8      # Runs created
+            'adj_BB': -0.7,   # Walk impact
+            'wXB%': 0.8       # Weighted XB%
         }
 
         # Calculate base score
@@ -129,14 +124,13 @@ def calculate_scores(df):
         )
         
         # Apply ratio-based adjustments
-        df['1B_K_ratio'] = df['adj_1B'] / df['adj_K']
         df['Score'] = np.where(
             df['1B_K_ratio'] < 1.3,
-            df['Score'] * 0.85,
+            df['Score'] * 0.85,  # 15% penalty for poor ratio
             df['Score']
         )
 
-        # Normalize scores
+        # Normalize scores (0-100)
         score_min = df['Score'].min()
         score_range = df['Score'].max() - score_min
         df['Score'] = np.where(
@@ -155,12 +149,14 @@ def create_filters():
     st.sidebar.header("Advanced Filters")
     filters = {
         'strict_mode': st.sidebar.checkbox('Strict Mode', True,
-                      help="Enforce 1B/K ratio >1.5 and BB% ≤12%"),
+                      help="Enforce 1B/K ratio >1.3 and BB% ≤12%"),
         'min_1b': st.sidebar.slider("Minimum 1B%", 10, 40, 18),
         'num_players': st.sidebar.selectbox("Number of Players", [5, 10, 15, 20], index=2),
-        'pa_tier': st.sidebar.slider("Min PA Confidence Tier", 0, 4, 2,
-                   format=lambda x: ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"][x]),
-        'min_wavg': st.sidebar.slider("Min Weighted AVG%", 0.0, 40.0, 20.0, 0.5)
+        'min_pa_tier': st.sidebar.select_slider("Min PA Confidence", 
+                                              options=[0, 1, 2, 3, 4],
+                                              value=2,
+                                              format_func=lambda x: ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"][x]),
+        'min_avg': st.sidebar.slider("Min Historical AVG%", 0.0, 40.0, 20.0, 0.5)
     }
     
     if not filters['strict_mode']:
@@ -173,8 +169,8 @@ def create_filters():
 def apply_filters(df, filters):
     query_parts = [
         f"adj_1B >= {filters['min_1b']}",
-        f"PA_tier >= {filters['pa_tier']}",
-        f"wAVG >= {filters['min_wavg']}"
+        f"PA_tier >= {filters['min_pa_tier']}",
+        f"AVG >= {filters['min_avg']}"
     ]
     
     if filters['strict_mode']:
@@ -193,15 +189,14 @@ def apply_filters(df, filters):
 
 def style_dataframe(df):
     display_cols = [
-        'Batter', 'Pitcher', 'adj_1B', 'adj_XB', 'wAVG', 'PA_tier',
+        'Batter', 'Pitcher', 'adj_1B', 'adj_XB', 'AVG', 'PA_tier',
         'adj_K', 'adj_BB', '1B_K_ratio', 'Score'
     ]
-    display_cols = [col for col in display_cols if col in df.columns]
     
     styled = df[display_cols].rename(columns={
         'adj_1B': '1B%', 
         'adj_XB': 'XB%',
-        'wAVG': 'wAVG%', 
+        'AVG': 'AVG%', 
         'adj_K': 'K%', 
         'adj_BB': 'BB%',
         'PA_tier': 'PA Tier',
@@ -214,24 +209,18 @@ def style_dataframe(df):
         else: return 'background-color: #d7191c; color: white'
     
     def pa_tier_color(val):
-        return {
-            0: 'color: #ff4b4b',
-            1: 'color: #fdae61',
-            2: 'color: #a1d99b',
-            3: 'color: #31a354',
-            4: 'color: #006d2c'
-        }.get(val, '')
+        return f'pa-tier-{val}'
     
     return styled.style.format({
         '1B%': '{:.1f}%', 
         'XB%': '{:.1f}%',
-        'wAVG%': '{:.1f}%',
+        'AVG%': '{:.1f}%',
         'K%': '{:.1f}%', 
         'BB%': '{:.1f}%',
         '1B/K Ratio': '{:.2f}',
         'Score': '{:.1f}'
-    }).map(score_color, subset=['Score']
-    ).map(pa_tier_color, subset=['PA Tier']
+    }).applymap(score_color, subset=['Score']
+    ).applymap(pa_tier_color, subset=['PA Tier']
     ).background_gradient(
         subset=['1B%'], cmap='YlGn'
     ).background_gradient(
@@ -262,7 +251,7 @@ def main_page():
     **Color Legend:**
     - **Score**: 🟩 ≥70 (Elite) | 🟨 50-69 (Good) | 🟥 <50 (Risky)
     - **PA Tier**: 
-      🔴 0 | 🟠 1-5 | 🟡 5-15 | 🟢 15-25 | 🔵 25+
+      🔴 None | 🟠 Low (1-5) | 🟡 Medium (5-15) | 🟢 High (15-25) | 🔵 Elite (25+)
     - **1B/K Ratio**: ≥1.3 required in Strict Mode
     """, unsafe_allow_html=True)
 
