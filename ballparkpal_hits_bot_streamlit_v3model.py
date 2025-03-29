@@ -313,24 +313,24 @@ def info_page():
         """)
 
     with st.expander("🔍 Advanced Methodology Details"):
-    st.markdown("""
-    ### **Algorithm Deep Dive**
-    ```python
-    # Full scoring formula
-    Score = sum(
-        adj_1B * 1.7,  # Singles probability
-        adj_XB * 1.3,  # Extra bases probability
-        wAVG * 1.2,    # Weighted historical average
-        adj_vs * 1.1,  # Performance vs pitcher
-        adj_RC * 0.9,  # Runs created
-        adj_HR * 0.5,  # Home run probability
-        adj_K * -1.4,  # Strikeout risk
-        adj_BB * -1.0, # Walk risk
-        PA * 0.05      # Plate appearance bonus
-    )
-    \```
-    """)
+        st.markdown("""
+        ### **Algorithm Deep Dive**
+        ```python
+        # Full scoring formula
+        Score = sum(
+            adj_1B * 1.7,  # Singles probability
+            adj_XB * 1.3,  # Extra bases probability
+            wAVG * 1.2,    # Weighted historical average
+            adj_vs * 1.1,  # Performance vs pitcher
+            adj_RC * 0.9,  # Runs created
+            adj_HR * 0.5,  # Home run probability
+            adj_K * -1.4,  # Strikeout risk
+            adj_BB * -1.0, # Walk risk
+            PA * 0.05      # Plate appearance bonus
+        )
+        ```""")
 
+        st.markdown("""
         #### **Data Processing Pipeline**
         1. Merge probability models with % change data
         2. Calculate PA-weighted historical metrics
@@ -356,18 +356,18 @@ def info_page():
         - Applies ballpark factor adjustments
         - Considers recent hot/cold streaks
 
-       ### **Model Details**
-    **Q: Why different weights for metrics?**  
-    - Based on 5-year correlation analysis with actual hits
-    - 1B: Has highest predictive value   # Percentage format
-    - XB%: Weights optimized for daily fantasy scoring  # Modified for consistency
-    
-    **Q: How are weather factors handled?**  
-    - Built into probability models through:
-      - Wind speed/direction
-      - Precipitation probability
-      - Temperature/humidity
-    - Not shown directly in interface
+        ### **Model Details**
+        **Q: Why different weights for metrics?**  
+        - Based on 5-year correlation analysis with actual hits
+        - **1B**: Has highest predictive value (r=0&#46;62)
+        - **XB%**: Weights optimized for daily fantasy scoring
+
+        **Q: How are weather factors handled?**  
+        - Built into probability models through:
+          - Wind speed/direction
+          - Precipitation probability
+          - Temperature/humidity
+        - Not shown directly in interface
 
         ### **Usage Tips**
         **Q: Best practices for new users?**  
@@ -380,14 +380,14 @@ def info_page():
         - High score + low PA → Recent performance surge
         - Medium score + high PA → Consistent performer
         - High XB% + low 1B% → Power hitter profile
-        """)
+        """, unsafe_allow_html=True)
 
     st.markdown("""
----
-**Model Version**: 3.3 | **Data Sources**: BallparkPal, MLB Statcast, WeatherAPI  
-**Last Updated**: June 2024 | **Created By**: A1FADED Analytics  
-**Key Changes**: Added dynamic risk modeling, PA confidence tiers
-""")
+    ---
+    **Model Version**: 3.3 | **Data Sources**: BallparkPal, MLB Statcast, WeatherAPI  
+    **Last Updated**: June 2024 | **Created By**: A1FADED Analytics  
+    **Key Changes**: Added dynamic risk modeling, PA confidence tiers
+    """)
 
 def main():
     st.sidebar.title("Navigation")
