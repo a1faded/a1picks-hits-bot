@@ -234,16 +234,30 @@ def info_page():
            - *Weighted AVG*: Historical performance threshold (Default: 20%)
 
         3. **Risk Tolerance** (In Relaxed Mode)  
-           - *Max K Risk*: Strikeout probability ceiling (15-40%)
-           - *Max BB Risk*: Walk probability limit (10-30%)
+           **Recommended Safe Limits**:
+           - *Max K Risk*: ≤25% (MLB average: ~22%)
+           - *Max BB Risk*: ≤12% (MLB average: ~8%)
+           - *Min 1B%*: ≥15% (vs 18% in Strict)
+           - *Min wAVG*: ≥15% (vs 20% in Strict)
 
         4. **Interpret Results**  
-           - **Score Colors**:  
-             🟩 ≥70 (Elite Play) | 🟨 50-69 (Good) | 🟥 <50 (Risky)  
-           - **XB% Colors**:  
-             🔵 15-20% | 🔷 20%+ (Extra Base Potential)
-           - **PA Indicators**:  
-             🔴 <10 PA | 🟢 ≥10 PA
+           - **Score Colors**: 🟩 ≥70 (Elite) | 🟨 50-69 (Good) | 🟥 <50 (Risky)  
+           - **XB% Colors**: 🔵 15-20% | 🔷 20%+  
+           - **PA Indicators**: 🔴 <10 PA | 🟢 ≥10 PA
+
+        **Relaxed Mode Pro Tips**:
+        - Always pair higher risk limits with:
+          - Higher PA Confidence (≥15)
+          - Above-average XB% (≥18%)
+        - Avoid combining:
+          - K% >25 + BB% >15
+          - PA <5 + wAVG <15
+        - Ideal Relaxed Profile:
+          ```python
+          (K% ≤25 and BB% ≤12) and 
+          (XB% ≥18 or PA ≥15) and 
+          Score ≥55
+          ```
         """)
 
     with st.expander("🔍 Advanced Methodology Details"):
