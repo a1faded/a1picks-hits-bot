@@ -33,15 +33,15 @@ st.markdown("""
 @st.cache_data(ttl=3600)
 def load_and_process_data():
     try:
-        # Enhanced data loading with error handling
-        def safe_fetch(url):
+        # Load datasets with error handling
+        def fetch_data(url):
             response = requests.get(url)
             response.raise_for_status()
             return pd.read_csv(StringIO(response.text))
         
-        prob = safe_fetch(CSV_URLS['probabilities'])
-        pct = safe_fetch(CSV_URLS['percent_change'])
-        hist = safe_fetch(CSV_URLS['historical'])
+        prob = fetch_data(CSV_URLS['probabilities'])
+        pct = fetch_data(CSV_URLS['percent_change'])
+        hist = fetch_data(CSV_URLS['historical'])
         
         # Process historical data
         hist['AVG'] = (hist['H'] / hist['AB'].replace(0, 1)) * 100
@@ -49,15 +49,19 @@ def load_and_process_data():
         hist['wAVG'] = hist['AVG'] * hist['PA_weight']
         hist['wXB%'] = (hist['XB'] / hist['AB'].replace(0, 1)) * 100 * hist['PA_weight']
         
-        # Safer merge with validation
+        # Merge data with validation
         merged = pd.merge(
-            pd.merge(prob, pct, on=['Tm', 'Batter', 'Pitcher'], suffixes=('_prob', '_pct'), validate='one_to_one'),
+            pd.merge(prob, pct, on=['Tm', 'Batter', 'Pitcher'], suffixes=('_prob', '_pct')),
             hist[['Tm','Batter','Pitcher','PA','H','HR','wAVG','wXB%','AVG']],
             on=['Tm','Batter','Pitcher'],
-            how='left'
+            how='left',
+            validate='one_to_one'
         )
         
+        # Calculate league average after merging
         league_avg = merged['AVG'].mean() if 'AVG' in merged.columns else 25.0
+        
+        # Fill missing values
         merged = merged.fillna({
             'wAVG': league_avg,
             'wXB%': 0,
@@ -83,40 +87,63 @@ def calculate_scores(df):
             else:
                 df[f'adj_{metric}'] = 0
 
-        # Add critical ratio metrics
-        df['1B_K_ratio'] = df['adj_1B'] / (df['adj_K'] + 0.001)  # Avoid division by zero
-        df['XB_BB_ratio'] = df['adj_XB'] / (df['adj_BB'] + 0.001)
+        # Create PA confidence tiers
+        pa_bins = [-1, 0, 5, 15, 25, np.inf]
+        pa_labels = [0, 1, 3, 5, 7]
+        df['PA_tier'] = pd.cut(df['PA'], bins=pa_bins, labels=pa_labels).astype(int)
+
+        # Non-linear penalties
+        df['K_penalty'] = np.where(
+            df['adj_K'] > 15,
+            (df['adj_K'] - 15) ** 1.5,
+            0
+        )
         
-        # Enhanced weights with ratio considerations
+        df['BB_penalty'] = np.where(
+            df['adj_BB'] > 12,
+            (df['adj_BB'] - 12) ** 1.2,
+            0
+        )
+
+        # Updated weights
         weights = {
-            'adj_1B': 1.8,  # Slightly increased from 1.7
-            'adj_XB': 1.2,  # Slightly reduced from 1.3
-            'adj_vs': 1.1,
-            'adj_RC': 0.9,
-            'adj_HR': 0.5,
-            'adj_K': -1.6,  # Stronger penalty
-            'adj_BB': -1.1, # Slightly stronger penalty
-            'wAVG': 1.2,
-            'wXB%': 0.8,    # Reduced from 0.9
-            'PA': 0.05,
-            '1B_K_ratio': 0.3,  # Bonus for good ratio
-            'XB_BB_ratio': 0.2
+            'adj_1B': 2.0,    # Increased emphasis on singles
+            'adj_XB': 1.2,     # Slightly reduced XB weight
+            'wAVG': 1.5,       # More historical emphasis
+            'adj_vs': 1.0,     # Matchup history
+            'PA_tier': 3.0,    # Tiered PA bonus
+            'K_penalty': -0.3, # Exponential K penalty
+            'adj_BB': -0.7,    # Adjusted walk impact
+            'adj_HR': 0.4,     # Reduced HR weight
+            'adj_RC': 0.8      # Runs created
         }
-        
+
         # Calculate base score
         df['Score'] = sum(df[col]*weight for col, weight in weights.items() if col in df.columns)
         
-        # Apply non-linear penalties
+        # Apply safeguards
         df['Score'] = np.where(
-            df['adj_K'] > 15,
-            df['Score'] * (1 - (df['adj_K'] - 15)/100),  # Additional 1% penalty per K% over 15
+            df['adj_1B'] < 15,
+            df['Score'] * 0.7,  # 30% penalty for low 1B%
             df['Score']
         )
         
-        # Normalize scores with safeguard
+        # Apply ratio-based adjustments
+        df['1B_K_ratio'] = df['adj_1B'] / df['adj_K']
+        df['Score'] = np.where(
+            df['1B_K_ratio'] < 1.3,
+            df['Score'] * 0.85,
+            df['Score']
+        )
+
+        # Normalize scores
         score_min = df['Score'].min()
-        score_range = max(df['Score'].max() - score_min, 0.001)  # Avoid division by zero
-        df['Score'] = ((df['Score'] - score_min) / score_range) * 100
+        score_range = df['Score'].max() - score_min
+        df['Score'] = np.where(
+            score_range > 0,
+            ((df['Score'] - score_min) / score_range) * 100,
+            50  # Fallback for identical scores
+        )
         
         return df.round(1)
     
@@ -128,12 +155,12 @@ def create_filters():
     st.sidebar.header("Advanced Filters")
     filters = {
         'strict_mode': st.sidebar.checkbox('Strict Mode', True,
-                      help="Enforces 1B/K ratio >1.3 and BB% ≤12%"),
+                      help="Enforce 1B/K ratio >1.5 and BB% ≤12%"),
         'min_1b': st.sidebar.slider("Minimum 1B%", 10, 40, 18),
         'num_players': st.sidebar.selectbox("Number of Players", [5, 10, 15, 20], index=2),
-        'pa_confidence': st.sidebar.slider("Min PA Confidence", 0, 25, 10),
-        'min_wavg': st.sidebar.slider("Min Weighted AVG%", 0.0, 40.0, 20.0, 0.5),
-        'min_1b_k_ratio': st.sidebar.slider("Min 1B/K Ratio", 0.5, 3.0, 1.3, 0.1) if st.sidebar.checkbox('Custom Ratio Threshold', False) else 1.3
+        'pa_tier': st.sidebar.slider("Min PA Confidence Tier", 0, 4, 2,
+                   format=lambda x: ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"][x]),
+        'min_wavg': st.sidebar.slider("Min Weighted AVG%", 0.0, 40.0, 20.0, 0.5)
     }
     
     if not filters['strict_mode']:
@@ -146,12 +173,16 @@ def create_filters():
 def apply_filters(df, filters):
     query_parts = [
         f"adj_1B >= {filters['min_1b']}",
-        f"(PA >= {filters['pa_confidence']} or wAVG >= {filters['min_wavg']})",
-        f"1B_K_ratio >= {filters['min_1b_k_ratio']}"
+        f"PA_tier >= {filters['pa_tier']}",
+        f"wAVG >= {filters['min_wavg']}"
     ]
     
     if filters['strict_mode']:
-        query_parts += ["adj_K <= 15", "adj_BB <= 12"]  # Tighter BB control
+        query_parts += [
+            "1B_K_ratio >= 1.3",
+            "adj_BB <= 12",
+            "K_penalty == 0"
+        ]
     else:
         query_parts += [
             f"adj_K <= {filters.get('max_k', 25)}",
@@ -162,7 +193,7 @@ def apply_filters(df, filters):
 
 def style_dataframe(df):
     display_cols = [
-        'Batter', 'Pitcher', 'adj_1B', 'adj_XB', 'wAVG', 'PA',
+        'Batter', 'Pitcher', 'adj_1B', 'adj_XB', 'wAVG', 'PA_tier',
         'adj_K', 'adj_BB', '1B_K_ratio', 'Score'
     ]
     display_cols = [col for col in display_cols if col in df.columns]
@@ -173,7 +204,8 @@ def style_dataframe(df):
         'wAVG': 'wAVG%', 
         'adj_K': 'K%', 
         'adj_BB': 'BB%',
-        '1B_K_ratio': '1B/K'
+        'PA_tier': 'PA Tier',
+        '1B_K_ratio': '1B/K Ratio'
     })
     
     def score_color(val):
@@ -181,8 +213,14 @@ def style_dataframe(df):
         elif val >= 50: return 'background-color: #fdae61'
         else: return 'background-color: #d7191c; color: white'
     
-    def ratio_color(val):
-        return 'background-color: #2b8cbe; color: white' if val >= 1.5 else 'background-color: #a6bddb'
+    def pa_tier_color(val):
+        return {
+            0: 'color: #ff4b4b',
+            1: 'color: #fdae61',
+            2: 'color: #a1d99b',
+            3: 'color: #31a354',
+            4: 'color: #006d2c'
+        }.get(val, '')
     
     return styled.style.format({
         '1B%': '{:.1f}%', 
@@ -190,10 +228,10 @@ def style_dataframe(df):
         'wAVG%': '{:.1f}%',
         'K%': '{:.1f}%', 
         'BB%': '{:.1f}%',
-        '1B/K': '{:.2f}',
+        '1B/K Ratio': '{:.2f}',
         'Score': '{:.1f}'
     }).map(score_color, subset=['Score']
-    ).map(ratio_color, subset=['1B/K']
+    ).map(pa_tier_color, subset=['PA Tier']
     ).background_gradient(
         subset=['1B%'], cmap='YlGn'
     ).background_gradient(
@@ -223,9 +261,9 @@ def main_page():
     st.markdown("""
     **Color Legend:**
     - **Score**: 🟩 ≥70 (Elite) | 🟨 50-69 (Good) | 🟥 <50 (Risky)
-    - **1B%**: Green gradient (higher = better)
-    - **XB%**: 🔵 15-20% | 🔷 20%+ (Extra Base Potential)
-    - **PA**: <span class="pa-high">≥10</span> | <span class="pa-low"><10</span>
+    - **PA Tier**: 
+      🔴 0 | 🟠 1-5 | 🟡 5-15 | 🟢 15-25 | 🔵 25+
+    - **1B/K Ratio**: ≥1.3 required in Strict Mode
     """, unsafe_allow_html=True)
 
 def info_page():
