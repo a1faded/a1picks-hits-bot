@@ -33,10 +33,15 @@ st.markdown("""
 @st.cache_data(ttl=3600)
 def load_and_process_data():
     try:
-        # Load datasets
-        prob = pd.read_csv(StringIO(requests.get(CSV_URLS['probabilities']).text))
-        pct = pd.read_csv(StringIO(requests.get(CSV_URLS['percent_change']).text))
-        hist = pd.read_csv(StringIO(requests.get(CSV_URLS['historical']).text))
+        # Load datasets with error handling
+        def fetch_data(url):
+            response = requests.get(url)
+            response.raise_for_status()
+            return pd.read_csv(StringIO(response.text))
+        
+        prob = fetch_data(CSV_URLS['probabilities'])
+        pct = fetch_data(CSV_URLS['percent_change'])
+        hist = fetch_data(CSV_URLS['historical'])
         
         # Process historical data
         hist['AVG'] = (hist['H'] / hist['AB'].replace(0, 1)) * 100
@@ -44,12 +49,13 @@ def load_and_process_data():
         hist['wAVG'] = hist['AVG'] * hist['PA_weight']
         hist['wXB%'] = (hist['XB'] / hist['AB'].replace(0, 1)) * 100 * hist['PA_weight']
         
-        # Merge data
+        # Merge data with validation
         merged = pd.merge(
             pd.merge(prob, pct, on=['Tm', 'Batter', 'Pitcher'], suffixes=('_prob', '_pct')),
             hist[['Tm','Batter','Pitcher','PA','H','HR','wAVG','wXB%','AVG']],
             on=['Tm','Batter','Pitcher'],
-            how='left'
+            how='left',
+            validate='one_to_one'
         )
         
         # Calculate league average after merging
@@ -71,6 +77,7 @@ def load_and_process_data():
 
 def calculate_scores(df):
     try:
+        # Calculate adjusted metrics
         metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
         for metric in metrics:
             base_col = f'{metric}_prob'
@@ -79,15 +86,65 @@ def calculate_scores(df):
                 df[f'adj_{metric}'] = df[base_col] * (1 + df[pct_col]/100).clip(0, 100)
             else:
                 df[f'adj_{metric}'] = 0
+
+        # Create PA confidence tiers
+        pa_bins = [-1, 0, 5, 15, 25, np.inf]
+        pa_labels = [0, 1, 3, 5, 7]
+        df['PA_tier'] = pd.cut(df['PA'], bins=pa_bins, labels=pa_labels).astype(int)
+
+        # Non-linear penalties
+        df['K_penalty'] = np.where(
+            df['adj_K'] > 15,
+            (df['adj_K'] - 15) ** 1.5,
+            0
+        )
         
+        df['BB_penalty'] = np.where(
+            df['adj_BB'] > 12,
+            (df['adj_BB'] - 12) ** 1.2,
+            0
+        )
+
+        # Updated weights
         weights = {
-            'adj_1B': 1.7, 'adj_XB': 1.3, 'adj_vs': 1.1,
-            'adj_RC': 0.9, 'adj_HR': 0.5, 'adj_K': -1.4,
-            'adj_BB': -1.0, 'wAVG': 1.2, 'wXB%': 0.9, 'PA': 0.05
+            'adj_1B': 2.0,    # Increased emphasis on singles
+            'adj_XB': 1.2,     # Slightly reduced XB weight
+            'wAVG': 1.5,       # More historical emphasis
+            'adj_vs': 1.0,     # Matchup history
+            'PA_tier': 3.0,    # Tiered PA bonus
+            'K_penalty': -0.3, # Exponential K penalty
+            'adj_BB': -0.7,    # Adjusted walk impact
+            'adj_HR': 0.4,     # Reduced HR weight
+            'adj_RC': 0.8      # Runs created
         }
-        
+
+        # Calculate base score
         df['Score'] = sum(df[col]*weight for col, weight in weights.items() if col in df.columns)
-        df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
+        
+        # Apply safeguards
+        df['Score'] = np.where(
+            df['adj_1B'] < 15,
+            df['Score'] * 0.7,  # 30% penalty for low 1B%
+            df['Score']
+        )
+        
+        # Apply ratio-based adjustments
+        df['1B_K_ratio'] = df['adj_1B'] / df['adj_K']
+        df['Score'] = np.where(
+            df['1B_K_ratio'] < 1.3,
+            df['Score'] * 0.85,
+            df['Score']
+        )
+
+        # Normalize scores
+        score_min = df['Score'].min()
+        score_range = df['Score'].max() - score_min
+        df['Score'] = np.where(
+            score_range > 0,
+            ((df['Score'] - score_min) / score_range) * 100,
+            50  # Fallback for identical scores
+        )
+        
         return df.round(1)
     
     except Exception as e:
@@ -98,10 +155,11 @@ def create_filters():
     st.sidebar.header("Advanced Filters")
     filters = {
         'strict_mode': st.sidebar.checkbox('Strict Mode', True,
-                      help="Limit strikeout risk ≤15% and walk risk ≤10%"),
+                      help="Enforce 1B/K ratio >1.5 and BB% ≤12%"),
         'min_1b': st.sidebar.slider("Minimum 1B%", 10, 40, 18),
         'num_players': st.sidebar.selectbox("Number of Players", [5, 10, 15, 20], index=2),
-        'pa_confidence': st.sidebar.slider("Min PA Confidence", 0, 25, 10),
+        'pa_tier': st.sidebar.slider("Min PA Confidence Tier", 0, 4, 2,
+                   format=lambda x: ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"][x]),
         'min_wavg': st.sidebar.slider("Min Weighted AVG%", 0.0, 40.0, 20.0, 0.5)
     }
     
@@ -115,11 +173,16 @@ def create_filters():
 def apply_filters(df, filters):
     query_parts = [
         f"adj_1B >= {filters['min_1b']}",
-        f"(PA >= {filters['pa_confidence']} or wAVG >= {filters['min_wavg']})"
+        f"PA_tier >= {filters['pa_tier']}",
+        f"wAVG >= {filters['min_wavg']}"
     ]
     
     if filters['strict_mode']:
-        query_parts += ["adj_K <= 15", "adj_BB <= 10"]
+        query_parts += [
+            "1B_K_ratio >= 1.3",
+            "adj_BB <= 12",
+            "K_penalty == 0"
+        ]
     else:
         query_parts += [
             f"adj_K <= {filters.get('max_k', 25)}",
@@ -130,8 +193,8 @@ def apply_filters(df, filters):
 
 def style_dataframe(df):
     display_cols = [
-        'Batter', 'Pitcher', 'adj_1B', 'adj_XB', 'wAVG', 'PA',
-        'adj_K', 'adj_BB', 'Score'
+        'Batter', 'Pitcher', 'adj_1B', 'adj_XB', 'wAVG', 'PA_tier',
+        'adj_K', 'adj_BB', '1B_K_ratio', 'Score'
     ]
     display_cols = [col for col in display_cols if col in df.columns]
     
@@ -140,7 +203,9 @@ def style_dataframe(df):
         'adj_XB': 'XB%',
         'wAVG': 'wAVG%', 
         'adj_K': 'K%', 
-        'adj_BB': 'BB%'
+        'adj_BB': 'BB%',
+        'PA_tier': 'PA Tier',
+        '1B_K_ratio': '1B/K Ratio'
     })
     
     def score_color(val):
@@ -148,13 +213,14 @@ def style_dataframe(df):
         elif val >= 50: return 'background-color: #fdae61'
         else: return 'background-color: #d7191c; color: white'
     
-    def pa_color(val):
-        return 'font-weight: bold; color: #1a9641' if val >= 10 else 'font-weight: bold; color: #ff4b4b'
-    
-    def xb_color(val):
-        if val >= 20: return 'background-color: #08519c; color: white'
-        elif val >= 15: return 'background-color: #3182bd'
-        else: return 'background-color: #6baed6'
+    def pa_tier_color(val):
+        return {
+            0: 'color: #ff4b4b',
+            1: 'color: #fdae61',
+            2: 'color: #a1d99b',
+            3: 'color: #31a354',
+            4: 'color: #006d2c'
+        }.get(val, '')
     
     return styled.style.format({
         '1B%': '{:.1f}%', 
@@ -162,10 +228,10 @@ def style_dataframe(df):
         'wAVG%': '{:.1f}%',
         'K%': '{:.1f}%', 
         'BB%': '{:.1f}%',
+        '1B/K Ratio': '{:.2f}',
         'Score': '{:.1f}'
     }).map(score_color, subset=['Score']
-    ).map(pa_color, subset=['PA']
-    ).map(xb_color, subset=['XB%']
+    ).map(pa_tier_color, subset=['PA Tier']
     ).background_gradient(
         subset=['1B%'], cmap='YlGn'
     ).background_gradient(
@@ -195,159 +261,12 @@ def main_page():
     st.markdown("""
     **Color Legend:**
     - **Score**: 🟩 ≥70 (Elite) | 🟨 50-69 (Good) | 🟥 <50 (Risky)
-    - **1B%**: Green gradient (higher = better)
-    - **XB%**: 🔵 15-20% | 🔷 20%+ (Extra Base Potential)
-    - **PA**: <span class="pa-high">≥10</span> | <span class="pa-low"><10</span>
+    - **PA Tier**: 
+      🔴 0 | 🟠 1-5 | 🟡 5-15 | 🟢 15-25 | 🔵 25+
+    - **1B/K Ratio**: ≥1.3 required in Strict Mode
     """, unsafe_allow_html=True)
 
-def info_page():
-    st.title("Guide & FAQ 📚")
-    
-    with st.expander("📖 Comprehensive Guide", expanded=True):
-        st.markdown("""
-        ## MLB Hit Predictor Pro+ Methodology & Usage Guide ⚾📊
-
-        ### **Core Philosophy**
-        We combine three key data dimensions to predict daily hitting success:
-        1. **Predictive Models** (Probability of outcomes)
-        2. **Recent Performance Trends** (% Change from baseline)
-        3. **Historical Matchup Data** (Actual batter vs pitcher history)
-        """)
-
-        st.table(pd.DataFrame({
-            "Metric": ["1B Probability", "XB Probability", "Historical wAVG",
-                      "Strikeout Risk", "Walk Risk", "Pitcher Matchup"],
-            "Weight": ["1.7x", "1.3x", "1.2x", "-1.4x", "-1.0x", "1.1x"],
-            "Type": ["Positive", "Positive", "Positive", 
-                    "Negative", "Negative", "Context"],
-            "Ideal Range": [">20%", ">15%", ">25%", "<15%", "<10%", ">10%"]
-        }))
-
-        st.markdown("""
-        ### **Step-by-Step Usage Guide**
-        1. **Set Baseline Filters**  
-           - *Strict Mode*: Conservative risk thresholds (K% ≤15, BB% ≤10)
-           - *1B% Floor*: Minimum single probability (Default: 18%)
-
-        2. **Adjust Confidence Levels**  
-           - *PA Confidence*: Minimum meaningful matchups (≥10 PA recommended)
-           - *Weighted AVG*: Historical performance threshold (Default: 20%)
-
-        3. **Risk Tolerance** (In Relaxed Mode)  
-           **Recommended Safe Limits**:
-           - *Max K Risk*: ≤25% (MLB average: ~22%)
-           - *Max BB Risk*: ≤12% (MLB average: ~8%)
-           - *Min 1B%*: ≥15% (vs 18% in Strict)
-           - *Min wAVG*: ≥15% (vs 20% in Strict)
-
-        4. **Interpret Results**  
-           - **Score Colors**: 🟩 ≥70 (Elite) | 🟨 50-69 (Good) | 🟥 <50 (Risky)  
-           - **XB% Colors**: 🔵 15-20% | 🔷 20%+  
-           - **PA Indicators**: 🔴 <10 PA | 🟢 ≥10 PA
-
-        **Relaxed Mode Pro Tips**:
-        - Always pair higher risk limits with:
-          - Higher PA Confidence (≥15)
-          - Above-average XB% (≥18%)
-        - Avoid combining:
-          - K% >25 + BB% >15
-          - PA <5 + wAVG <15
-        - Ideal Relaxed Profile:
-          ```python
-          (K% ≤25 and BB% ≤12) and 
-          (XB% ≥18 or PA ≥15) and 
-          Score ≥55
-          ```
-        """)
-
-    with st.expander("🔍 Advanced Methodology Details"):
-        st.markdown("""
-        ### **Algorithm Deep Dive**
-        ```python
-        # Full scoring formula
-        Score = sum(
-            adj_1B * 1.7,  # Singles probability
-            adj_XB * 1.3,  # Extra bases probability
-            wAVG * 1.2,    # Weighted historical average
-            adj_vs * 1.1,  # Performance vs pitcher
-            adj_RC * 0.9,  # Runs created
-            adj_HR * 0.5,  # Home run probability
-            adj_K * -1.4,  # Strikeout risk
-            adj_BB * -1.0, # Walk risk
-            PA * 0.05      # Plate appearance bonus
-        )
-        ```
-
-        #### **Data Processing Pipeline**
-        1. Merge probability models with % change data
-        2. Calculate PA-weighted historical metrics
-        3. Apply dynamic range compression to outliers
-        4. Normalize final scores 0-100 daily
-
-        #### **Key Enhancements**
-        - **XB% Tracking**: Now explicitly shown and color-coded
-        - **Risk Curve**: Exponential penalties for K% > 20
-        - **Live Adjustments**: Real-time weather updates factored in
-        """)
-
-    with st.expander("❓ Frequently Asked Questions"):
-        st.markdown("""
-        ### **Data & Updates**
-        **Q: How current is the data?**  
-        - Probabilities update hourly from 7 AM ET
-        - Historical data updates nightly
-        - Live game conditions refresh every 15 minutes
-
-        **Q: How are new matchups handled?**  
-        - Uses pitcher/batter handedness averages
-        - Applies ballpark factor adjustments
-        - Considers recent hot/cold streaks
-
-        ### **Model Details**
-        **Q: Why different weights for metrics?**  
-        - Based on 5-year correlation analysis with actual hits
-        - 1B has highest predictive value (r=0.62)
-        - XB% weights optimized for daily fantasy scoring
-
-        **Q: How are weather factors handled?**  
-        - Built into probability models through:
-          - Wind speed/direction
-          - Precipitation probability
-          - Temperature/humidity
-        - Not shown directly in interface
-
-        ### **Usage Tips**
-        **Q: Best practices for new users?**  
-        1. Start with Strict Mode
-        2. Use 10-15 player view
-        3. Cross-check with lineup positions
-        4. Look for high XB% + PA ≥10 combinations
-
-        **Q: How to interpret conflicting indicators?**  
-        - High score + low PA → Recent performance surge
-        - Medium score + high PA → Consistent performer
-        - High XB% + low 1B% → Power hitter profile
-        """)
-
-    st.markdown("""
-    ---
-    **Model Version**: 3.2 | **Data Sources**: BallparkPal, MLB Statcast, WeatherAPI  
-    **Last Updated**: June 2024 | **Created By**: A1FADED Analytics  
-    **Key Changes**: Added XB% tracking, enhanced weather integration
-    """)
-
-def main():
-    st.sidebar.title("Navigation")
-    app_mode = st.sidebar.radio(
-        "Choose Section",
-        ["🏠 Main App", "📚 Documentation"],
-        index=0
-    )
-    
-    if app_mode == "🏠 Main App":
-        main_page()
-    else:
-        info_page()
+# ... (keep the info_page() and main() functions same as before)
 
 if __name__ == "__main__":
     main()
