@@ -163,6 +163,10 @@ def reset_filters():
     st.session_state['max_k'] = 25
     st.session_state['max_bb'] = 15
 
+def pa_tier_format(x):
+    labels = ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"]
+    return labels[int(x)]
+
 def create_filters():
     st.sidebar.header("Advanced Filters")
     
@@ -200,7 +204,8 @@ def create_filters():
         "Min PA Confidence Tier",
         min_value=0, max_value=4,
         value=st.session_state.get('pa_tier', 2),
-        format_func=lambda x: ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"][x],
+        step=1,
+        format_func=pa_tier_format,
         key="pa_tier"
     )
     
