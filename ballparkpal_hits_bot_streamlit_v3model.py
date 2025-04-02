@@ -4,22 +4,53 @@ import numpy as np
 import requests
 from io import StringIO
 import altair as alt
+import logging
 
-# Configure Streamlit page
+# ------------------------------------------------------------------------------
+# Setup Logging
+# ------------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# ------------------------------------------------------------------------------
+# Configuration and Constants
+# ------------------------------------------------------------------------------
+CONFIG = {
+    "CSV_URLS": {
+        'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv',
+        'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv',
+        'historical': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Untitled%201.csv'
+    },
+    "PA_BINS": [-1, 0, 5, 15, 25, np.inf],
+    "PA_LABELS": [0, 1, 3, 5, 7],
+    "PENALTY_THRESHOLDS": {
+        "K": 15,
+        "BB": 12
+    },
+    "WEIGHTS": {
+        'adj_1B': 2.0,
+        'adj_XB': 1.2,
+        'wAVG_percent': 1.5,
+        'adj_vs': 1.0,
+        'PA_tier': 3.0,
+        'K_penalty': -0.3,
+        'adj_BB': -0.7,
+        'adj_HR': 0.4,
+        'adj_RC': 0.8
+    }
+}
+
+# ------------------------------------------------------------------------------
+# Configure Streamlit Page and Custom CSS
+# ------------------------------------------------------------------------------
 st.set_page_config(
     page_title="A1PICKS MLB Hit Predictor Pro+",
     layout="wide",
     page_icon="⚾"
 )
 
-# Constants
-CSV_URLS = {
-    'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv',
-    'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv',
-    'historical': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Untitled%201.csv'
-}
-
-# Custom CSS
 st.markdown("""
 <style>
     .score-high { background-color: #1a9641 !important; color: white !important; }
@@ -30,22 +61,77 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=3600)
-def load_and_process_data():
+# ------------------------------------------------------------------------------
+# Helper Functions
+# ------------------------------------------------------------------------------
+
+def fetch_data(url: str) -> pd.DataFrame:
+    """
+    Fetch CSV data from the provided URL and return a DataFrame.
+    
+    Parameters:
+        url (str): The URL to fetch data from.
+        
+    Returns:
+        pd.DataFrame: Data loaded from the CSV.
+    """
     try:
-        def fetch_data(url):
-            response = requests.get(url)
-            response.raise_for_status()
-            return pd.read_csv(StringIO(response.text))
+        response = requests.get(url)
+        response.raise_for_status()
+        logging.info("Successfully fetched data from %s", url)
+        return pd.read_csv(StringIO(response.text))
+    except requests.exceptions.RequestException as e:
+        logging.error("Failed to fetch data from %s: %s", url, e)
+        st.error(f"Data fetching failed from {url}. Please check your network connection.")
+        st.stop()
 
-        prob = fetch_data(CSV_URLS['probabilities'])
-        pct = fetch_data(CSV_URLS['percent_change'])
-        hist = fetch_data(CSV_URLS['historical'])
 
-        hist['AVG'] = (hist['H'] / hist['AB'].replace(0, 1)) * 100
-        hist['PA_weight'] = np.log1p(hist['PA']) / np.log1p(25)
-        hist['wAVG_percent'] = hist['AVG'] * hist['PA_weight']
-        hist['wXB%'] = (hist['XB'] / hist['AB'].replace(0, 1)) * 100 * hist['PA_weight']
+def process_historical_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Process historical data by calculating batting average (AVG), PA weight, and weighted averages.
+    
+    Parameters:
+        df (pd.DataFrame): The historical data DataFrame.
+    
+    Returns:
+        pd.DataFrame: Processed DataFrame with additional computed columns.
+    """
+    df['AVG'] = (df['H'] / df['AB'].replace(0, 1)) * 100
+    df['PA_weight'] = np.log1p(df['PA']) / np.log1p(25)
+    df['wAVG_percent'] = df['AVG'] * df['PA_weight']
+    df['wXB%'] = (df['XB'] / df['AB'].replace(0, 1)) * 100 * df['PA_weight']
+    return df
+
+
+def calculate_penalty(series: pd.Series, threshold: float, exponent: float) -> pd.Series:
+    """
+    Calculate penalty for a given metric based on a threshold and exponent.
+    
+    Parameters:
+        series (pd.Series): The metric column (e.g., 'adj_K' or 'adj_BB').
+        threshold (float): The threshold above which the penalty applies.
+        exponent (float): The exponent used for penalty calculation.
+    
+    Returns:
+        pd.Series: Calculated penalty values.
+    """
+    return np.where(series > threshold, (series - threshold) ** exponent, 0)
+
+
+@st.cache_data(ttl=3600)
+def load_and_process_data() -> pd.DataFrame:
+    """
+    Load and process CSV data from configured URLs. Merge datasets and process historical data.
+    
+    Returns:
+        pd.DataFrame: Merged and processed data.
+    """
+    try:
+        prob = fetch_data(CONFIG["CSV_URLS"]['probabilities'])
+        pct = fetch_data(CONFIG["CSV_URLS"]['percent_change'])
+        hist = fetch_data(CONFIG["CSV_URLS"]['historical'])
+
+        hist = process_historical_data(hist)
 
         merged = pd.merge(
             pd.merge(prob, pct, on=['Tm', 'Batter', 'Pitcher'], suffixes=('_prob', '_pct')),
@@ -56,7 +142,6 @@ def load_and_process_data():
         )
 
         league_avg = merged['AVG'].mean() if 'AVG' in merged.columns else 25.0
-
         merged = merged.fillna({
             'wAVG_percent': league_avg,
             'wXB%': 0,
@@ -64,13 +149,25 @@ def load_and_process_data():
             'AVG': league_avg
         })
 
+        logging.info("Data loaded and processed successfully.")
         return merged
 
     except Exception as e:
+        logging.exception("An error occurred while loading and processing data.")
         st.error(f"Data loading failed: {str(e)}")
         st.stop()
 
-def calculate_scores(df):
+
+def calculate_scores(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate adjusted metrics, penalties, and a normalized score based on defined weights.
+    
+    Parameters:
+        df (pd.DataFrame): DataFrame with raw and processed data.
+        
+    Returns:
+        pd.DataFrame: DataFrame with additional calculated columns including Score.
+    """
     try:
         metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
         for metric in metrics:
@@ -81,30 +178,21 @@ def calculate_scores(df):
             else:
                 df[f'adj_{metric}'] = 0
 
-        pa_bins = [-1, 0, 5, 15, 25, np.inf]
-        pa_labels = [0, 1, 3, 5, 7]
-        df['PA_tier'] = pd.cut(df['PA'], bins=pa_bins, labels=pa_labels).astype(int)
+        # Calculate PA tier based on bins and labels from CONFIG
+        df['PA_tier'] = pd.cut(df['PA'], bins=CONFIG["PA_BINS"], labels=CONFIG["PA_LABELS"]).astype(int)
 
-        df['K_penalty'] = np.where(df['adj_K'] > 15, (df['adj_K'] - 15) ** 1.5, 0)
-        df['BB_penalty'] = np.where(df['adj_BB'] > 12, (df['adj_BB'] - 12) ** 1.2, 0)
+        # Calculate penalties using helper function
+        df['K_penalty'] = calculate_penalty(df['adj_K'], CONFIG["PENALTY_THRESHOLDS"]['K'], 1.5)
+        df['BB_penalty'] = calculate_penalty(df['adj_BB'], CONFIG["PENALTY_THRESHOLDS"]['BB'], 1.2)
 
-        weights = {
-            'adj_1B': 2.0,
-            'adj_XB': 1.2,
-            'wAVG_percent': 1.5,
-            'adj_vs': 1.0,
-            'PA_tier': 3.0,
-            'K_penalty': -0.3,
-            'adj_BB': -0.7,
-            'adj_HR': 0.4,
-            'adj_RC': 0.8
-        }
-
+        # Calculate weighted score using configured weights
+        weights = CONFIG["WEIGHTS"]
         df['Score'] = sum(df[col]*weight for col, weight in weights.items() if col in df.columns)
         df['Score'] = np.where(df['adj_1B'] < 15, df['Score'] * 0.7, df['Score'])
         df['Ratio_1B_K'] = df['adj_1B'] / df['adj_K']
         df['Score'] = np.where(df['Ratio_1B_K'] < 1.3, df['Score'] * 0.85, df['Score'])
 
+        # Normalize Score to 0-100 scale
         score_min = df['Score'].min()
         score_range = df['Score'].max() - score_min
         df['Score'] = np.where(score_range > 0, ((df['Score'] - score_min) / score_range) * 100, 50)
@@ -112,10 +200,18 @@ def calculate_scores(df):
         return df.round(1)
 
     except Exception as e:
+        logging.exception("An error occurred while calculating scores.")
         st.error(f"Score calculation failed: {str(e)}")
         st.stop()
 
-def create_filters():
+
+def create_filters() -> dict:
+    """
+    Create UI filters on the Streamlit sidebar for the user to adjust filtering criteria.
+    
+    Returns:
+        dict: A dictionary containing filter settings.
+    """
     st.sidebar.header("Advanced Filters")
     pa_tier_labels = ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"]
     pa_tier_index = st.sidebar.slider("Min PA Confidence Tier", 0, 4, 2)
@@ -123,7 +219,7 @@ def create_filters():
 
     filters = {
         'strict_mode': st.sidebar.checkbox('Strict Mode', True,
-                          help="Enforce 1B/K ratio >1.5 and BB% ≤12%"),
+                          help="Enforce 1B/K ratio >1.3 and BB% ≤12% with no K penalty"),
         'min_1b': st.sidebar.slider("Minimum 1B%", 10, 40, 18),
         'num_players': st.sidebar.selectbox("Number of Players", [5, 10, 15, 20], index=2),
         'pa_tier': pa_tier_index,
@@ -137,7 +233,18 @@ def create_filters():
         })
     return filters
 
-def apply_filters(df, filters):
+
+def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
+    """
+    Filter the DataFrame based on user-specified criteria from the sidebar.
+    
+    Parameters:
+        df (pd.DataFrame): The DataFrame to filter.
+        filters (dict): Dictionary containing filter criteria.
+        
+    Returns:
+        pd.DataFrame: The filtered DataFrame.
+    """
     try:
         filtered = df[
             (df['adj_1B'] >= filters['min_1b']) &
@@ -160,10 +267,21 @@ def apply_filters(df, filters):
         return filtered
 
     except Exception as e:
+        logging.exception("An error occurred while applying filters.")
         st.error(f"Failed to filter data: {str(e)}")
         st.stop()
 
-def style_dataframe(df):
+
+def style_dataframe(df: pd.DataFrame) -> pd.io.formats.style.Styler:
+    """
+    Style the DataFrame for display in Streamlit, applying formatting, color coding, and gradients.
+    
+    Parameters:
+        df (pd.DataFrame): The DataFrame to style.
+        
+    Returns:
+        pd.Styler: A styled DataFrame ready for display.
+    """
     display_cols = [
         'Batter', 'Pitcher', 'adj_1B', 'adj_XB', 'wAVG_percent', 'PA_tier',
         'adj_K', 'adj_BB', 'Ratio_1B_K', 'Score'
@@ -181,9 +299,12 @@ def style_dataframe(df):
     })
 
     def score_color(val):
-        if val >= 70: return 'background-color: #1a9641; color: white'
-        elif val >= 50: return 'background-color: #fdae61'
-        else: return 'background-color: #d7191c; color: white'
+        if val >= 70:
+            return 'background-color: #1a9641; color: white'
+        elif val >= 50:
+            return 'background-color: #fdae61'
+        else:
+            return 'background-color: #d7191c; color: white'
 
     def pa_tier_color(val):
         return {
@@ -210,7 +331,15 @@ def style_dataframe(df):
         subset=['K%', 'BB%'], cmap='YlOrRd_r'
     )
 
+# ------------------------------------------------------------------------------
+# Streamlit App Pages
+# ------------------------------------------------------------------------------
+
 def main_page():
+    """
+    Render the main page of the app, including data loading, score calculation,
+    filter application, and displaying the top recommended batters.
+    """
     st.title("MLB Daily Hit Predictor Pro+")
     st.image('https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true', width=200)
 
@@ -238,12 +367,19 @@ def main_page():
     - **1B/K Ratio**: ≥1.3 required in Strict Mode
     """, unsafe_allow_html=True)
 
+
 def info_page():
+    """
+    Render the informational page of the app with a guide and FAQ.
+    """
     st.title("Guide & FAQ 📚")
-    # (Truncated guide content for brevity)
     st.markdown("More details in documentation...")
 
+
 def main():
+    """
+    Main function to control app navigation and display the correct page.
+    """
     st.sidebar.title("Navigation")
     app_mode = st.sidebar.radio(
         "Choose Section",
@@ -255,6 +391,7 @@ def main():
         main_page()
     else:
         info_page()
+
 
 if __name__ == "__main__":
     main()
