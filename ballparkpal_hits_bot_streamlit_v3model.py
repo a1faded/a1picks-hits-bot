@@ -295,12 +295,11 @@ def main_page():
     st.title("MLB Daily Hit Predictor Pro+")
     st.image('https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true', width=200)
     
-    # Place the refresh button at the top.
+    # Place a single refresh button at the top.
     if st.button("Refresh Data", key="refresh_button_top"):
         load_and_process_data.clear()  # Clear the cached data.
         st.success("Data cache cleared. Loading fresh data...")
 
-    # Now load data and process as usual.
     with st.spinner('Loading and analyzing data...'):
         df = load_and_process_data()
         df = calculate_scores(df)
@@ -308,14 +307,8 @@ def main_page():
     filters = create_filters()
     filtered = apply_filters(df, filters)
 
-    # Optionally, display the header and (if desired) a duplicate refresh button.
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.subheader(f"Top {min(filters['num_players'], len(filtered))} Recommended Batters")
-    with col2:
-        if st.button("Refresh Data", key="refresh_button_bottom"):
-            load_and_process_data.clear()
-            st.warning("Data cache cleared. Loading fresh data...")
+    # Display the subheader without a duplicate refresh button.
+    st.subheader(f"Top {min(filters['num_players'], len(filtered))} Recommended Batters")
 
     st.dataframe(
         style_dataframe(
