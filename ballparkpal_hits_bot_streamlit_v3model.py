@@ -153,16 +153,20 @@ def calculate_scores(df):
 
 def create_filters():
     st.sidebar.header("Advanced Filters")
+
+    pa_tier_labels = ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"]
+    pa_tier_index = st.sidebar.slider("Min PA Confidence Tier", 0, 4, 2)
+    st.sidebar.caption(f"Selected: {pa_tier_labels[pa_tier_index]}")
+
     filters = {
         'strict_mode': st.sidebar.checkbox('Strict Mode', True,
-                      help="Enforce 1B/K ratio >1.5 and BB% ≤12%"),
+                          help="Enforce 1B/K ratio >1.5 and BB% ≤12%"),
         'min_1b': st.sidebar.slider("Minimum 1B%", 10, 40, 18),
         'num_players': st.sidebar.selectbox("Number of Players", [5, 10, 15, 20], index=2),
-        'pa_tier': st.sidebar.slider("Min PA Confidence Tier", 0, 4, 2,
-                   format=lambda x: ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"][x]),
+        'pa_tier': pa_tier_index,
         'min_wavg': st.sidebar.slider("Min Weighted AVG%", 0.0, 40.0, 20.0, 0.5)
     }
-    
+
     if not filters['strict_mode']:
         filters.update({
             'max_k': st.sidebar.slider("Max K Risk%", 15, 40, 25),
