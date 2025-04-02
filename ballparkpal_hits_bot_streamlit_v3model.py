@@ -180,7 +180,7 @@ def apply_filters(df, filters):
         f"PA_tier >= {filters['pa_tier']}",
         f"wAVG >= {filters['min_wavg']}"
     ]
-    
+
     if filters['strict_mode']:
         query_parts += [
             "1B_K_ratio >= 1.3",
@@ -192,8 +192,16 @@ def apply_filters(df, filters):
             f"adj_K <= {filters.get('max_k', 25)}",
             f"adj_BB <= {filters.get('max_bb', 15)}"
         ]
-    
-    return df.query(" and ".join(query_parts))
+
+    # DEBUG: Print query string before running
+    query_string = " and ".join(query_parts)
+    st.text(f"Query: {query_string}")  # Streamlit safe debug log
+
+    try:
+        return df.query(query_string)
+    except Exception as e:
+        st.error(f"Failed to filter data: {str(e)}")
+        st.stop()
 
 def style_dataframe(df):
     display_cols = [
