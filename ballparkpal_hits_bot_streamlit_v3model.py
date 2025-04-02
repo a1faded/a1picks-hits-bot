@@ -295,11 +295,6 @@ def main_page():
     st.title("MLB Daily Hit Predictor Pro+")
     st.image('https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true', width=200)
 
-    # Check if a refresh was triggered in a previous run and rerun if needed
-    if st.session_state.get('refresh', False):
-        st.session_state.pop('refresh')
-        st.experimental_rerun()
-
     with st.spinner('Loading and analyzing data...'):
         df = load_and_process_data()
         df = calculate_scores(df)
@@ -312,9 +307,12 @@ def main_page():
     with col1:
         st.subheader(f"Top {min(filters['num_players'], len(filtered))} Recommended Batters")
     with col2:
-        if st.button("Refresh Data"):
-            load_and_process_data.clear()  # Clear the cached data
-            st.session_state['refresh'] = True  # Set a flag to trigger rerun
+        refresh_clicked = st.button("Refresh Data", key="refresh_button")
+    
+    # Check if the refresh button was clicked outside of the column context.
+    if refresh_clicked:
+        load_and_process_data.clear()  # Clear the cached data
+        st.experimental_rerun()        # Rerun the app to fetch fresh data
 
     st.dataframe(
         style_dataframe(
