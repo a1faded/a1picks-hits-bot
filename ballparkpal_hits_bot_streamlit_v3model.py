@@ -77,7 +77,6 @@ def load_and_process_data():
 
 def calculate_scores(df):
     try:
-        # Calculate adjusted metrics
         metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
         for metric in metrics:
             base_col = f'{metric}_prob'
@@ -87,66 +86,38 @@ def calculate_scores(df):
             else:
                 df[f'adj_{metric}'] = 0
 
-        # Create PA confidence tiers
         pa_bins = [-1, 0, 5, 15, 25, np.inf]
         pa_labels = [0, 1, 3, 5, 7]
         df['PA_tier'] = pd.cut(df['PA'], bins=pa_bins, labels=pa_labels).astype(int)
 
-        # Non-linear penalties
-        df['K_penalty'] = np.where(
-            df['adj_K'] > 15,
-            (df['adj_K'] - 15) ** 1.5,
-            0
-        )
-        
-        df['BB_penalty'] = np.where(
-            df['adj_BB'] > 12,
-            (df['adj_BB'] - 12) ** 1.2,
-            0
-        )
+        df['K_penalty'] = np.where(df['adj_K'] > 15, (df['adj_K'] - 15) ** 1.5, 0)
+        df['BB_penalty'] = np.where(df['adj_BB'] > 12, (df['adj_BB'] - 12) ** 1.2, 0)
 
-        # Updated weights
         weights = {
-            'adj_1B': 2.0,    # Increased emphasis on singles
-            'adj_XB': 1.2,     # Slightly reduced XB weight
-            'wAVG': 1.5,       # More historical emphasis
-            'adj_vs': 1.0,     # Matchup history
-            'PA_tier': 3.0,    # Tiered PA bonus
-            'K_penalty': -0.3, # Exponential K penalty
-            'adj_BB': -0.7,    # Adjusted walk impact
-            'adj_HR': 0.4,     # Reduced HR weight
-            'adj_RC': 0.8      # Runs created
+            'adj_1B': 2.0,
+            'adj_XB': 1.2,
+            'wAVG': 1.5,
+            'adj_vs': 1.0,
+            'PA_tier': 3.0,
+            'K_penalty': -0.3,
+            'adj_BB': -0.7,
+            'adj_HR': 0.4,
+            'adj_RC': 0.8
         }
 
-        # Calculate base score
         df['Score'] = sum(df[col]*weight for col, weight in weights.items() if col in df.columns)
-        
-        # Apply safeguards
-        df['Score'] = np.where(
-            df['adj_1B'] < 15,
-            df['Score'] * 0.7,  # 30% penalty for low 1B%
-            df['Score']
-        )
-        
-        # Apply ratio-based adjustments
-        df['1B_K_ratio'] = df['adj_1B'] / df['adj_K']
-        df['Score'] = np.where(
-            df['1B_K_ratio'] < 1.3,
-            df['Score'] * 0.85,
-            df['Score']
-        )
 
-        # Normalize scores
+        df['Score'] = np.where(df['adj_1B'] < 15, df['Score'] * 0.7, df['Score'])
+
+        df['Ratio_1B_K'] = df['adj_1B'] / df['adj_K']
+        df['Score'] = np.where(df['Ratio_1B_K'] < 1.3, df['Score'] * 0.85, df['Score'])
+
         score_min = df['Score'].min()
         score_range = df['Score'].max() - score_min
-        df['Score'] = np.where(
-            score_range > 0,
-            ((df['Score'] - score_min) / score_range) * 100,
-            50  # Fallback for identical scores
-        )
-        
+        df['Score'] = np.where(score_range > 0, ((df['Score'] - score_min) / score_range) * 100, 50)
+
         return df.round(1)
-    
+
     except Exception as e:
         st.error(f"Score calculation failed: {str(e)}")
         st.stop()
@@ -206,19 +177,49 @@ def apply_filters(df, filters):
 def style_dataframe(df):
     display_cols = [
         'Batter', 'Pitcher', 'adj_1B', 'adj_XB', 'wAVG', 'PA_tier',
-        'adj_K', 'adj_BB', '1B_K_ratio', 'Score'
+        'adj_K', 'adj_BB', 'Ratio_1B_K', 'Score'
     ]
     display_cols = [col for col in display_cols if col in df.columns]
-    
+
     styled = df[display_cols].rename(columns={
-        'adj_1B': '1B%', 
+        'adj_1B': '1B%',
         'adj_XB': 'XB%',
-        'wAVG': 'wAVG%', 
-        'adj_K': 'K%', 
+        'wAVG': 'wAVG%',
+        'adj_K': 'K%',
         'adj_BB': 'BB%',
         'PA_tier': 'PA Tier',
-        '1B_K_ratio': '1B/K Ratio'
+        'Ratio_1B_K': '1B/K Ratio'
     })
+
+    def score_color(val):
+        if val >= 70: return 'background-color: #1a9641; color: white'
+        elif val >= 50: return 'background-color: #fdae61'
+        else: return 'background-color: #d7191c; color: white'
+
+    def pa_tier_color(val):
+        return {
+            0: 'color: #ff4b4b',
+            1: 'color: #fdae61',
+            2: 'color: #a1d99b',
+            3: 'color: #31a354',
+            4: 'color: #006d2c'
+        }.get(val, '')
+
+    return styled.style.format({
+        '1B%': '{:.1f}%',
+        'XB%': '{:.1f}%',
+        'wAVG%': '{:.1f}%',
+        'K%': '{:.1f}%',
+        'BB%': '{:.1f}%',
+        '1B/K Ratio': '{:.2f}',
+        'Score': '{:.1f}'
+    }).map(score_color, subset=['Score']
+    ).map(pa_tier_color, subset=['PA Tier']
+    ).background_gradient(
+        subset=['1B%'], cmap='YlGn'
+    ).background_gradient(
+        subset=['K%', 'BB%'], cmap='YlOrRd_r'
+    )
     
     def score_color(val):
         if val >= 70: return 'background-color: #1a9641; color: white'
