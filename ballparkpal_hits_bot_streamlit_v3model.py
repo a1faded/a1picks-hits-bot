@@ -272,7 +272,7 @@ def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
         st.stop()
 
 
-def style_dataframe(df: pd.DataFrame) -> pd.io.formats.style.Styler:
+def style_dataframe(df: pd.DataFrame):
     """
     Style the DataFrame for display in Streamlit, applying formatting, color coding, and gradients.
     
