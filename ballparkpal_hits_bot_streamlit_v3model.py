@@ -68,12 +68,6 @@ st.markdown("""
 def fetch_data(url: str) -> pd.DataFrame:
     """
     Fetch CSV data from the provided URL and return a DataFrame.
-    
-    Parameters:
-        url (str): The URL to fetch data from.
-        
-    Returns:
-        pd.DataFrame: Data loaded from the CSV.
     """
     try:
         response = requests.get(url)
@@ -89,12 +83,6 @@ def fetch_data(url: str) -> pd.DataFrame:
 def process_historical_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Process historical data by calculating batting average (AVG), PA weight, and weighted averages.
-    
-    Parameters:
-        df (pd.DataFrame): The historical data DataFrame.
-    
-    Returns:
-        pd.DataFrame: Processed DataFrame with additional computed columns.
     """
     df['AVG'] = (df['H'] / df['AB'].replace(0, 1)) * 100
     df['PA_weight'] = np.log1p(df['PA']) / np.log1p(25)
@@ -106,14 +94,6 @@ def process_historical_data(df: pd.DataFrame) -> pd.DataFrame:
 def calculate_penalty(series: pd.Series, threshold: float, exponent: float) -> pd.Series:
     """
     Calculate penalty for a given metric based on a threshold and exponent.
-    
-    Parameters:
-        series (pd.Series): The metric column (e.g., 'adj_K' or 'adj_BB').
-        threshold (float): The threshold above which the penalty applies.
-        exponent (float): The exponent used for penalty calculation.
-    
-    Returns:
-        pd.Series: Calculated penalty values.
     """
     return np.where(series > threshold, (series - threshold) ** exponent, 0)
 
@@ -122,9 +102,6 @@ def calculate_penalty(series: pd.Series, threshold: float, exponent: float) -> p
 def load_and_process_data() -> pd.DataFrame:
     """
     Load and process CSV data from configured URLs. Merge datasets and process historical data.
-    
-    Returns:
-        pd.DataFrame: Merged and processed data.
     """
     try:
         prob = fetch_data(CONFIG["CSV_URLS"]['probabilities'])
@@ -161,12 +138,6 @@ def load_and_process_data() -> pd.DataFrame:
 def calculate_scores(df: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate adjusted metrics, penalties, and a normalized score based on defined weights.
-    
-    Parameters:
-        df (pd.DataFrame): DataFrame with raw and processed data.
-        
-    Returns:
-        pd.DataFrame: DataFrame with additional calculated columns including Score.
     """
     try:
         metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
@@ -174,7 +145,7 @@ def calculate_scores(df: pd.DataFrame) -> pd.DataFrame:
             base_col = f'{metric}_prob'
             pct_col = f'{metric}_pct'
             if base_col in df.columns and pct_col in df.columns:
-                df[f'adj_{metric}'] = df[base_col] * (1 + df[pct_col]/100).clip(0, 100)
+                df[f'adj_{metric}'] = df[base_col] * (1 + df[pct_col] / 100).clip(0, 100)
             else:
                 df[f'adj_{metric}'] = 0
 
@@ -187,7 +158,7 @@ def calculate_scores(df: pd.DataFrame) -> pd.DataFrame:
 
         # Calculate weighted score using configured weights
         weights = CONFIG["WEIGHTS"]
-        df['Score'] = sum(df[col]*weight for col, weight in weights.items() if col in df.columns)
+        df['Score'] = sum(df[col] * weight for col, weight in weights.items() if col in df.columns)
         df['Score'] = np.where(df['adj_1B'] < 15, df['Score'] * 0.7, df['Score'])
         df['Ratio_1B_K'] = df['adj_1B'] / df['adj_K']
         df['Score'] = np.where(df['Ratio_1B_K'] < 1.3, df['Score'] * 0.85, df['Score'])
@@ -208,9 +179,6 @@ def calculate_scores(df: pd.DataFrame) -> pd.DataFrame:
 def create_filters() -> dict:
     """
     Create UI filters on the Streamlit sidebar for the user to adjust filtering criteria.
-    
-    Returns:
-        dict: A dictionary containing filter settings.
     """
     st.sidebar.header("Advanced Filters")
     pa_tier_labels = ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"]
@@ -237,13 +205,6 @@ def create_filters() -> dict:
 def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     """
     Filter the DataFrame based on user-specified criteria from the sidebar.
-    
-    Parameters:
-        df (pd.DataFrame): The DataFrame to filter.
-        filters (dict): Dictionary containing filter criteria.
-        
-    Returns:
-        pd.DataFrame: The filtered DataFrame.
     """
     try:
         filtered = df[
@@ -272,15 +233,9 @@ def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
         st.stop()
 
 
-def style_dataframe(df: pd.DataFrame):
+def style_dataframe(df: pd.DataFrame) -> pd.Styler:
     """
     Style the DataFrame for display in Streamlit, applying formatting, color coding, and gradients.
-    
-    Parameters:
-        df (pd.DataFrame): The DataFrame to style.
-        
-    Returns:
-        pd.Styler: A styled DataFrame ready for display.
     """
     display_cols = [
         'Batter', 'Pitcher', 'adj_1B', 'adj_XB', 'wAVG_percent', 'PA_tier',
@@ -350,7 +305,15 @@ def main_page():
     filters = create_filters()
     filtered = apply_filters(df, filters)
 
-    st.subheader(f"Top {min(filters['num_players'], len(filtered))} Recommended Batters")
+    # Create a row with the subheader and a refresh button
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.subheader(f"Top {min(filters['num_players'], len(filtered))} Recommended Batters")
+    with col2:
+        if st.button("Refresh Data"):
+            load_and_process_data.clear()  # Clear the cached data
+            st.experimental_rerun()        # Rerun the app to fetch fresh data
+
     st.dataframe(
         style_dataframe(
             filtered.sort_values('Score', ascending=False).head(filters['num_players'])
