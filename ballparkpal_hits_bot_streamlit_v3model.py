@@ -292,12 +292,13 @@ def style_dataframe(df: pd.DataFrame):
 # ------------------------------------------------------------------------------
 
 def main_page():
-    """
-    Render the main page of the app, including data loading, score calculation,
-    filter application, and displaying the top recommended batters.
-    """
     st.title("MLB Daily Hit Predictor Pro+")
     st.image('https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true', width=200)
+
+    # Check if a refresh was triggered in a previous run and rerun if needed
+    if st.session_state.get('refresh', False):
+        st.session_state.pop('refresh')
+        st.experimental_rerun()
 
     with st.spinner('Loading and analyzing data...'):
         df = load_and_process_data()
@@ -313,7 +314,7 @@ def main_page():
     with col2:
         if st.button("Refresh Data"):
             load_and_process_data.clear()  # Clear the cached data
-            st.experimental_rerun()        # Rerun the app to fetch fresh data
+            st.session_state['refresh'] = True  # Set a flag to trigger rerun
 
     st.dataframe(
         style_dataframe(
