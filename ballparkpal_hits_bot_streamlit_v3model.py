@@ -151,98 +151,23 @@ def calculate_scores(df):
         st.error(f"Score calculation failed: {str(e)}")
         st.stop()
 
-def reset_filters():
-    """
-    Reset advanced filter settings to their default values in session state.
-    """
-    st.session_state['strict_mode'] = True
-    st.session_state['min_1b'] = 18
-    st.session_state['num_players'] = 15
-    st.session_state['pa_tier'] = 2
-    st.session_state['min_wavg'] = 20.0
-    st.session_state['max_k'] = 25
-    st.session_state['max_bb'] = 15
-
-def pa_tier_format(x):
-    labels = ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"]
-    return labels[int(x)]
-
 def create_filters():
     st.sidebar.header("Advanced Filters")
-    
-    # Add a reset button
-    if st.sidebar.button("Reset Filters"):
-        reset_filters()
-        st.sidebar.success("Filters reset to default!")
-    
-    # Use session_state defaults with explicit keys
-    strict_mode = st.sidebar.checkbox(
-        'Strict Mode',
-        value=st.session_state.get('strict_mode', True),
-        key="strict_mode",
-        help="Enforce 1B/K ratio >1.5 and BB% ≤12%"
-    )
-    
-    min_1b = st.sidebar.slider(
-        "Minimum 1B%",
-        min_value=10, max_value=40,
-        value=st.session_state.get('min_1b', 18),
-        key="min_1b"
-    )
-    
-    num_players_options = [5, 10, 15, 20]
-    default_num = st.session_state.get('num_players', 15)
-    default_index = num_players_options.index(default_num) if default_num in num_players_options else 2
-    num_players = st.sidebar.selectbox(
-        "Number of Players",
-        options=num_players_options,
-        index=default_index,
-        key="num_players"
-    )
-    
-    pa_tier = st.sidebar.slider(
-        "Min PA Confidence Tier",
-        min_value=0, max_value=4,
-        value=st.session_state.get('pa_tier', 2),
-        step=1,
-        format_func=pa_tier_format,
-        key="pa_tier"
-    )
-    
-    min_wavg = st.sidebar.slider(
-        "Min Weighted AVG%",
-        min_value=0.0, max_value=40.0,
-        value=st.session_state.get('min_wavg', 20.0),
-        step=0.5,
-        key="min_wavg"
-    )
-    
     filters = {
-        'strict_mode': strict_mode,
-        'min_1b': min_1b,
-        'num_players': num_players,
-        'pa_tier': pa_tier,
-        'min_wavg': min_wavg
+        'strict_mode': st.sidebar.checkbox('Strict Mode', True,
+                      help="Enforce 1B/K ratio >1.5 and BB% ≤12%"),
+        'min_1b': st.sidebar.slider("Minimum 1B%", 10, 40, 18),
+        'num_players': st.sidebar.selectbox("Number of Players", [5, 10, 15, 20], index=2),
+        'pa_tier': st.sidebar.slider("Min PA Confidence Tier", 0, 4, 2,
+                   format=lambda x: ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"][x]),
+        'min_wavg': st.sidebar.slider("Min Weighted AVG%", 0.0, 40.0, 20.0, 0.5)
     }
     
-    if not strict_mode:
-        max_k = st.sidebar.slider(
-            "Max K Risk%",
-            min_value=15, max_value=40,
-            value=st.session_state.get('max_k', 25),
-            key="max_k"
-        )
-        max_bb = st.sidebar.slider(
-            "Max BB Risk%",
-            min_value=10, max_value=30,
-            value=st.session_state.get('max_bb', 15),
-            key="max_bb"
-        )
+    if not filters['strict_mode']:
         filters.update({
-            'max_k': max_k,
-            'max_bb': max_bb
+            'max_k': st.sidebar.slider("Max K Risk%", 15, 40, 25),
+            'max_bb': st.sidebar.slider("Max BB Risk%", 10, 30, 15)
         })
-    
     return filters
 
 def apply_filters(df, filters):
@@ -284,12 +209,9 @@ def style_dataframe(df):
     })
     
     def score_color(val):
-        if val >= 70: 
-            return 'background-color: #1a9641; color: white'
-        elif val >= 50: 
-            return 'background-color: #fdae61'
-        else: 
-            return 'background-color: #d7191c; color: white'
+        if val >= 70: return 'background-color: #1a9641; color: white'
+        elif val >= 50: return 'background-color: #fdae61'
+        else: return 'background-color: #d7191c; color: white'
     
     def pa_tier_color(val):
         return {
@@ -357,6 +279,7 @@ def info_page():
         2. **Recent Performance Trends** (% Change from baseline)
         3. **Historical Matchup Data** (Actual batter vs pitcher history)
         """)
+
         st.table(pd.DataFrame({
             "Metric": ["1B Probability", "XB Probability", "Historical wAVG",
                       "Strikeout Risk", "Walk Risk", "Pitcher Matchup"],
@@ -365,6 +288,7 @@ def info_page():
                     "Negative", "Negative", "Context"],
             "Ideal Range": [">20%", ">15%", ">25%", "<15%", "<10%", ">10%"]
         }))
+
         st.markdown("""
         ### **Step-by-Step Usage Guide**
         1. **Set Baseline Filters**  
@@ -383,11 +307,11 @@ def info_page():
            - **Score Colors**:  
              🟩 ≥70 (Elite Play) | 🟨 50-69 (Good) | 🟥 <50 (Risky)  
            - **XB% Colors**:  
-             🔵 15-20% | 🔷 20+ (Extra Base Potential)
+             🔵 15-20% | 🔷 20%+ (Extra Base Potential)
            - **PA Indicators**:  
              🔴 <10 PA | 🟢 ≥10 PA
         """)
-    
+
     with st.expander("🔍 Advanced Methodology Details"):
         st.markdown("""
         ### **Algorithm Deep Dive**
@@ -405,6 +329,7 @@ def info_page():
             PA * 0.05      # Plate appearance bonus
         )
         ```""")
+
         st.markdown("""
         #### **Data Processing Pipeline**
         1. Merge probability models with % change data
@@ -417,7 +342,7 @@ def info_page():
         - **Risk Curve**: Exponential penalties for K% > 20
         - **Live Adjustments**: Real-time weather updates factored in
         """)
-    
+
     with st.expander("❓ Frequently Asked Questions"):
         st.markdown("""
         ### **Data & Updates**
@@ -434,7 +359,7 @@ def info_page():
         ### **Model Details**
         **Q: Why different weights for metrics?**  
         - Based on 5-year correlation analysis with actual hits
-        - **1B**: Has highest predictive value (r=0.62)
+        - **1B**: Has highest predictive value (r=0&#46;62)
         - **XB%**: Weights optimized for daily fantasy scoring
 
         **Q: How are weather factors handled?**  
@@ -456,7 +381,7 @@ def info_page():
         - Medium score + high PA → Consistent performer
         - High XB% + low 1B% → Power hitter profile
         """, unsafe_allow_html=True)
-    
+
     st.markdown("""
     ---
     **Model Version**: 3.3 | **Data Sources**: BallparkPal, MLB Statcast, WeatherAPI  
@@ -478,4 +403,4 @@ def main():
         info_page()
 
 if __name__ == "__main__":
-    main()
+    main()'
