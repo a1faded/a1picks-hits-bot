@@ -200,7 +200,7 @@ def create_filters():
         "Min PA Confidence Tier",
         min_value=0, max_value=4,
         value=st.session_state.get('pa_tier', 2),
-        format=lambda x: ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"][x],
+        format_func=lambda x: ["None", "Low (1-5)", "Medium (5-15)", "High (15-25)", "Elite (25+)"][x],
         key="pa_tier"
     )
     
