@@ -231,7 +231,7 @@ def create_data_quality_dashboard(df):
         """.format(avg_hit_prob), unsafe_allow_html=True)
 
 def calculate_percentiles(df):
-    """Calculate percentiles for smart filtering."""
+    """Calculate percentiles for smart filtering with NaN handling."""
     if df is None or df.empty:
         return {}
     
@@ -242,13 +242,21 @@ def calculate_percentiles(df):
     
     for metric in metrics:
         if metric in df.columns:
-            percentiles[metric] = {
-                'p10': np.percentile(df[metric], 10),
-                'p25': np.percentile(df[metric], 25),
-                'p50': np.percentile(df[metric], 50),
-                'p75': np.percentile(df[metric], 75),
-                'p90': np.percentile(df[metric], 90)
-            }
+            # Remove NaN values before calculating percentiles
+            clean_data = df[metric].dropna()
+            if len(clean_data) > 0:
+                percentiles[metric] = {
+                    'p10': np.percentile(clean_data, 10),
+                    'p25': np.percentile(clean_data, 25),
+                    'p50': np.percentile(clean_data, 50),
+                    'p75': np.percentile(clean_data, 75),
+                    'p90': np.percentile(clean_data, 90)
+                }
+            else:
+                # Fallback values if no clean data
+                percentiles[metric] = {
+                    'p10': 0, 'p25': 0, 'p50': 0, 'p75': 0, 'p90': 0
+                }
     
     return percentiles
 
@@ -286,10 +294,11 @@ def create_smart_filters(df=None):
         help="Combined probability of getting ANY base hit (1B + XB + HR)"
     )
     
-    # Convert to actual threshold
+    # Convert to actual threshold with NaN handling
     percentile_val = hit_prob_options[filters['hit_prob_percentile']]
-    if percentiles and 'total_hit_prob' in percentiles:
-        filters['min_hit_prob'] = np.percentile(df['total_hit_prob'], percentile_val) if percentile_val > 0 else 0
+    if percentiles and 'total_hit_prob' in percentiles and percentile_val > 0:
+        threshold = np.percentile(df['total_hit_prob'].dropna(), percentile_val)
+        filters['min_hit_prob'] = threshold if not np.isnan(threshold) else 25  # Fallback
     else:
         # Fallback defaults
         fallback_values = {90: 45, 75: 38, 60: 32, 40: 28, 0: 0}
@@ -311,10 +320,11 @@ def create_smart_filters(df=None):
         help="Lower strikeout risk = higher chance of making contact"
     )
     
-    # Convert to actual threshold
+    # Convert to actual threshold with NaN handling
     k_percentile_val = k_risk_options[filters['k_risk_percentile']]
-    if percentiles and 'adj_K' in percentiles:
-        filters['max_k'] = np.percentile(df['adj_K'], k_percentile_val) if k_percentile_val < 100 else 100
+    if percentiles and 'adj_K' in percentiles and k_percentile_val < 100:
+        threshold = np.percentile(df['adj_K'].dropna(), k_percentile_val)
+        filters['max_k'] = threshold if not np.isnan(threshold) else 20  # Fallback
     else:
         # Fallback defaults
         k_fallback = {10: 12, 25: 16, 50: 20, 75: 25, 100: 100}
@@ -364,27 +374,36 @@ def create_smart_filters(df=None):
     # REAL-TIME FEEDBACK
     if df is not None and not df.empty:
         # Quick filter preview (simplified without redundant contact filter)
-        preview_query = f"total_hit_prob >= {filters['min_hit_prob']:.1f} and adj_K <= {filters['max_k']:.1f}"
-        
         try:
-            preview_df = df.query(preview_query)
-            matching_count = len(preview_df)
+            preview_parts = []
+            if 'min_hit_prob' in filters and not np.isnan(filters['min_hit_prob']):
+                preview_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
+            if 'max_k' in filters and not np.isnan(filters['max_k']):
+                preview_parts.append(f"adj_K <= {filters['max_k']:.1f}")
             
-            if matching_count == 0:
-                st.sidebar.error("❌ No players match current filters")
-                st.sidebar.markdown("**💡 Try:** Lower hit probability tier or increase K risk tolerance")
-            elif matching_count < 5:
-                st.sidebar.warning(f"⚠️ Only {matching_count} players match")
-                st.sidebar.markdown("**💡 Tip:** Lower hit probability tier for more options")
-            else:
-                st.sidebar.success(f"✅ {matching_count} players match your criteria")
+            if preview_parts:
+                preview_query = " and ".join(preview_parts)
+                preview_df = df.query(preview_query)
+                matching_count = len(preview_df)
                 
-                if matching_count > 0:
-                    top_hit_prob = preview_df['total_hit_prob'].max()
-                    st.sidebar.markdown(f"**🎯 Best Hit Prob:** {top_hit_prob:.1f}%")
+                if matching_count == 0:
+                    st.sidebar.error("❌ No players match current filters")
+                    st.sidebar.markdown("**💡 Try:** Lower hit probability tier or increase K risk tolerance")
+                elif matching_count < 5:
+                    st.sidebar.warning(f"⚠️ Only {matching_count} players match")
+                    st.sidebar.markdown("**💡 Tip:** Lower hit probability tier for more options")
+                else:
+                    st.sidebar.success(f"✅ {matching_count} players match your criteria")
                     
-        except Exception:
-            pass  # Don't break if query fails
+                    if matching_count > 0:
+                        top_hit_prob = preview_df['total_hit_prob'].max()
+                        st.sidebar.markdown(f"**🎯 Best Hit Prob:** {top_hit_prob:.1f}%")
+            else:
+                # No valid filters
+                st.sidebar.info("📊 All players included (no filters applied)")
+                        
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ Filter preview unavailable: {str(e)}")
     
     return filters
 
@@ -396,34 +415,44 @@ def apply_smart_filters(df, filters):
     
     query_parts = []
     
-    # Primary filters
-    query_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
-    query_parts.append(f"adj_K <= {filters['max_k']:.1f}")
-    # Contact rate now handled by Hit Probability Tier (no separate filter needed)
+    # Validate filter values and add to query
+    if 'min_hit_prob' in filters and not np.isnan(filters['min_hit_prob']):
+        query_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
     
-    # Advanced filters
-    query_parts.append(f"adj_vs >= {filters['min_vs_pitcher']}")
-    query_parts.append(f"adj_BB <= {filters['max_walk']}")
+    if 'max_k' in filters and not np.isnan(filters['max_k']):
+        query_parts.append(f"adj_K <= {filters['max_k']:.1f}")
+    
+    # Advanced filters with validation
+    if 'min_vs_pitcher' in filters and not np.isnan(filters['min_vs_pitcher']):
+        query_parts.append(f"adj_vs >= {filters['min_vs_pitcher']}")
+    
+    if 'max_walk' in filters and not np.isnan(filters['max_walk']):
+        query_parts.append(f"adj_BB <= {filters['max_walk']}")
     
     # Team filter
-    if filters['selected_teams']:
+    if filters.get('selected_teams'):
         team_filter = "Tm in " + str(filters['selected_teams'])
         query_parts.append(team_filter)
     
     # Apply filters with error handling
     try:
-        full_query = " and ".join(query_parts)
-        filtered_df = df.query(full_query)
+        if query_parts:
+            full_query = " and ".join(query_parts)
+            filtered_df = df.query(full_query)
+        else:
+            filtered_df = df  # No filters applied
         
         # Sort by score and limit results
-        result_df = filtered_df.sort_values('Score', ascending=False).head(filters['result_count'])
+        result_count = filters.get('result_count', 15)
+        result_df = filtered_df.sort_values('Score', ascending=False).head(result_count)
         
         return result_df
         
     except Exception as e:
         st.error(f"❌ Filter error: {str(e)}")
         # Return top players by score if filtering fails
-        return df.sort_values('Score', ascending=False).head(filters['result_count'])
+        result_count = filters.get('result_count', 15)
+        return df.sort_values('Score', ascending=False).head(result_count)
 
 def display_smart_results(filtered_df, filters):
     """Display results with intelligent insights and feedback."""
