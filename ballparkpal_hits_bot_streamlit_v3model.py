@@ -298,98 +298,240 @@ def create_data_quality_dashboard(df):
         </div>
         """.format(avg_hit_prob), unsafe_allow_html=True)
 
-def create_enhanced_filters(df=None):
-    """Create enhanced filtering options focused on base hits."""
-    st.sidebar.header("🎯 Base Hit Filters")
+def calculate_percentiles(df):
+    """Calculate percentiles for smart filtering."""
+    if df is None or df.empty:
+        return {}
+    
+    percentiles = {}
+    
+    # Calculate percentiles for key metrics
+    metrics = ['total_hit_prob', 'adj_K', 'adj_1B', 'adj_vs', 'adj_BB']
+    
+    for metric in metrics:
+        if metric in df.columns:
+            percentiles[metric] = {
+                'p10': np.percentile(df[metric], 10),
+                'p25': np.percentile(df[metric], 25),
+                'p50': np.percentile(df[metric], 50),
+                'p75': np.percentile(df[metric], 75),
+                'p90': np.percentile(df[metric], 90)
+            }
+    
+    return percentiles
+
+def create_smart_filters(df=None):
+    """Create intelligent filtering system optimized for base hits."""
+    st.sidebar.header("🎯 Smart Base Hit Filters")
     
     filters = {}
+    percentiles = calculate_percentiles(df) if df is not None else {}
     
-    # Core filtering mode
-    filters['mode'] = st.sidebar.radio(
-        "Filtering Strategy",
-        ["🎯 Base Hit Focused", "🔒 Conservative", "⚡ Aggressive"],
-        help="Choose your risk tolerance for base hit predictions"
-    )
-    
-    if filters['mode'] == "🎯 Base Hit Focused":
-        filters['min_hit_prob'] = st.sidebar.slider("Minimum Total Hit Probability", 25, 60, 35, help="Combined probability of 1B + XB + HR")
-        filters['max_k'] = st.sidebar.slider("Maximum Strikeout Risk", 10, 30, 20)
-        filters['max_bb'] = st.sidebar.slider("Maximum Walk Risk", 5, 25, 12)
-        
-    elif filters['mode'] == "🔒 Conservative":
-        filters['min_hit_prob'] = st.sidebar.slider("Minimum Total Hit Probability", 30, 70, 40)
-        filters['max_k'] = st.sidebar.slider("Maximum Strikeout Risk", 8, 20, 15)
-        filters['max_bb'] = st.sidebar.slider("Maximum Walk Risk", 5, 15, 10)
-        
-    else:  # Aggressive
-        filters['min_hit_prob'] = st.sidebar.slider("Minimum Total Hit Probability", 20, 50, 30)
-        filters['max_k'] = st.sidebar.slider("Maximum Strikeout Risk", 15, 35, 25)
-        filters['max_bb'] = st.sidebar.slider("Maximum Walk Risk", 8, 30, 15)
-    
-    # Additional filters
-    filters['min_1b'] = st.sidebar.slider("Minimum Single Probability", 10, 35, 18)
-    filters['min_vs'] = st.sidebar.slider("Minimum vs Pitcher", 0, 100, 50, help="Matchup rating vs opposing pitcher")
-    
-    # Team filter - now properly populated
-    team_options = []
+    # Show data summary
     if df is not None and not df.empty:
-        team_options = sorted(df['Tm'].unique().tolist())
+        st.sidebar.markdown(f"**📊 Today's Pool:** {len(df)} matchups")
+        avg_hit_prob = df['total_hit_prob'].mean() if 'total_hit_prob' in df.columns else 0
+        st.sidebar.markdown(f"**🎯 Avg Hit Prob:** {avg_hit_prob:.1f}%")
     
-    filters['selected_teams'] = st.sidebar.multiselect(
-        "Filter by Teams (optional)",
-        options=team_options
+    st.sidebar.markdown("---")
+    
+    # PRIMARY FILTERS
+    st.sidebar.markdown("### **🎯 Primary Filters**")
+    
+    # Hit Probability Percentile Filter
+    hit_prob_options = {
+        "Top 10% (Elite)": 90,
+        "Top 25% (Excellent)": 75,
+        "Top 40% (Good)": 60,
+        "Top 60% (Average+)": 40,
+        "All Players": 0
+    }
+    
+    filters['hit_prob_percentile'] = st.sidebar.selectbox(
+        "Hit Probability Tier",
+        options=list(hit_prob_options.keys()),
+        index=1,  # Default to Top 25%
+        help="Combined probability of getting ANY base hit (1B + XB + HR)"
     )
     
-    # Number of results
-    filters['num_players'] = st.sidebar.selectbox("Number of Top Results", [5, 10, 15, 20, 25], index=2)
+    # Convert to actual threshold
+    percentile_val = hit_prob_options[filters['hit_prob_percentile']]
+    if percentiles and 'total_hit_prob' in percentiles:
+        filters['min_hit_prob'] = np.percentile(df['total_hit_prob'], percentile_val) if percentile_val > 0 else 0
+    else:
+        # Fallback defaults
+        fallback_values = {90: 45, 75: 38, 60: 32, 40: 28, 0: 0}
+        filters['min_hit_prob'] = fallback_values[percentile_val]
+    
+    # Strikeout Risk Control
+    k_risk_options = {
+        "Bottom 10% (Safest)": 10,
+        "Bottom 25% (Safe)": 25,
+        "Bottom 50% (Moderate)": 50,
+        "Bottom 75% (Flexible)": 75,
+        "All Risk Levels": 100
+    }
+    
+    filters['k_risk_percentile'] = st.sidebar.selectbox(
+        "Strikeout Risk Tolerance",
+        options=list(k_risk_options.keys()),
+        index=1,  # Default to Bottom 25%
+        help="Lower strikeout risk = higher chance of making contact"
+    )
+    
+    # Convert to actual threshold
+    k_percentile_val = k_risk_options[filters['k_risk_percentile']]
+    if percentiles and 'adj_K' in percentiles:
+        filters['max_k'] = np.percentile(df['adj_K'], k_percentile_val) if k_percentile_val < 100 else 100
+    else:
+        # Fallback defaults
+        k_fallback = {10: 12, 25: 16, 50: 20, 75: 25, 100: 100}
+        filters['max_k'] = k_fallback[k_percentile_val]
+    
+    # Contact Foundation (Singles)
+    filters['min_contact'] = st.sidebar.slider(
+        "Minimum Contact Rate (1B%)",
+        min_value=10,
+        max_value=35,
+        value=18,
+        step=1,
+        help="Base single probability - foundation for all hits"
+    )
+    
+    # ADVANCED FILTERS (Collapsible)
+    with st.sidebar.expander("⚙️ Advanced Options"):
+        
+        # vs Pitcher Rating (moderate importance as requested)
+        filters['min_vs_pitcher'] = st.slider(
+            "vs Pitcher Rating",
+            min_value=0,
+            max_value=100,
+            value=45,
+            step=5,
+            help="How well batter performs against this pitcher type (moderate importance)"
+        )
+        
+        # Walk Risk Tolerance
+        filters['max_walk'] = st.slider(
+            "Walk Risk Tolerance",
+            min_value=5,
+            max_value=25,
+            value=12,
+            step=1,
+            help="Maximum walk probability (walks aren't hits)"
+        )
+        
+        # Team Selection
+        team_options = []
+        if df is not None and not df.empty:
+            team_options = sorted(df['Tm'].unique().tolist())
+        
+        filters['selected_teams'] = st.multiselect(
+            "Filter by Teams",
+            options=team_options,
+            help="Leave empty to include all teams"
+        )
+        
+        # Result count
+        filters['result_count'] = st.selectbox(
+            "Number of Results",
+            options=[5, 10, 15, 20, 25, 30],
+            index=2
+        )
+    
+    # REAL-TIME FEEDBACK
+    if df is not None and not df.empty:
+        # Quick filter preview
+        preview_query = f"total_hit_prob >= {filters['min_hit_prob']:.1f} and adj_K <= {filters['max_k']:.1f} and adj_1B >= {filters['min_contact']}"
+        
+        try:
+            preview_df = df.query(preview_query)
+            matching_count = len(preview_df)
+            
+            if matching_count == 0:
+                st.sidebar.error("❌ No players match current filters")
+                st.sidebar.markdown("**💡 Try:** Lowering hit probability or increasing K risk tolerance")
+            elif matching_count < 5:
+                st.sidebar.warning(f"⚠️ Only {matching_count} players match")
+                st.sidebar.markdown("**💡 Tip:** Expand criteria for more options")
+            else:
+                st.sidebar.success(f"✅ {matching_count} players match your criteria")
+                
+                if matching_count > 0:
+                    top_hit_prob = preview_df['total_hit_prob'].max()
+                    st.sidebar.markdown(f"**🎯 Best Hit Prob:** {top_hit_prob:.1f}%")
+                    
+        except Exception:
+            pass  # Don't break if query fails
     
     return filters
 
-def apply_enhanced_filters(df, filters):
-    """Apply enhanced filtering logic for base hit optimization."""
+def apply_smart_filters(df, filters):
+    """Apply intelligent filtering logic optimized for base hits."""
+    
+    if df is None or df.empty:
+        return df
     
     query_parts = []
     
-    # Core base hit filters
-    query_parts.append(f"total_hit_prob >= {filters['min_hit_prob']}")
-    query_parts.append(f"adj_K <= {filters['max_k']}")
-    query_parts.append(f"adj_BB <= {filters['max_bb']}")
-    query_parts.append(f"adj_1B >= {filters['min_1b']}")
-    query_parts.append(f"adj_vs >= {filters['min_vs']}")
+    # Primary filters
+    query_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
+    query_parts.append(f"adj_K <= {filters['max_k']:.1f}")
+    query_parts.append(f"adj_1B >= {filters['min_contact']}")
+    
+    # Advanced filters
+    query_parts.append(f"adj_vs >= {filters['min_vs_pitcher']}")
+    query_parts.append(f"adj_BB <= {filters['max_walk']}")
     
     # Team filter
     if filters['selected_teams']:
         team_filter = "Tm in " + str(filters['selected_teams'])
         query_parts.append(team_filter)
     
-    # Apply filters
-    full_query = " and ".join(query_parts)
-    
+    # Apply filters with error handling
     try:
+        full_query = " and ".join(query_parts)
         filtered_df = df.query(full_query)
-        return filtered_df.sort_values('Score', ascending=False).head(filters['num_players'])
+        
+        # Sort by score and limit results
+        result_df = filtered_df.sort_values('Score', ascending=False).head(filters['result_count'])
+        
+        return result_df
+        
     except Exception as e:
-        st.error(f"Filter error: {str(e)}")
-        return df.head(filters['num_players'])
+        st.error(f"❌ Filter error: {str(e)}")
+        # Return top players by score if filtering fails
+        return df.sort_values('Score', ascending=False).head(filters['result_count'])
 
-def display_enhanced_results(filtered_df):
-    """Display results with enhanced base hit focus."""
+def display_smart_results(filtered_df, filters):
+    """Display results with intelligent insights and feedback."""
     
     if filtered_df.empty:
-        st.warning("⚠️ No players match your current filters. Try adjusting the criteria.")
+        st.warning("⚠️ No players match your current filters")
+        
+        # Smart suggestions
+        st.markdown("""
+        ### 💡 **Suggested Adjustments:**
+        - Try **"Top 40% Hit Probability"** instead of higher tiers
+        - Increase **Strikeout Risk Tolerance** to "Bottom 50%"
+        - Lower **Minimum Contact Rate** to 15%
+        """)
         return
     
     st.subheader(f"🎯 Top {len(filtered_df)} Base Hit Candidates")
     
-    # Key insights
-    col1, col2, col3 = st.columns(3)
+    # Enhanced key insights
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        top_hit_prob = filtered_df['total_hit_prob'].iloc[0] if len(filtered_df) > 0 else 0
+        best_hit_prob = filtered_df['total_hit_prob'].iloc[0] if len(filtered_df) > 0 else 0
+        league_avg = 32.5  # Typical MLB average
+        color = "success-card" if best_hit_prob > league_avg else "metric-card"
         st.markdown(f"""
-        <div class="success-card">
+        <div class="{color}">
             <h4>🥇 Best Hit Probability</h4>
-            <h2>{top_hit_prob:.1f}%</h2>
+            <h2>{best_hit_prob:.1f}%</h2>
+            <small>League Avg: {league_avg}%</small>
         </div>
         """, unsafe_allow_html=True)
     
@@ -399,25 +541,42 @@ def display_enhanced_results(filtered_df):
         <div class="metric-card">
             <h4>📊 Average Score</h4>
             <h2>{avg_score:.1f}</h2>
+            <small>0-100 Scale</small>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
+        elite_count = (filtered_df['Score'] >= 70).sum()
+        st.markdown(f"""
+        <div class="{'success-card' if elite_count > 0 else 'metric-card'}">
+            <h4>⭐ Elite Plays</h4>
+            <h2>{elite_count}/{len(filtered_df)}</h2>
+            <small>Score ≥70</small>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
         low_k_count = (filtered_df['adj_K'] <= 15).sum()
         st.markdown(f"""
         <div class="success-card">
             <h4>🛡️ Low K Risk</h4>
             <h2>{low_k_count}/{len(filtered_df)}</h2>
+            <small>≤15% Strikeout</small>
         </div>
         """, unsafe_allow_html=True)
     
-    # Enhanced results table
+    # Show filter summary
+    st.markdown(f"""
+    **🎯 Applied Filters:** {filters['hit_prob_percentile']} • {filters['k_risk_percentile']} • Min Contact {filters['min_contact']}%
+    """)
+    
+    # Enhanced results table with better column selection
     display_columns = {
         'Batter': 'Batter',
         'Tm': 'Team',
         'Pitcher': 'Pitcher',
-        'total_hit_prob': 'Hit Prob %',
-        'adj_1B': '1B %',
+        'total_hit_prob': 'Total Hit %',
+        'adj_1B': 'Contact %',
         'adj_XB': 'XB %',
         'adj_HR': 'HR %',
         'adj_vs': 'vs Pitcher',
@@ -428,10 +587,10 @@ def display_enhanced_results(filtered_df):
     
     styled_df = filtered_df[display_columns.keys()].rename(columns=display_columns)
     
-    # Format the dataframe
+    # Enhanced formatting with multiple gradients
     styled_df = styled_df.style.format({
-        'Hit Prob %': "{:.1f}%",
-        '1B %': "{:.1f}%", 
+        'Total Hit %': "{:.1f}%",
+        'Contact %': "{:.1f}%", 
         'XB %': "{:.1f}%",
         'HR %': "{:.1f}%",
         'vs Pitcher': "{:.0f}",
@@ -444,25 +603,50 @@ def display_enhanced_results(filtered_df):
         vmin=0,
         vmax=100
     ).background_gradient(
-        subset=['Hit Prob %'],
+        subset=['Total Hit %'],
         cmap='Greens',
         vmin=20,
-        vmax=60
+        vmax=50
+    ).background_gradient(
+        subset=['K Risk %'],
+        cmap='RdYlGn_r',  # Reversed so red=high risk
+        vmin=10,
+        vmax=30
     )
     
     st.dataframe(styled_df, use_container_width=True)
     
-    # Enhanced color legend
+    # Enhanced interpretation guide
     st.markdown("""
     <div class="color-legend">
-        <strong>📊 Color Guide:</strong><br>
-        <strong>Score:</strong> <span style="color: #d7191c;">●</span> Low (0-49) | 
-        <span style="color: #fdae61;">●</span> Medium (50-69) | 
-        <span style="color: #1a9641;">●</span> High (70-100)<br>
-        <strong>Hit Prob:</strong> <span style="color: #f7fcf5;">●</span> Lower chance | 
-        <span style="color: #00441b;">●</span> Higher chance
+        <strong>📊 Smart Color Guide:</strong><br>
+        <strong>Score:</strong> <span style="color: #1a9641;">●</span> Elite (70+) | 
+        <span style="color: #fdae61;">●</span> Good (50-69) | 
+        <span style="color: #d7191c;">●</span> Risky (<50)<br>
+        <strong>Total Hit %:</strong> <span style="color: #00441b;">●</span> Excellent chance | 
+        <span style="color: #f7fcf5;">●</span> Lower chance<br>
+        <strong>K Risk %:</strong> <span style="color: #1a9641;">●</span> Safe | 
+        <span style="color: #d7191c;">●</span> Dangerous
     </div>
     """, unsafe_allow_html=True)
+    
+    # Performance insights
+    if len(filtered_df) >= 5:
+        st.markdown("### 🔍 **Quick Insights**")
+        
+        # Top performer analysis
+        top_player = filtered_df.iloc[0]
+        top_hit_prob = top_player['total_hit_prob']
+        top_k_risk = top_player['adj_K']
+        
+        insight_text = f"**🏆 Top Pick:** {top_player['Batter']} ({top_player['Tm']}) has {top_hit_prob:.1f}% hit probability with only {top_k_risk:.1f}% strikeout risk"
+        
+        if top_hit_prob >= 45:
+            insight_text += " - **Elite opportunity!**"
+        elif top_hit_prob >= 35:
+            insight_text += " - **Solid choice**"
+        
+        st.success(insight_text)
 
 def create_enhanced_visualizations(df, filtered_df):
     """Create enhanced visualizations focused on base hit analysis."""
@@ -539,14 +723,14 @@ def main_page():
     # Show data quality dashboard
     create_data_quality_dashboard(df)
     
-    # Create filters with team options populated
-    filters = create_enhanced_filters(df)
+    # Create smart filters with real-time feedback
+    filters = create_smart_filters(df)
     
-    # Apply filters
-    filtered_df = apply_enhanced_filters(df, filters)
+    # Apply intelligent filters
+    filtered_df = apply_smart_filters(df, filters)
     
-    # Display results
-    display_enhanced_results(filtered_df)
+    # Display intelligent results
+    display_smart_results(filtered_df, filters)
     
     # Create visualizations
     create_enhanced_visualizations(df, filtered_df)
@@ -584,99 +768,128 @@ def main_page():
     """)
 
 def info_page():
-    """Enhanced info page with base hit focus."""
-    st.title("📚 Base Hit Predictor Guide")
+    """Enhanced info page with smart filtering focus."""
+    st.title("📚 Smart Base Hit Predictor Guide")
     
-    with st.expander("🎯 Enhanced Base Hit Algorithm", expanded=True):
+    with st.expander("🧠 Intelligent Filtering System", expanded=True):
         st.markdown("""
-        ## 🚀 New & Improved Algorithm
+        ## 🚀 **Smart Percentile-Based Filtering**
         
-        ### **Key Enhancements for Base Hit Prediction**
+        ### **Why Percentile-Based?**
+        - **Adapts Daily**: "Top 25%" adjusts to each day's player pool
+        - **Always Relevant**: Works whether it's a pitcher's duel or slugfest
+        - **Intuitive**: "Top 25% Hit Probability" is clearer than "≥35%"
         
-        #### 🎯 **Total Hit Probability**
-        - **Formula**: `1B% + XB% + HR%` (capped at 100%)
-        - **Purpose**: Comprehensive view of ANY base hit chance
-        - **Usage**: Primary filter for identifying hit candidates
+        ### **🎯 Primary Filters (Always Visible)**
         
-        #### ⚖️ **Optimized Scoring Weights**
-        | Factor | Weight | Focus |
-        |--------|--------|-------|
-        | **Single %** | 2.0 | ⭐⭐⭐⭐⭐ Most common hit |
-        | **Extra Base %** | 1.8 | ⭐⭐⭐⭐⭐ High-value hits |
-        | **Strikeout Risk** | -2.0 | 🚨 Heavy penalty (no hit) |
-        | **vs Pitcher** | 1.2 | ⭐⭐⭐ Matchup advantage |
-        | **Walk Risk** | -0.8 | ⚠️ Not a hit |
+        #### **1. Hit Probability Tier** ⭐⭐⭐⭐⭐
+        - **Top 10% (Elite)**: Only the absolute best opportunities
+        - **Top 25% (Excellent)**: **← Recommended default**
+        - **Top 40% (Good)**: Solid options with more choices
+        - **Purpose**: Combined 1B + XB + HR probability
         
-        #### 🎁 **Smart Bonuses**
+        #### **2. Strikeout Risk Tolerance** ⭐⭐⭐⭐⭐
+        - **Bottom 10% (Safest)**: Ultra-low strikeout risk
+        - **Bottom 25% (Safe)**: **← Recommended default**
+        - **Bottom 50% (Moderate)**: Balanced approach
+        - **Purpose**: Strikeouts prevent ALL hits
+        
+        #### **3. Minimum Contact Rate** ⭐⭐⭐⭐
+        - **18%**: Default - solid single probability
+        - **Range**: 10-35% (adjust based on daily slate)
+        - **Purpose**: Foundation for all base hits
+        
+        ### **⚙️ Advanced Options (When You Need More Control)**
+        
+        | Filter | Impact | Default | Why It Matters |
+        |--------|--------|---------|----------------|
+        | **vs Pitcher** | Moderate | 45 | Matchup advantage |
+        | **Walk Risk** | Low | 12% | Walks aren't hits |
+        | **Team Filter** | Situational | All | Focus on specific games |
+        
+        ### **🎁 Smart Bonuses in Scoring**
         - **Contact Bonus** (+8): Hit Prob >40% AND K Risk <18%
-        - **Consistency Bonus** (+5): 1B >20% AND XB >8%
-        - **Matchup Bonus** (+3): vs Pitcher >70
-        
-        #### 🛡️ **Risk Management**
-        - Strikeout probability heavily weighted (prevents hits)
-        - Walk probability moderately penalized (not a hit)
-        - Balanced approach for sustainable hit prediction
+        - **Consistency Bonus** (+5): Strong single + extra base rates
+        - **Matchup Bonus** (+3): Excellent vs pitcher rating
         """)
     
-    with st.expander("🔍 How to Use the Enhanced Filters"):
+    with st.expander("🎯 How to Use Smart Filters"):
         st.markdown("""
-        ### **Filter Strategies**
+        ### **Quick Start Guide**
         
-        #### 🎯 **Base Hit Focused** (Recommended)
-        - Balanced approach for consistent base hits
-        - Moderate risk tolerance
-        - Good for daily fantasy and betting
+        #### **🔰 New User (Recommended)**
+        1. Keep **"Top 25% Hit Probability"**
+        2. Keep **"Bottom 25% Strikeout Risk"**
+        3. Adjust **Contact Rate** between 15-20%
+        4. Check results - aim for 10-15 players
         
-        #### 🔒 **Conservative**
-        - Lower risk, higher confidence
-        - Better for smaller bankrolls
-        - Focuses on sure things
+        #### **🔧 Fine-Tuning**
+        - **Too few results?** → Lower hit probability tier OR increase K risk tolerance
+        - **Too many results?** → Raise hit probability tier OR decrease K risk tolerance
+        - **Want more power?** → Lower contact rate, accept higher K risk
+        - **Playing it safe?** → Top 10% hit probability + Bottom 10% K risk
         
-        #### ⚡ **Aggressive**  
-        - Higher upside potential
-        - More risk tolerance
-        - Good for tournaments
+        #### **📊 Real-Time Feedback**
+        - **Green ✅**: Perfect number of matches
+        - **Yellow ⚠️**: Few matches - consider expanding criteria  
+        - **Red ❌**: No matches - suggestions provided automatically
         
-        ### **Key Filter Explanations**
-        - **Total Hit Prob**: Combined chance of ANY base hit
-        - **Minimum Single %**: Focus on most common hit type
-        - **vs Pitcher**: How well batter performs against this pitcher type
+        ### **🎯 Understanding Results**
+        
+        | Score | Color | Action | Confidence |
+        |-------|-------|--------|------------|
+        | **80-100** | 🟢 Green | Max bet/lineup | Elite |
+        | **70-79** | 🟢 Green | High confidence | Excellent |
+        | **60-69** | 🟡 Yellow | Good choice | Solid |
+        | **50-59** | 🟡 Yellow | Proceed cautiously | Okay |
+        | **<50** | 🔴 Red | Avoid | High risk |
         """)
     
-    with st.expander("📊 Understanding the Results"):
+    with st.expander("📈 Advanced Strategy Tips"):
         st.markdown("""
-        ### **Result Interpretation**
+        ### **Daily Adaptation Strategies**
         
-        | Score Range | Recommendation | Action |
-        |-------------|----------------|---------|
-        | **80-100** | 🌟 Elite Play | Max confidence |
-        | **70-79** | ⭐ Excellent | High confidence |
-        | **60-69** | ✅ Good | Solid choice |
-        | **50-59** | ⚠️ Okay | Proceed with caution |
-        | **<50** | ❌ Avoid | High risk |
+        #### **High-Offense Days** (lots of good hitters)
+        - Use **"Top 10%"** hit probability
+        - Can afford **"Bottom 10%"** K risk
+        - Raise contact rate to 20%+
         
-        ### **Color Coding**
-        - **Green**: Favorable metrics (higher is better)
-        - **Red to Yellow**: Risk indicators (lower is better)
-        - **Size**: Represents relative importance
+        #### **Pitcher-Heavy Days** (tough slate)
+        - Use **"Top 40%"** hit probability  
+        - Accept **"Bottom 50%"** K risk
+        - Lower contact rate to 15%
+        
+        #### **Tournament Play**
+        - Focus on **Elite (Score 70+)** players only
+        - Accept higher variance for upside
+        - Use vs Pitcher rating heavily
+        
+        #### **Cash Games**
+        - Target **15+ matching players**
+        - Prioritize consistency over upside
+        - Keep K risk in "Bottom 25%"
+        
+        ### **🔍 Reading the Data Quality Dashboard**
+        - **47+ matchups**: Good daily slate
+        - **Avg Hit Prob 33%+**: Above-average offensive day
+        - **Top Teams**: Focus on favorable park factors
         """)
     
     st.markdown("---")
     st.markdown("""
-    **🔥 New Features in V2.0:**
-    - Enhanced base hit algorithm
-    - Total hit probability calculation  
-    - Smart filtering strategies
-    - Improved data validation
-    - Better error handling
-    - Export functionality
-    - Real-time data quality monitoring
+    **🔥 Smart Features in V2.0:**
+    - Percentile-based filtering that adapts daily
+    - Real-time player count and suggestions  
+    - Enhanced scoring with smart bonuses
+    - League average comparisons
+    - Automatic filter recommendations
+    - Elite vs safe play identification
     
-    *Made with ❤️ by A1FADED | Focused on Base Hits*
+    *Engineered for Base Hit Success | A1FADED V2.0*
     """)
 
 def main():
-    """Enhanced main function with better navigation."""
+    """Enhanced main function with smart navigation."""
     st.sidebar.title("🏟️ Navigation")
     
     # Optional music controls (improved)
@@ -691,18 +904,18 @@ def main():
 
     app_mode = st.sidebar.radio(
         "Choose Section",
-        ["🎯 Base Hit Predictor", "📚 Guide & Tips"],
+        ["🎯 Smart Hit Predictor", "📚 Smart Guide"],
         index=0
     )
 
-    if app_mode == "🎯 Base Hit Predictor":
+    if app_mode == "🎯 Smart Hit Predictor":
         main_page()
     else:
         info_page()
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.0** | Enhanced Base Hit Focus")
+    st.sidebar.markdown("**V2.0** | Smart Percentile Filtering")
 
 if __name__ == "__main__":
     main()
