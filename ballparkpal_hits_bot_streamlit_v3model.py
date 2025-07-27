@@ -403,15 +403,13 @@ def create_smart_filters(df=None):
             help="How well batter performs vs this pitcher type (+10=much better, -10=much worse, moderate importance)"
         )
         
-        # Walk Risk Tolerance
-        filters['max_walk'] = st.slider(
-            "Walk Risk Tolerance",
-            min_value=5,
-            max_value=25,
-            value=12,
-            step=1,
-            help="Maximum walk probability (walks aren't hits)"
+        # Walk Risk Control (simplified)
+        minimize_walks = st.checkbox(
+            "Minimize Walk Risk",
+            value=True,
+            help="Checked = ≤10% walk risk (conservative) | Unchecked = ≤20% walk risk (more options)"
         )
+        filters['max_walk'] = 10 if minimize_walks else 20
         
         # Team Selection
         team_options = []
@@ -506,7 +504,7 @@ def display_smart_results(filtered_df, filters):
         ### 💡 **Suggested Adjustments:**
         - Try **"Top 40% Hit Probability"** instead of higher tiers
         - Increase **Strikeout Risk Tolerance** to "Bottom 50%"  
-        - Use **Advanced Options** to adjust vs Pitcher or Walk tolerance
+        - Try **unchecking "Minimize Walks"** for more options
         """)
         return
     
@@ -791,7 +789,7 @@ def info_page():
         | Filter | Impact | Default | Range | Why It Matters |
         |--------|--------|---------|-------|----------------|
         | **vs Pitcher** | Moderate | 0 | -10 to +10 | Matchup advantage/disadvantage |
-        | **Walk Risk** | Low | 12% | 5-25% | Walks aren't hits |
+        | **Minimize Walks** | Low | ✅ On | ≤10% or ≤20% | Walks aren't hits (simple toggle) |
         | **Team Filter** | Situational | All | - | Focus on specific games |
         
         ### **🎁 Smart Bonuses in Scoring**
