@@ -388,15 +388,7 @@ def create_smart_filters(df=None):
         k_fallback = {10: 12, 25: 16, 50: 20, 75: 25, 100: 100}
         filters['max_k'] = k_fallback[k_percentile_val]
     
-    # Contact Foundation (Singles)
-    filters['min_contact'] = st.sidebar.slider(
-        "Minimum Contact Rate (1B%)",
-        min_value=10,
-        max_value=35,
-        value=18,
-        step=1,
-        help="Base single probability - foundation for all hits"
-    )
+    # REMOVED: Minimum Contact Rate slider (redundant with Hit Probability Tier)
     
     # ADVANCED FILTERS (Collapsible)
     with st.sidebar.expander("⚙️ Advanced Options"):
@@ -441,8 +433,8 @@ def create_smart_filters(df=None):
     
     # REAL-TIME FEEDBACK
     if df is not None and not df.empty:
-        # Quick filter preview
-        preview_query = f"total_hit_prob >= {filters['min_hit_prob']:.1f} and adj_K <= {filters['max_k']:.1f} and adj_1B >= {filters['min_contact']}"
+        # Quick filter preview (simplified without redundant contact filter)
+        preview_query = f"total_hit_prob >= {filters['min_hit_prob']:.1f} and adj_K <= {filters['max_k']:.1f}"
         
         try:
             preview_df = df.query(preview_query)
@@ -450,10 +442,10 @@ def create_smart_filters(df=None):
             
             if matching_count == 0:
                 st.sidebar.error("❌ No players match current filters")
-                st.sidebar.markdown("**💡 Try:** Lowering hit probability or increasing K risk tolerance")
+                st.sidebar.markdown("**💡 Try:** Lower hit probability tier or increase K risk tolerance")
             elif matching_count < 5:
                 st.sidebar.warning(f"⚠️ Only {matching_count} players match")
-                st.sidebar.markdown("**💡 Tip:** Expand criteria for more options")
+                st.sidebar.markdown("**💡 Tip:** Lower hit probability tier for more options")
             else:
                 st.sidebar.success(f"✅ {matching_count} players match your criteria")
                 
@@ -477,7 +469,7 @@ def apply_smart_filters(df, filters):
     # Primary filters
     query_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
     query_parts.append(f"adj_K <= {filters['max_k']:.1f}")
-    query_parts.append(f"adj_1B >= {filters['min_contact']}")
+    # Contact rate now handled by Hit Probability Tier (no separate filter needed)
     
     # Advanced filters
     query_parts.append(f"adj_vs >= {filters['min_vs_pitcher']}")
@@ -513,8 +505,8 @@ def display_smart_results(filtered_df, filters):
         st.markdown("""
         ### 💡 **Suggested Adjustments:**
         - Try **"Top 40% Hit Probability"** instead of higher tiers
-        - Increase **Strikeout Risk Tolerance** to "Bottom 50%"
-        - Lower **Minimum Contact Rate** to 15%
+        - Increase **Strikeout Risk Tolerance** to "Bottom 50%"  
+        - Use **Advanced Options** to adjust vs Pitcher or Walk tolerance
         """)
         return
     
@@ -565,9 +557,9 @@ def display_smart_results(filtered_df, filters):
         </div>
         """, unsafe_allow_html=True)
     
-    # Show filter summary
+    # Show filter summary (simplified)
     st.markdown(f"""
-    **🎯 Applied Filters:** {filters['hit_prob_percentile']} • {filters['k_risk_percentile']} • Min Contact {filters['min_contact']}%
+    **🎯 Applied Filters:** {filters['hit_prob_percentile']} • {filters['k_risk_percentile']}
     """)
     
     # Enhanced results table with better column selection
@@ -786,18 +778,13 @@ def info_page():
         - **Top 10% (Elite)**: Only the absolute best opportunities
         - **Top 25% (Excellent)**: **← Recommended default**
         - **Top 40% (Good)**: Solid options with more choices
-        - **Purpose**: Combined 1B + XB + HR probability
+        - **Purpose**: Combined 1B + XB + HR probability (captures ALL base hit ability)
         
         #### **2. Strikeout Risk Tolerance** ⭐⭐⭐⭐⭐
         - **Bottom 10% (Safest)**: Ultra-low strikeout risk
         - **Bottom 25% (Safe)**: **← Recommended default**
         - **Bottom 50% (Moderate)**: Balanced approach
         - **Purpose**: Strikeouts prevent ALL hits
-        
-        #### **3. Minimum Contact Rate** ⭐⭐⭐⭐
-        - **18%**: Default - solid single probability
-        - **Range**: 10-35% (adjust based on daily slate)
-        - **Purpose**: Foundation for all base hits
         
         ### **⚙️ Advanced Options (When You Need More Control)**
         
@@ -820,14 +807,14 @@ def info_page():
         #### **🔰 New User (Recommended)**
         1. Keep **"Top 25% Hit Probability"**
         2. Keep **"Bottom 25% Strikeout Risk"**
-        3. Adjust **Contact Rate** between 15-20%
-        4. Check results - aim for 10-15 players
+        3. Check results - aim for 10-15 players
+        4. Adjust if needed using fine-tuning tips below
         
         #### **🔧 Fine-Tuning**
         - **Too few results?** → Lower hit probability tier OR increase K risk tolerance
         - **Too many results?** → Raise hit probability tier OR decrease K risk tolerance
-        - **Want more power?** → Lower contact rate, accept higher K risk
-        - **Playing it safe?** → Top 10% hit probability + Bottom 10% K risk
+        - **Want safer plays?** → Top 10% hit probability + Bottom 10% K risk
+        - **Need more options?** → Top 40% hit probability + Bottom 50% K risk
         
         #### **📊 Real-Time Feedback**
         - **Green ✅**: Perfect number of matches
@@ -849,15 +836,17 @@ def info_page():
         st.markdown("""
         ### **Daily Adaptation Strategies**
         
+        ### **Daily Adaptation Strategies**
+        
         #### **High-Offense Days** (lots of good hitters)
         - Use **"Top 10%"** hit probability
         - Can afford **"Bottom 10%"** K risk
-        - Raise contact rate to 20%+
+        - Tighten advanced filters for selectivity
         
         #### **Pitcher-Heavy Days** (tough slate)
         - Use **"Top 40%"** hit probability  
         - Accept **"Bottom 50%"** K risk
-        - Lower contact rate to 15%
+        - Relax advanced filters for more options
         
         #### **Tournament Play**
         - Focus on **Elite (Score 70+)** players only
