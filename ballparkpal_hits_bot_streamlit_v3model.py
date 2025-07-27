@@ -170,6 +170,8 @@ def validate_merge_quality(prob_df, pct_df, merged_df):
     
     return merged_df
 
+# League-aware filtering system functions
+
 @st.cache_data(ttl=CONFIG['cache_ttl'])
 def load_and_process_data():
     """Enhanced data loading and processing with validation (RESTORED with fixed clipping)."""
