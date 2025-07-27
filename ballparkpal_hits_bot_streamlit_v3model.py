@@ -198,6 +198,11 @@ def load_and_process_data():
             
         pct_col = f'{metric}_pct'
         
+        # Debug: Check if columns exist
+        st.write(f"🔍 Debug: Looking for {base_col} and {pct_col}")
+        st.write(f"Available columns: {list(merged_df.columns)}")
+        st.write(f"Columns exist: {base_col in merged_df.columns}, {pct_col in merged_df.columns}")
+        
         if base_col in merged_df.columns and pct_col in merged_df.columns:
             # Apply adjustment formula
             merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
@@ -210,6 +215,12 @@ def load_and_process_data():
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
             else:  # Other metrics (vs, RC)
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0)
+                
+            st.write(f"✅ Created adj_{metric} column")
+        else:
+            st.error(f"❌ Missing columns for {metric}: {base_col} or {pct_col}")
+            # Create a fallback column with zeros to prevent KeyError
+            merged_df[f'adj_{metric}'] = 0
     
     # Calculate total base hit probability (key enhancement!)
     merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
