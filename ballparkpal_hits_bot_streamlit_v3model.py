@@ -102,6 +102,23 @@ def load_and_process_data():
             prob_df = pd.read_csv(StringIO(requests.get(CONFIG['csv_urls']['probabilities']).text))
             pct_df = pd.read_csv(StringIO(requests.get(CONFIG['csv_urls']['percent_change']).text))
             
+            # DEBUGGING: Check data before merge
+            st.write("🔍 **DEBUG: Checking data before merge**")
+            st.write(f"Probabilities CSV columns: {list(prob_df.columns)}")
+            st.write(f"Percent change CSV columns: {list(pct_df.columns)}")
+            
+            # Check Kyle Farmer specifically
+            kyle_prob = prob_df[prob_df['Batter'] == 'Kyle Farmer']
+            kyle_pct = pct_df[pct_df['Batter'] == 'Kyle Farmer']
+            
+            if not kyle_prob.empty:
+                st.write("Kyle Farmer in probabilities CSV:")
+                st.write(kyle_prob[['Batter', 'Tm', 'Pitcher', 'K', 'BB']])
+            
+            if not kyle_pct.empty:
+                st.write("Kyle Farmer in percent change CSV:")
+                st.write(kyle_pct[['Batter', 'Tm', 'Pitcher', 'K', 'BB']])
+            
             # Basic validation without aggressive type conversion
             if prob_df.empty or pct_df.empty:
                 st.error("❌ One or both CSV files are empty")
@@ -114,6 +131,15 @@ def load_and_process_data():
                 suffixes=('_prob', '_pct')
             )
             
+            # DEBUGGING: Check merge results
+            st.write("🔍 **DEBUG: After merge**")
+            st.write(f"Merged columns: {list(merged_df.columns)}")
+            
+            kyle_merged = merged_df[merged_df['Batter'] == 'Kyle Farmer']
+            if not kyle_merged.empty:
+                st.write("Kyle Farmer after merge:")
+                st.write(kyle_merged[['Batter', 'Tm', 'Pitcher', 'K_prob', 'K_pct', 'BB_prob', 'BB_pct']])
+            
             if merged_df.empty:
                 st.error("❌ No matching records after merge")
                 return None
@@ -125,9 +151,32 @@ def load_and_process_data():
                 base_col = f'{metric}_prob'
                 pct_col = f'{metric}_pct'
                 
+                # DEBUGGING: Check specific columns for K and BB
+                if metric in ['K', 'BB']:
+                    st.write(f"🔍 **DEBUG: Processing {metric}**")
+                    st.write(f"Looking for columns: {base_col}, {pct_col}")
+                    st.write(f"Columns exist: {base_col in merged_df.columns}, {pct_col in merged_df.columns}")
+                    
+                    if base_col in merged_df.columns and pct_col in merged_df.columns:
+                        kyle_base = merged_df.loc[merged_df['Batter'] == 'Kyle Farmer', base_col].iloc[0] if not kyle_merged.empty else "N/A"
+                        kyle_pct = merged_df.loc[merged_df['Batter'] == 'Kyle Farmer', pct_col].iloc[0] if not kyle_merged.empty else "N/A"
+                        st.write(f"Kyle Farmer {base_col}: {kyle_base}")
+                        st.write(f"Kyle Farmer {pct_col}: {kyle_pct}")
+                
                 # Simple calculation like the old version
                 merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
+                
+                # DEBUGGING: Check after calculation but before clipping
+                if metric in ['K', 'BB']:
+                    kyle_after_calc = merged_df.loc[merged_df['Batter'] == 'Kyle Farmer', f'adj_{metric}'].iloc[0] if not kyle_merged.empty else "N/A"
+                    st.write(f"Kyle Farmer adj_{metric} after calculation: {kyle_after_calc}")
+                
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
+                
+                # DEBUGGING: Check after clipping
+                if metric in ['K', 'BB']:
+                    kyle_after_clip = merged_df.loc[merged_df['Batter'] == 'Kyle Farmer', f'adj_{metric}'].iloc[0] if not kyle_merged.empty else "N/A"
+                    st.write(f"Kyle Farmer adj_{metric} after clipping: {kyle_after_clip}")
             
             # Calculate total base hit probability
             merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
