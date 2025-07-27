@@ -854,134 +854,493 @@ def main_page():
     """)
 
 def info_page():
-    """Enhanced info page with league-aware filtering focus."""
-    st.title("📚 League-Aware Hit Predictor Guide")
+    """Comprehensive baseball strategy guide with detailed profile usage."""
+    st.title("📚 Complete Baseball Strategy Guide")
     
-    with st.expander("🏆 League-Average Based System", expanded=True):
+    with st.expander("🏆 Understanding the League-Aware System", expanded=True):
         st.markdown("""
-        ## 🚀 **Baseball-Intelligent Filtering**
+        ## 🚀 **Why League Context Matters**
         
-        ### **Why League Averages Matter**
-        - **Context-Driven**: Filters based on real 2024 MLB performance
-        - **Player Types**: Identifies specific hitting profiles 
-        - **Meaningful Thresholds**: Elite/Above Average/League Average tiers
+        Traditional baseball analysis often uses arbitrary thresholds. Our system uses **real 2024 MLB data** to identify truly exceptional performers relative to their peers.
         
-        ### **📊 2024 League Benchmarks**
-        | Metric | Elite | Above Avg | League Avg | Below Avg |
-        |--------|-------|-----------|------------|-----------|
-        | **K%** | ≤12% | 12-17% | ~22.6% | ≥25% |
-        | **BB%** | ≤4% | 4-6% | ~8.5% | ≥10% |
+        ### **📊 2024 MLB Reality Check**
+        | Metric | Elite (Top 10%) | Above Avg (Top 30%) | League Avg | Below Avg (Bottom 30%) |
+        |--------|-----------------|---------------------|------------|------------------------|
+        | **K%** | ≤12.0% | 12.0-17.0% | ~22.6% | ≥25.0% |
+        | **BB%** | ≤4.0% | 4.0-6.0% | ~8.5% | ≥10.0% |
+        | **BABIP** | ≥.320 | .300-.320 | ~.290 | ≤.280 |
         
-        ### **🎯 Player Type Profiles**
-        
-        #### **🏆 Contact-Aggressive Hitters** (Recommended)
-        - **K% ≤17%** (Above average contact)
-        - **BB% ≤6%** (Aggressive approach)
-        - **Example**: Luis Arraez, Tim Anderson types
-        - **Best for**: Base hit consistency
-        
-        #### **⭐ Elite Contact Specialists**
-        - **K% ≤12%** (Elite contact skills)
-        - **BB% ≤8.5%** (League average walks)
-        - **Focus**: Pure contact ability
-        
-        #### **⚡ Swing-Happy Hitters**
-        - **K% ≤22.6%** (League average strikeouts)
-        - **BB% ≤4%** (Ultra-aggressive)
-        - **Example**: Bo Bichette types
-        - **Benefit**: Early swing, quick at-bats
-        
-        ### **🎁 Enhanced Scoring Bonuses**
-        - **Elite Contact Bonus** (+10): K% ≤12% (much better than league)
-        - **Aggressive Contact Bonus** (+8): K% ≤17% AND BB% ≤6%
-        - **League Superior Bonus** (+6): Better than league in both K% and BB%
-        - **High Hit Probability** (+5): Total hit chance >40%
+        ### **💡 Key Insight: Contact vs Aggression**
+        - **Low K% = Better Contact** (fewer strikeouts = more balls in play)
+        - **Low BB% = More Aggressive** (fewer walks = more swinging, quicker at-bats)
+        - **Sweet Spot**: Low K% + Low BB% = Contact hitters who attack the zone
         """)
     
-    with st.expander("🔍 How to Use League-Aware Filters"):
+    with st.expander("🎯 Complete Hitter Profile Guide", expanded=False):
         st.markdown("""
-        ### **Quick Start Guide**
+        ## **When to Use Each Profile: Detailed Breakdown**
         
-        #### **🔰 New User (Recommended)**
-        1. Start with **"Contact-Aggressive Hitters"**
-        2. Check the results - aim for 10-15 players
-        3. Look for players with **green K% vs League** values
-        4. Focus on **negative values** (better than league average)
+        ### **🏆 Contact-Aggressive Hitters** ⭐ RECOMMENDED DEFAULT
+        **Profile**: K% ≤17%, BB% ≤6% | **Historical Examples**: Luis Arraez, José Altuve (prime), Tony Gwynn (all-time)
         
-        #### **🔧 Advanced Usage**
-        - **Elite Contact**: For tournament/high-stakes plays
-        - **Swing-Happy**: For aggressive game scripts
-        - **Custom Overrides**: Fine-tune thresholds in advanced options
+        #### **✅ Use This Profile When:**
+        - **Daily Fantasy Sports** - Maximum safety and consistency
+        - **Cash Games** - You need reliable base hits
+        - **Pitcher-Heavy Slates** - Tough pitching matchups across the board
+        - **Bad Weather** - Wind/rain favors contact over power
+        - **Small Slates** - Limited player pool, need reliable options
+        - **New to the Tool** - Best balance of safety and opportunity
         
-        ### **📊 Reading League Context**
+        #### **📈 Why It Works:**
+        - Above-average contact skills (better than 70% of MLB)
+        - Aggressive approach leads to more swings = more hit opportunities  
+        - Avoids the "walk trap" (walks don't count as hits)
+        - Typically 10-15 players per slate (good sample size)
         
-        #### **K% vs League Column**
-        - **Green/Negative**: Better contact than league average
-        - **-5.0%**: 5% better strikeout rate than league (excellent)
-        - **+3.0%**: 3% worse than league (concerning)
+        #### **⚠️ Avoid When:**
+        - Offensive explosion expected (too conservative)
+        - Tournament play where you need ceiling (limits upside)
         
-        #### **BB% vs League Column**  
-        - **Green/Negative**: More aggressive than league average
-        - **-3.0%**: 3% fewer walks than league (very aggressive)
-        - **+2.0%**: 2% more walks than league (patient approach)
+        ---
         
-        ### **🎯 Interpretation Examples**
+        ### **⭐ Elite Contact Specialists** 🎯 PREMIUM PLAYS
+        **Profile**: K% ≤12%, BB% ≤8.5% | **Historical Examples**: Luis Arraez, Steven Kwan, Juan Soto (contact years)
         
-        | Player Profile | K% vs League | BB% vs League | Assessment |
-        |----------------|--------------|---------------|------------|
-        | **Elite Contact** | -8.0% | -2.0% | Perfect base hit candidate |
-        | **Power Contact** | -3.0% | +1.0% | Good contact, patient approach |
-        | **Aggressive** | +1.0% | -4.0% | Swing-first mentality |
-        | **Risky** | +5.0% | +3.0% | Below league average in both |
+        #### **✅ Use This Profile When:**
+        - **Tournament Finals** - You need the absolute best
+        - **High-Stakes Contests** - Maximum confidence required
+        - **Ace Pitcher Slates** - Only elite contact can succeed
+        - **You Have Specific Intel** - Inside info on a particular matchup
+        - **Playoff Baseball** - Pressure situations favor elite skills
+        - **Small Field Tournaments** - Need every edge possible
+        
+        #### **📈 Why It's Elite:**
+        - Top 10% contact skills in all of baseball
+        - Proven ability to hit elite pitching
+        - Rarely have 0-hit games
+        - Multiple bonus scoring opportunities
+        
+        #### **⚠️ Limitations:**
+        - Very limited player pool (3-8 players typically)
+        - May miss out on power upside
+        - Expensive in salary cap formats
+        
+        ---
+        
+        ### **⚡ Swing-Happy Hitters** 🔥 CONTRARIAN PLAYS  
+        **Profile**: K% ≤22.6%, BB% ≤4% | **Historical Examples**: Bo Bichette, Tim Anderson, Vladimir Guerrero Sr.
+        
+        #### **✅ Use This Profile When:**
+        - **GPP Tournaments** - Looking for contrarian leverage
+        - **Offensive Slates** - Lots of runs expected
+        - **Fast Pace Games** - More at-bats available
+        - **Specific Matchups** - You know pitcher struggles with aggressive hitters
+        - **Late Swap Strategy** - Quick decisions needed
+        - **Stacking Strategy** - Building around team offense
+        
+        #### **📈 Why It's Valuable:**
+        - Ultra-aggressive = more swings per at-bat
+        - Lower ownership in tournaments (contrarian edge)
+        - Quick at-bats = more plate appearances possible
+        - Can catch fire in offensive environments
+        
+        #### **⚠️ High Risk:**
+        - Strikeout risk near league average
+        - Boom/bust potential higher
+        - Less reliable for cash games
+        
+        ---
+        
+        ### **🔷 Above-Average Contact** 🛡️ BALANCED APPROACH
+        **Profile**: K% ≤17%, BB% ≤10% | **Examples**: Most solid everyday players
+        
+        #### **✅ Use This Profile When:**
+        - **Mixed Contests** - Balance of safety and upside
+        - **Learning the Tool** - Good middle ground
+        - **Uncertain Weather** - When conditions are unclear
+        - **Pitcher Mix Slates** - Some good, some bad pitching
+        - **Building Multiple Lineups** - Need variety in approach
+        
+        #### **📈 Benefits:**
+        - Larger player pool (15-25+ options)
+        - Good balance of contact and patience
+        - Suitable for most game types
+        - Less volatile than extreme profiles
+        
+        ---
+        
+        ### **🌐 All Players** 📊 RESEARCH MODE
+        **Profile**: No restrictions | **Use**: Analysis and research
+        
+        #### **✅ Use This Profile When:**
+        - **Initial Research** - See the full landscape
+        - **Looking for Outliers** - Find unique opportunities
+        - **Checking Your Logic** - Validate other profiles
+        - **Large Field Tournaments** - Need maximum differentiation
         """)
     
-    with st.expander("📈 Advanced Strategy Tips"):
+    with st.expander("🎮 Game Theory & Strategy Selection", expanded=False):
         st.markdown("""
-        ### **Game Situation Strategies**
+        ## **Choosing Profiles Based on Contest Type**
         
-        #### **Cash Games (Conservative)**
-        - Use **"Contact-Aggressive Hitters"** or **"Elite Contact"**
-        - Target players with **K% vs League < -3.0%**
-        - Prioritize consistency over upside
+        ### **💰 Cash Games Strategy**
+        **Goal**: Consistent base hits, minimize risk
         
-        #### **Tournaments (Aggressive)**
-        - Mix **"Elite Contact"** with some **"Swing-Happy"** 
-        - Look for **high Hit Prob %** (40%+) regardless of profile
-        - Accept some K% risk for upside
+        **Primary**: 🏆 Contact-Aggressive Hitters (80% of plays)
+        **Secondary**: ⭐ Elite Contact Specialists (20% of plays)
+        **Avoid**: ⚡ Swing-Happy Hitters (too volatile)
         
-        #### **Pitcher-Heavy Slates**
-        - Use **"Above-Average Contact"** for more options
-        - Lower Hit Probability thresholds
-        - Focus heavily on **K% vs League** values
+        **Why This Works:**
+        - Cash games reward consistency over ceiling
+        - Contact-Aggressive gives you 10-15 reliable options
+        - Elite Contact for when you need absolute best
         
-        #### **Offense-Heavy Slates**
-        - Can afford **"Elite Contact"** strictness
-        - Raise Hit Probability thresholds
-        - Look for bonus combinations
+        ---
         
-        ### **🔍 Reading the Bonuses**
-        Your top players should have multiple bonuses:
-        - **Elite Contact** + **League Superior** = Premium play
-        - **Aggressive Contact** + **Hit Prob** = Solid choice
-        - **Multiple bonuses** = Higher scores and better opportunities
+        ### **🏆 Tournament Strategy**
+        **Goal**: High ceiling, willing to accept some risk
         
-        ### **⚠️ Red Flags to Avoid**
-        - **K% vs League > +5.0%**: Much worse contact than league
-        - **Both K% and BB% above league**: Poor plate discipline
-        - **Hit Prob < 25%**: Very low chance of any base hit
+        **Core Approach (60%)**: 🏆 Contact-Aggressive Hitters
+        **Leverage Plays (25%)**: ⚡ Swing-Happy Hitters  
+        **Elite Spots (15%)**: ⭐ Elite Contact Specialists
+        
+        **Why This Mix:**
+        - Contact-Aggressive as foundation (safe)
+        - Swing-Happy for contrarian leverage (differentiation)
+        - Elite Contact for absolute premium spots
+        
+        ---
+        
+        ### **⚖️ 50/50 & Double-Ups**
+        **Goal**: Finish in top 50%, moderate safety
+        
+        **Primary**: 🏆 Contact-Aggressive Hitters (70%)
+        **Secondary**: 🔷 Above-Average Contact (30%)
+        
+        **Strategy**: Cast wider net while maintaining quality floor
+        
+        ---
+        
+        ### **🎯 Head-to-Head**
+        **Goal**: Beat one opponent, balanced approach
+        
+        **Flexible Mix**: All profiles depending on opponent tendencies
+        - vs Conservative opponents: Use ⚡ Swing-Happy for leverage
+        - vs Aggressive opponents: Use ⭐ Elite Contact for safety
+        """)
+    
+    with st.expander("🌤️ Situational Profile Selection", expanded=False):
+        st.markdown("""
+        ## **Environmental & Matchup Factors**
+        
+        ### **⛈️ Weather Considerations**
+        
+        #### **Wind Blowing In/Cold Weather**
+        - **Use**: 🏆 Contact-Aggressive or ⭐ Elite Contact
+        - **Avoid**: Power-dependent profiles
+        - **Why**: Contact becomes more valuable when power is suppressed
+        
+        #### **Wind Blowing Out/Hot Weather** 
+        - **Use**: ⚡ Swing-Happy or 🔷 Above-Average Contact
+        - **Why**: More aggressive swings can benefit from offensive conditions
+        
+        #### **Rain/Poor Conditions**
+        - **Use**: ⭐ Elite Contact Specialists only
+        - **Why**: Only the best contact skills succeed in tough conditions
+        
+        ---
+        
+        ### **🏟️ Ballpark Factors**
+        
+        #### **Pitcher-Friendly Parks** (Marlins Park, Tropicana, etc.)
+        - **Use**: ⭐ Elite Contact Specialists
+        - **Secondary**: 🏆 Contact-Aggressive  
+        - **Avoid**: ⚡ Swing-Happy (strikeouts are killers)
+        
+        #### **Hitter-Friendly Parks** (Coors, Yankees, etc.)
+        - **Use**: ⚡ Swing-Happy for leverage
+        - **Why**: Aggressive approaches can capitalize on friendly environments
+        
+        #### **Neutral Parks**
+        - **Use**: 🏆 Contact-Aggressive (default approach works)
+        
+        ---
+        
+        ### **🥎 Pitching Matchup Analysis**
+        
+        #### **Ace Pitcher Slates** (Cy Young candidates, sub-3.00 ERA)
+        - **Use**: ⭐ Elite Contact Specialists ONLY
+        - **Why**: Only elite contact skills can handle top-tier pitching
+        - **Target**: Players with -8% or better K% vs League
+        
+        #### **Mixed Pitching Quality**
+        - **Use**: 🏆 Contact-Aggressive (handles variety well)
+        - **Why**: Balanced approach works against varied competition
+        
+        #### **Weak Pitching Slates** (ERA 4.50+, high walk rates)
+        - **Use**: ⚡ Swing-Happy for maximum leverage
+        - **Secondary**: 🔷 Above-Average Contact
+        - **Why**: Aggressive approaches can feast on poor pitching
+        
+        #### **Rookie/Unknown Pitchers**
+        - **Use**: ⚡ Swing-Happy + 🔷 Above-Average Contact
+        - **Why**: Aggressive veterans often handle inexperienced pitching well
+        """)
+    
+    with st.expander("📊 Advanced Metrics & Profile Optimization", expanded=False):
+        st.markdown("""
+        ## **Reading Between the Numbers**
+        
+        ### **🎯 Key Metrics by Profile**
+        
+        #### **🏆 Contact-Aggressive: What to Look For**
+        - **K% vs League**: -3% to -8% (significantly better)
+        - **BB% vs League**: -2% to -4% (moderately aggressive)
+        - **Hit Probability**: 35-45% (solid chance)
+        - **Ideal Score Range**: 60-80 points
+        
+        #### **⭐ Elite Contact: Premium Indicators**
+        - **K% vs League**: -8% or better (elite tier)
+        - **BB% vs League**: -1% to +1% (doesn't matter much)
+        - **Hit Probability**: 40%+ (high confidence)
+        - **Ideal Score Range**: 75-95 points
+        - **Bonus Requirements**: Must have Elite Contact Bonus
+        
+        #### **⚡ Swing-Happy: Leverage Markers**
+        - **K% vs League**: -2% to +2% (near league average acceptable)
+        - **BB% vs League**: -4% or better (very aggressive)
+        - **Hit Probability**: 30-40% (moderate chance but high volume)
+        - **Ideal Score Range**: 45-70 points
+        
+        ---
+        
+        ### **🎁 Bonus Combinations to Target**
+        
+        #### **Premium Combinations (Prioritize These)**
+        1. **Elite Contact + League Superior** = 16 bonus points
+        2. **Aggressive Contact + Hit Probability** = 13 bonus points  
+        3. **Elite Contact + Hit Probability** = 15 bonus points
+        
+        #### **Solid Combinations**
+        - **League Superior + Hit Probability** = 11 bonus points
+        - **Aggressive Contact + Matchup** = 11 bonus points
+        
+        #### **Red Flags (Avoid)**
+        - **No bonuses** = Likely poor matchup
+        - **Only Matchup bonus** = Weak underlying skills
+        
+        ---
+        
+        ### **🔍 Profile Validation Checklist**
+        
+        #### **Before Selecting Contact-Aggressive:**
+        - [ ] 10+ players available in filter?
+        - [ ] Average K% vs League better than -2%?
+        - [ ] Multiple players with 2+ bonuses?
+        
+        #### **Before Selecting Elite Contact:**
+        - [ ] 5+ players available in filter?
+        - [ ] All players have Elite Contact bonus?
+        - [ ] Hit probability 38%+ on top options?
+        
+        #### **Before Selecting Swing-Happy:**
+        - [ ] Offensive environment confirmed?
+        - [ ] Players have very low BB% (-3% vs league)?
+        - [ ] Contrarian edge available (low ownership)?
+        """)
+    
+    with st.expander("⚡ Real-Time Strategy Adjustments", expanded=False):
+        st.markdown("""
+        ## **Dynamic Profile Selection**
+        
+        ### **📈 Slate Development Strategy**
+        
+        #### **Early in Day (Morning)**
+        1. Start with **🌐 All Players** - Survey the landscape
+        2. Check weather, lineups, and pitching
+        3. Narrow to appropriate profile based on conditions
+        4. Build initial lineups with chosen profile
+        
+        #### **Mid-Day Adjustments**
+        1. Monitor lineup changes and weather updates
+        2. If conditions worsen → Move to **⭐ Elite Contact**
+        3. If conditions improve → Consider **⚡ Swing-Happy**
+        4. Always maintain **🏆 Contact-Aggressive** as backup
+        
+        #### **Late Swaps (30min before games)**
+        1. **🏆 Contact-Aggressive** only (safest pivots)
+        2. Quick substitutions within same profile
+        3. Avoid profile switching this late
+        
+        ---
+        
+        ### **🎪 Contest-Specific Adaptations**
+        
+        #### **Large Field GPPs (1000+ entries)**
+        - **Primary**: 🏆 Contact-Aggressive (60%)
+        - **Leverage**: ⚡ Swing-Happy (30%)
+        - **Premium**: ⭐ Elite Contact (10%)
+        - **Goal**: Balance safety with differentiation
+        
+        #### **Small Field GPPs (<100 entries)**
+        - **Primary**: ⭐ Elite Contact (70%)
+        - **Secondary**: 🏆 Contact-Aggressive (30%)
+        - **Goal**: Maximum quality, less differentiation needed
+        
+        #### **Beginner Contests**
+        - **Primary**: 🏆 Contact-Aggressive (90%)
+        - **Secondary**: 🔷 Above-Average Contact (10%)
+        - **Goal**: Learn tool without high risk
+        
+        ---
+        
+        ### **🚨 Emergency Situations**
+        
+        #### **No Elite Options Available**
+        - Fall back to **🔷 Above-Average Contact**
+        - Widen search to **🌐 All Players**
+        - Focus on matchup and ballpark advantages
+        
+        #### **Too Many Good Options**
+        - Tighten to **⭐ Elite Contact Specialists**
+        - Look for multiple bonus combinations
+        - Prioritize proven performers in big spots
+        
+        #### **Slate Looking Chalky**
+        - Shift to **⚡ Swing-Happy** for differentiation
+        - Target players with good metrics but lower expected ownership
+        - Accept higher risk for tournament leverage
+        """)
+    
+    with st.expander("📚 Study Examples & Case Studies", expanded=False):
+        st.markdown("""
+        ## **Real-World Application Examples**
+        
+        ### **📖 Case Study 1: Pitcher's Duel Slate**
+        **Scenario**: Two aces facing off, low run total (7.5 under)
+        
+        **Wrong Approach**: Using ⚡ Swing-Happy (high strikeout risk)
+        **Correct Approach**: ⭐ Elite Contact Specialists
+        
+        **Key Metrics to Target**:
+        - K% vs League: -8% or better
+        - Hit Probability: 35%+ minimum
+        - Must have Elite Contact bonus
+        
+        **Expected Results**: Lower ownership, higher hit rates
+        
+        ---
+        
+        ### **📖 Case Study 2: Coors Field Explosion**
+        **Scenario**: High run total (11+ runs), wind blowing out
+        
+        **Wrong Approach**: Being too conservative with ⭐ Elite Contact
+        **Correct Approach**: ⚡ Swing-Happy for leverage
+        
+        **Key Metrics to Target**:
+        - BB% vs League: -4% or better (very aggressive)
+        - Total Hit Probability: 30%+ (volume matters)
+        - Target players others might avoid due to K%
+        
+        **Expected Results**: Higher variance but massive upside
+        
+        ---
+        
+        ### **📖 Case Study 3: Mixed Quality Slate**
+        **Scenario**: Some good pitching, some bad, normal conditions
+        
+        **Optimal Approach**: 🏆 Contact-Aggressive Hitters
+        **Why**: Handles variety well, good sample size
+        
+        **Portfolio Allocation**:
+        - 70% Contact-Aggressive
+        - 20% Elite Contact (premium spots)
+        - 10% Swing-Happy (contrarian)
+        
+        ---
+        
+        ### **🎯 Success Patterns to Recognize**
+        
+        #### **High Success Indicators**
+        1. Profile matches environmental conditions
+        2. 2+ bonuses on most selected players
+        3. Good sample size (8+ viable options)
+        4. K% vs League consistently negative
+        
+        #### **Warning Signs**
+        1. Forcing a profile despite conditions
+        2. Very limited options (2-3 players)
+        3. No players with multiple bonuses
+        4. Having to reach for players with positive K% vs League
+        """)
+    
+    with st.expander("🎓 Quick Reference & Cheat Sheets", expanded=False):
+        st.markdown("""
+        ## **Quick Decision Framework**
+        
+        ### **⚡ 30-Second Profile Selection**
+        
+        #### **Ask Yourself:**
+        1. **What's the weather?** Bad → Elite Contact | Good → More options
+        2. **What's the pitching?** Aces → Elite Contact | Weak → Swing-Happy
+        3. **What's the contest?** Cash → Contact-Aggressive | GPP → Mix
+        4. **What's your experience?** New → Contact-Aggressive | Advanced → Mix
+        
+        #### **Default Decision Tree:**
+        ```
+        Cash Game? → Contact-Aggressive (80%) + Elite Contact (20%)
+        ↓
+        Tournament? → Contact-Aggressive (60%) + Swing-Happy (25%) + Elite (15%)
+        ↓
+        Bad Weather/Aces? → Elite Contact Only
+        ↓
+        Great Conditions? → Add more Swing-Happy
+        ```
+        
+        ---
+        
+        ### **📊 Profile Comparison at a Glance**
+        
+        | Profile | Player Pool | Safety | Upside | Best For |
+        |---------|-------------|--------|--------|----------|
+        | **🏆 Contact-Aggressive** | 10-15 | High | Medium | Default choice |
+        | **⭐ Elite Contact** | 3-8 | Highest | Medium | Premium spots |
+        | **⚡ Swing-Happy** | 8-20 | Medium | High | Leverage plays |
+        | **🔷 Above-Average** | 15-25 | Medium | Medium | Learning/mixed |
+        | **🌐 All Players** | 30+ | Low | Highest | Research only |
+        
+        ---
+        
+        ### **🚨 Emergency Cheat Sheet**
+        
+        #### **When Everything Looks Bad:**
+        1. Switch to **🌐 All Players**
+        2. Sort by Score (highest first)
+        3. Look for hidden gems with good vs Pitcher ratings
+        4. Focus on players with any bonuses
+        
+        #### **When You Can't Decide:**
+        1. Default to **🏆 Contact-Aggressive**
+        2. It works in 80% of situations
+        3. Safe choice that rarely fails completely
+        
+        #### **When You're Behind in Tournament:**
+        1. Switch to **⚡ Swing-Happy**
+        2. Accept higher risk for differentiation
+        3. Look for contrarian plays others avoid
         """)
     
     st.markdown("---")
     st.markdown("""
-    **🔥 League-Aware Features in V2.0:**
-    - Player type profiles based on 2024 MLB data
-    - League context comparisons for all metrics  
-    - Enhanced scoring with baseball-intelligent bonuses
-    - Real-time league vs daily slate analysis
-    - Contact vs power emphasis based on approach
-    - Contextual suggestions and insights
+    **🔥 Complete Strategy System Features:**
+    - 5 distinct player profiles for every situation
+    - Environmental and matchup-based selection guides
+    - Contest-specific strategy recommendations
+    - Real-time adjustment frameworks
+    - Detailed case studies and examples
+    - Quick reference decision trees
     
-    *Engineered with Real Baseball Analytics | A1FADED V2.0*
+    *Master the Art of Baseball Analytics | A1FADED V2.0 Complete Guide*
     """)
 
 def main():
