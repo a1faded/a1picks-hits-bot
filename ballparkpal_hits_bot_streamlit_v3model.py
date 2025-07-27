@@ -381,10 +381,12 @@ def create_smart_filters(df=None):
     
     # Convert to actual threshold
     k_percentile_val = k_risk_options[filters['k_risk_percentile']]
-    if percentiles and 'adj_K' in percentiles:
-        filters['max_k'] = np.percentile(df['adj_K'], k_percentile_val) if k_percentile_val < 100 else 100
+    if percentiles and 'adj_K' in percentiles and k_percentile_val < 100:
+        filters['max_k'] = np.percentile(df['adj_K'], k_percentile_val)
+    elif k_percentile_val >= 100:
+        filters['max_k'] = 100  # Allow all K risk levels
     else:
-        # Fallback defaults
+        # Fallback defaults if percentiles aren't available
         k_fallback = {10: 12, 25: 16, 50: 20, 75: 25, 100: 100}
         filters['max_k'] = k_fallback[k_percentile_val]
     
@@ -429,8 +431,14 @@ def create_smart_filters(df=None):
             index=2
         )
     
-    # REAL-TIME FEEDBACK
+    # REAL-TIME FEEDBACK WITH DEBUGGING
     if df is not None and not df.empty:
+        # Show current filter thresholds for debugging
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("**🔧 Filter Thresholds:**")
+        st.sidebar.markdown(f"Hit Prob: ≥{filters['min_hit_prob']:.1f}%")
+        st.sidebar.markdown(f"K Risk: ≤{filters['max_k']:.1f}%")
+        
         # Quick filter preview (simplified without redundant contact filter)
         preview_query = f"total_hit_prob >= {filters['min_hit_prob']:.1f} and adj_K <= {filters['max_k']:.1f}"
         
@@ -462,6 +470,18 @@ def apply_smart_filters(df, filters):
     if df is None or df.empty:
         return df
     
+    # Debug: Check if adj_K column exists and has valid data
+    if 'adj_K' not in df.columns:
+        st.error("❌ Missing adj_K column in data")
+        return df
+    
+    # Clean any NaN values that might cause issues
+    df_clean = df.dropna(subset=['total_hit_prob', 'adj_K', 'adj_vs', 'adj_BB'])
+    
+    if df_clean.empty:
+        st.error("❌ No valid data after cleaning NaN values")
+        return df
+    
     query_parts = []
     
     # Primary filters
@@ -481,7 +501,7 @@ def apply_smart_filters(df, filters):
     # Apply filters with error handling
     try:
         full_query = " and ".join(query_parts)
-        filtered_df = df.query(full_query)
+        filtered_df = df_clean.query(full_query)
         
         # Sort by score and limit results
         result_df = filtered_df.sort_values('Score', ascending=False).head(filters['result_count'])
@@ -491,7 +511,7 @@ def apply_smart_filters(df, filters):
     except Exception as e:
         st.error(f"❌ Filter error: {str(e)}")
         # Return top players by score if filtering fails
-        return df.sort_values('Score', ascending=False).head(filters['result_count'])
+        return df_clean.sort_values('Score', ascending=False).head(filters['result_count'])
 
 def display_smart_results(filtered_df, filters):
     """Display results with intelligent insights and feedback."""
