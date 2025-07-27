@@ -283,6 +283,14 @@ def create_league_aware_filters(df=None):
     """Create baseball-intelligent filtering system based on league averages and player types."""
     st.sidebar.header("🎯 Baseball-Smart Filters")
     
+    # Handle session state for quick exclusions
+    if 'quick_exclude_players' not in st.session_state:
+        st.session_state.quick_exclude_players = []
+    
+    if 'clear_exclusions' in st.session_state and st.session_state.clear_exclusions:
+        st.session_state.quick_exclude_players = []
+        st.session_state.clear_exclusions = False
+    
     # League averages for 2024
     LEAGUE_K_AVG = 22.6
     LEAGUE_BB_AVG = 8.5
@@ -419,33 +427,83 @@ def create_league_aware_filters(df=None):
             index=2
         )
     
-    # REAL-TIME FEEDBACK with league context
+    # LINEUP STATUS MANAGEMENT (New Section)
+    with st.sidebar.expander("🏟️ Lineup Status Management"):
+        st.markdown("**Exclude players not in today's lineups:**")
+        
+        # Get list of all players for exclusion
+        all_players = []
+        if df is not None and not df.empty:
+            all_players = sorted(df['Batter'].unique().tolist())
+        
+        # Combine manual exclusions with quick exclusions from session state
+        default_exclusions = list(set(st.session_state.quick_exclude_players))
+        
+        filters['excluded_players'] = st.multiselect(
+            "Players NOT Playing Today",
+            options=all_players,
+            default=default_exclusions,
+            help="Select players who are confirmed out of lineups (injured, benched, etc.)"
+        )
+        
+        # Show quick exclusion count if any
+        if st.session_state.quick_exclude_players:
+            quick_count = len(st.session_state.quick_exclude_players)
+            st.info(f"⚡ {quick_count} players excluded via Quick Actions")
+        
+        # Quick exclude options for common scenarios
+        st.markdown("**Quick Exclude Options:**")
+        
+        if st.checkbox("🏥 Auto-exclude common injury-prone players"):
+            # This could be expanded with a known list of frequently injured players
+            filters['auto_exclude_injured'] = True
+        else:
+            filters['auto_exclude_injured'] = False
+            
+        if st.checkbox("📊 Show lineup confidence warnings"):
+            filters['show_lineup_warnings'] = True
+        else:
+            filters['show_lineup_warnings'] = False
+    
+    # REAL-TIME FEEDBACK with league context and lineup awareness
     if df is not None and not df.empty:
         try:
+            # Apply exclusions first
+            preview_df = df.copy()
+            if filters.get('excluded_players'):
+                preview_df = preview_df[~preview_df['Batter'].isin(filters['excluded_players'])]
+            
             preview_query = f"adj_K <= {filters['max_k']:.1f} and adj_BB <= {filters['max_bb']:.1f} and total_hit_prob >= {filters['min_hit_prob']}"
             
-            preview_df = df.query(preview_query)
+            preview_df = preview_df.query(preview_query)
             matching_count = len(preview_df)
+            excluded_count = len(filters.get('excluded_players', []))
             
-            # Context-aware feedback
+            # Context-aware feedback with lineup information
             if matching_count == 0:
                 st.sidebar.error("❌ No players match current profile")
+                if excluded_count > 0:
+                    st.sidebar.markdown(f"**💡 Note:** {excluded_count} players excluded due to lineup status")
                 st.sidebar.markdown("**💡 Try:** Different player type or use custom overrides")
             elif matching_count < 5:
                 st.sidebar.warning(f"⚠️ Only {matching_count} players match")
+                if excluded_count > 0:
+                    st.sidebar.markdown(f"**📊 Pool:** {matching_count} playing + {excluded_count} excluded")
                 st.sidebar.markdown("**💡 Consider:** Less restrictive profile or custom settings")
             else:
                 st.sidebar.success(f"✅ {matching_count} players match profile")
+                if excluded_count > 0:
+                    st.sidebar.markdown(f"**📊 Lineup Status:** {matching_count} confirmed playing, {excluded_count} excluded")
                 
                 if matching_count > 0:
-                    # Show league context comparison
+                    # Show league context comparison for playing players only
                     avg_k_filtered = preview_df['adj_K'].mean()
                     avg_bb_filtered = preview_df['adj_BB'].mean()
                     
                     k_vs_league = avg_k_filtered - LEAGUE_K_AVG
                     bb_vs_league = avg_bb_filtered - LEAGUE_BB_AVG
                     
-                    st.sidebar.markdown(f"**📊 vs League Avg:**")
+                    st.sidebar.markdown(f"**📊 vs League Avg (Playing Players):**")
                     st.sidebar.markdown(f"K%: {k_vs_league:+.1f}% vs league")
                     st.sidebar.markdown(f"BB%: {bb_vs_league:+.1f}% vs league")
                     
@@ -459,6 +517,13 @@ def apply_league_aware_filters(df, filters):
     
     if df is None or df.empty:
         return df
+    
+    # First, exclude players not in lineups
+    if filters.get('excluded_players'):
+        excluded_count = len(df[df['Batter'].isin(filters['excluded_players'])])
+        df = df[~df['Batter'].isin(filters['excluded_players'])]
+        if excluded_count > 0:
+            st.info(f"🏟️ Excluded {excluded_count} players not in today's lineups")
     
     query_parts = []
     
@@ -641,7 +706,7 @@ def display_league_aware_results(filtered_df, filters):
     
     st.markdown(f"**🎯 Active Profile:** {filter_profile}")
     
-    # Enhanced results table with league context
+    # Enhanced results table with league context and lineup awareness
     display_columns = {
         'Batter': 'Batter',
         'Tm': 'Team',
@@ -661,7 +726,16 @@ def display_league_aware_results(filtered_df, filters):
     display_df['K% vs League'] = display_df['adj_K'] - LEAGUE_K_AVG
     display_df['BB% vs League'] = display_df['adj_BB'] - LEAGUE_BB_AVG
     
-    styled_df = display_df[display_columns.keys()].rename(columns=display_columns)
+    # Add lineup status indicators
+    excluded_players = filters.get('excluded_players', [])
+    display_df['Lineup_Status'] = display_df['Batter'].apply(
+        lambda x: '🏟️' if x not in excluded_players else '❌'
+    )
+    
+    # Add lineup status to display columns
+    display_columns_with_status = {'Lineup_Status': 'Status', **display_columns}
+    
+    styled_df = display_df[display_columns_with_status.keys()].rename(columns=display_columns_with_status)
     
     # Enhanced formatting with league context
     styled_df = styled_df.style.format({
@@ -697,10 +771,11 @@ def display_league_aware_results(filtered_df, filters):
     
     st.dataframe(styled_df, use_container_width=True)
     
-    # Enhanced interpretation guide with league context
+    # Enhanced interpretation guide with league context and lineup status
     st.markdown("""
     <div class="color-legend">
         <strong>📊 League-Aware Color Guide:</strong><br>
+        <strong>Status:</strong> 🏟️ = Confirmed Playing | ❌ = Excluded from Lineups<br>
         <strong>Score:</strong> <span style="color: #1a9641;">●</span> Elite (70+) | 
         <span style="color: #fdae61;">●</span> Good (50-69) | 
         <span style="color: #d7191c;">●</span> Risky (<50)<br>
@@ -711,28 +786,86 @@ def display_league_aware_results(filtered_df, filters):
     </div>
     """, unsafe_allow_html=True)
     
-    # Performance insights with league context
+    # Performance insights with league context - ENHANCED with lineup awareness
     if len(filtered_df) >= 3:
         st.markdown("### 🔍 **League Context Analysis**")
         
-        # Top performer analysis
-        top_player = filtered_df.iloc[0]
-        k_improvement = LEAGUE_K_AVG - top_player['adj_K']
-        bb_improvement = LEAGUE_BB_AVG - top_player['adj_BB']
+        # Smart player selection - find the best player who is actually playing
+        excluded_players = filters.get('excluded_players', [])
         
-        insights = []
+        # Find the top player who is confirmed to be playing
+        analysis_player = None
+        analysis_player_index = 0
         
-        if k_improvement > 5:
-            insights.append(f"**{top_player['Batter']}** has elite contact skills ({k_improvement:.1f}% better K% than league)")
+        for i, (idx, player) in enumerate(filtered_df.iterrows()):
+            if player['Batter'] not in excluded_players:
+                analysis_player = player
+                analysis_player_index = i
+                break
         
-        if bb_improvement > 2:
-            insights.append(f"**{top_player['Batter']}** is aggressive at the plate ({bb_improvement:.1f}% fewer walks than league)")
-        
-        if top_player['total_hit_prob'] > 40:
-            insights.append(f"**{top_player['Batter']}** has excellent hit probability ({top_player['total_hit_prob']:.1f}%)")
-        
-        for insight in insights[:2]:  # Show top 2 insights
-            st.success(insight)
+        if analysis_player is not None:
+            # Show which player analysis is based on and why
+            if analysis_player_index > 0:
+                st.info(f"🏟️ **Analysis based on {analysis_player['Batter']}** (#{analysis_player_index + 1} ranked player) - higher ranked players not in confirmed lineups")
+            else:
+                st.success(f"🎯 **Analysis based on {analysis_player['Batter']}** (Top ranked player confirmed playing)")
+            
+            k_improvement = LEAGUE_K_AVG - analysis_player['adj_K']
+            bb_improvement = LEAGUE_BB_AVG - analysis_player['adj_BB']
+            
+            insights = []
+            
+            if k_improvement > 5:
+                insights.append(f"**{analysis_player['Batter']}** has elite contact skills ({k_improvement:.1f}% better K% than league)")
+            
+            if bb_improvement > 2:
+                insights.append(f"**{analysis_player['Batter']}** is aggressive at the plate ({bb_improvement:.1f}% fewer walks than league)")
+            
+            if analysis_player['total_hit_prob'] > 40:
+                insights.append(f"**{analysis_player['Batter']}** has excellent hit probability ({analysis_player['total_hit_prob']:.1f}%)")
+                
+            # Show additional context if this isn't the #1 player
+            if analysis_player_index > 0:
+                insights.append(f"**{analysis_player['Batter']}** provides elite opportunity among confirmed lineup players")
+            
+            for insight in insights[:3]:  # Show top 3 insights
+                st.success(insight)
+                
+            # Show lineup status warnings if enabled
+            if filters.get('show_lineup_warnings', False) and excluded_players:
+                st.warning(f"⚠️ **Lineup Alert**: {len(excluded_players)} players excluded from analysis due to lineup uncertainty")
+                
+        else:
+            st.warning("⚠️ Unable to provide League Context Analysis - no confirmed lineup players available")
+            
+        # Additional lineup management tips
+        if excluded_players:
+            with st.expander("💡 Lineup Management Tips"):
+                st.markdown(f"""
+                **Players Currently Excluded**: {', '.join(excluded_players)}
+                
+                **Best Practices:**
+                - ✅ Check official lineups 2-3 hours before first pitch
+                - ✅ Monitor injury reports and weather delays
+                - ✅ Have backup players ready from same profile
+                - ✅ Use late swap strategy for uncertain players
+                
+                **Quick Actions:**
+                - Remove players from exclusion list if lineups are confirmed
+                - Add more players to exclusion if lineup news breaks
+                """)
+        else:
+            with st.expander("💡 Lineup Confirmation Reminder"):
+                st.markdown("""
+                **🏟️ Don't forget to verify lineups!**
+                
+                - Check official team lineups 2-3 hours before games
+                - Monitor for late scratches due to injury/rest
+                - Weather delays can cause lineup changes
+                - Use the "Players NOT Playing Today" filter to exclude confirmed outs
+                """)
+    else:
+        st.info("💡 Need at least 3 players for League Context Analysis")
 
 def create_enhanced_visualizations(df, filtered_df):
     """Create enhanced visualizations focused on base hit analysis."""
@@ -821,9 +954,9 @@ def main_page():
     # Create visualizations
     create_enhanced_visualizations(df, filtered_df)
     
-    # Export functionality
+    # Export functionality and lineup management
     st.markdown("---")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         if st.button("📊 Export Results to CSV"):
@@ -841,7 +974,55 @@ def main_page():
             st.rerun()
     
     with col3:
+        if st.button("🏟️ Clear Exclusions"):
+            st.session_state.clear_exclusions = True
+            st.rerun()
+    
+    with col4:
         st.info(f"🕐 Last updated: {datetime.now().strftime('%H:%M:%S')}")
+    
+    # Quick Lineup Management Section
+    if not filtered_df.empty:
+        with st.expander("⚡ Quick Lineup Management"):
+            st.markdown("**Quick exclude players from results:**")
+            
+            # Show players in current results for quick exclusion
+            result_players = filtered_df['Batter'].tolist()
+            current_exclusions = filters.get('excluded_players', [])
+            
+            # Only show players not already excluded
+            available_to_exclude = [p for p in result_players if p not in current_exclusions]
+            
+            if available_to_exclude:
+                col_left, col_right = st.columns(2)
+                
+                with col_left:
+                    st.markdown("**Players in Current Results:**")
+                    for i, player in enumerate(available_to_exclude[:5]):  # Show first 5
+                        if st.button(f"❌ Exclude {player}", key=f"exclude_{i}"):
+                            if 'quick_exclude_players' not in st.session_state:
+                                st.session_state.quick_exclude_players = []
+                            st.session_state.quick_exclude_players.append(player)
+                            st.rerun()
+                
+                with col_right:
+                    if len(available_to_exclude) > 5:
+                        st.markdown("**More Players:**")
+                        for i, player in enumerate(available_to_exclude[5:10]):  # Show next 5
+                            if st.button(f"❌ Exclude {player}", key=f"exclude_more_{i}"):
+                                if 'quick_exclude_players' not in st.session_state:
+                                    st.session_state.quick_exclude_players = []
+                                st.session_state.quick_exclude_players.append(player)
+                                st.rerun()
+            
+            if current_exclusions:
+                st.markdown("**Currently Excluded Players:**")
+                excluded_display = ", ".join(current_exclusions)
+                st.info(f"🚫 {excluded_display}")
+                
+                if st.button("🔄 Re-include All Excluded Players"):
+                    st.session_state.clear_exclusions = True
+                    st.rerun()
     
     # Bottom tips
     st.markdown("---")
