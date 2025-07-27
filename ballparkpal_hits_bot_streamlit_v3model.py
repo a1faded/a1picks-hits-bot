@@ -437,8 +437,9 @@ def create_league_aware_filters(df=None):
         # Result count
         filters['result_count'] = st.selectbox(
             "Number of Results",
-            options=[5, 10, 15, 20, 25, 30],
-            index=2
+            options=[5, 10, 15, 20, 25, 30, "All"],
+            index=2,
+            help="Choose how many results to display, or 'All' to show everyone"
         )
     
     # LINEUP STATUS MANAGEMENT (New Section)
@@ -517,9 +518,17 @@ def create_league_aware_filters(df=None):
                     k_vs_league = avg_k_filtered - LEAGUE_K_AVG
                     bb_vs_league = avg_bb_filtered - LEAGUE_BB_AVG
                     
+                    result_count = filters.get('result_count', 15)
+                    display_count = matching_count if result_count == "All" else min(matching_count, result_count)
+                    
                     st.sidebar.markdown(f"**📊 vs League Avg (Playing Players):**")
                     st.sidebar.markdown(f"K%: {k_vs_league:+.1f}% vs league")
                     st.sidebar.markdown(f"BB%: {bb_vs_league:+.1f}% vs league")
+                    
+                    if result_count == "All":
+                        st.sidebar.markdown(f"**📋 Showing:** All {matching_count} players")
+                    else:
+                        st.sidebar.markdown(f"**📋 Showing:** Top {display_count} of {matching_count}")
                     
         except Exception as e:
             st.sidebar.warning(f"⚠️ Preview unavailable: {str(e)}")
@@ -570,7 +579,13 @@ def apply_league_aware_filters(df, filters):
         
         # Sort by score and limit results
         result_count = filters.get('result_count', 15)
-        result_df = filtered_df.sort_values('Score', ascending=False).head(result_count)
+        
+        if result_count == "All":
+            # Show all results when "All" is selected
+            result_df = filtered_df.sort_values('Score', ascending=False)
+        else:
+            # Limit to specified number
+            result_df = filtered_df.sort_values('Score', ascending=False).head(result_count)
         
         return result_df
         
@@ -578,7 +593,11 @@ def apply_league_aware_filters(df, filters):
         st.error(f"❌ Filter error: {str(e)}")
         # Return top players by score if filtering fails
         result_count = filters.get('result_count', 15)
-        return df.sort_values('Score', ascending=False).head(result_count)
+        
+        if result_count == "All":
+            return df.sort_values('Score', ascending=False)
+        else:
+            return df.sort_values('Score', ascending=False).head(result_count)
 
 def create_league_aware_header():
     """Create an enhanced header with league-aware focus."""
@@ -656,7 +675,12 @@ def display_league_aware_results(filtered_df, filters):
         """)
         return
     
-    st.subheader(f"🎯 Top {len(filtered_df)} Base Hit Candidates")
+    # Display header with dynamic count
+    result_count = filters.get('result_count', 15)
+    if result_count == "All":
+        st.subheader(f"🎯 All {len(filtered_df)} Base Hit Candidates")
+    else:
+        st.subheader(f"🎯 Top {len(filtered_df)} Base Hit Candidates")
     
     # Enhanced key insights with league context
     col1, col2, col3, col4 = st.columns(4)
