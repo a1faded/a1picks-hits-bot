@@ -89,66 +89,126 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Simplified data loading functions (back to working approach)
-# Removed: load_csv_with_validation and validate_merge_quality (were causing K% and BB% issues)
+# Enhanced Data Loading with Error Handling and Validation (RESTORED)
+@st.cache_data(ttl=CONFIG['cache_ttl'])
+def load_csv_with_validation(url, description, expected_columns):
+    """Load and validate CSV data with comprehensive error handling."""
+    try:
+        with st.spinner(f'Loading {description}...'):
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            
+            df = pd.read_csv(StringIO(response.text))
+            
+            # Validate structure
+            if df.empty:
+                st.error(f"❌ {description}: No data found")
+                return None
+            
+            # Check for required columns
+            missing_cols = set(expected_columns) - set(df.columns)
+            if missing_cols:
+                st.error(f"❌ {description}: Missing columns {missing_cols}")
+                return None
+            
+            # Validate key columns have no nulls
+            key_cols = ['Tm', 'Batter', 'Pitcher']
+            null_counts = df[key_cols].isnull().sum()
+            if null_counts.any():
+                problematic_cols = null_counts[null_counts > 0].index.tolist()
+                st.error(f"❌ {description}: Null values in {problematic_cols}")
+                return None
+            
+            # Light data standardization (without aggressive type conversion that caused issues)
+            # Only convert obvious numeric columns, let pandas handle the rest naturally
+            st.success(f"✅ {description}: {len(df)} records loaded")
+            return df
+            
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Network error loading {description}: {str(e)}")
+        return None
+    except Exception as e:
+        st.error(f"❌ Error processing {description}: {str(e)}")
+        return None
+
+def validate_merge_quality(prob_df, pct_df, merged_df):
+    """Validate the quality of the merge operation."""
+    original_count = len(prob_df)
+    merged_count = len(merged_df)
+    
+    if merged_count < original_count:
+        lost_records = original_count - merged_count
+        st.warning(f"⚠️ Lost {lost_records} records during merge ({lost_records/original_count*100:.1f}%)")
+    
+    # Check for duplicates
+    merge_keys = ['Tm', 'Batter', 'Pitcher']
+    duplicates = merged_df.duplicated(subset=merge_keys).sum()
+    if duplicates > 0:
+        st.error(f"🔴 Found {duplicates} duplicate matchups after merge")
+    
+    return merged_df
 
 @st.cache_data(ttl=CONFIG['cache_ttl'])
 def load_and_process_data():
-    """Simplified data loading using the working approach from the old version."""
+    """Enhanced data loading and processing with validation (RESTORED with fixed clipping)."""
     
+    # Load both CSV files with enhanced validation
+    prob_df = load_csv_with_validation(
+        CONFIG['csv_urls']['probabilities'], 
+        "Base Probabilities", 
+        CONFIG['expected_columns']
+    )
+    
+    pct_df = load_csv_with_validation(
+        CONFIG['csv_urls']['percent_change'], 
+        "Adjustment Factors", 
+        CONFIG['expected_columns']
+    )
+    
+    if prob_df is None or pct_df is None:
+        st.error("❌ Failed to load required data files")
+        return None
+    
+    # Enhanced merge with validation
     try:
-        with st.spinner('Loading and processing data...'):
-            # Simple data loading (like the old working version)
-            prob_df = pd.read_csv(StringIO(requests.get(CONFIG['csv_urls']['probabilities']).text))
-            pct_df = pd.read_csv(StringIO(requests.get(CONFIG['csv_urls']['percent_change']).text))
-            
-            # Basic validation without aggressive type conversion
-            if prob_df.empty or pct_df.empty:
-                st.error("❌ One or both CSV files are empty")
-                return None
-            
-            # Simple merge (like old version)
-            merged_df = pd.merge(
-                prob_df, pct_df,
-                on=['Tm', 'Batter', 'Pitcher'],
-                suffixes=('_prob', '_pct')
-            )
-            
-            if merged_df.empty:
-                st.error("❌ No matching records after merge")
-                return None
-            
-            # Calculate adjusted metrics (using old working approach)
-            metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
-            
-            for metric in metrics:
-                base_col = f'{metric}_prob'
-                pct_col = f'{metric}_pct'
-                
-                # Simple calculation like the old version
-                merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
-                
-                # Handle clipping based on metric type
-                if metric in ['K', 'BB']:
-                    # K and BB can be negative - only clip upper bound
-                    merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(upper=100)
-                else:
-                    # Other metrics (1B, XB, HR, etc.) should be 0-100
-                    merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
-            
-            # Calculate total base hit probability (only positive contributors)
-            merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
-            merged_df['total_hit_prob'] = merged_df['total_hit_prob'].clip(upper=100)
-            
-            st.success(f"✅ Successfully processed {len(merged_df)} matchups")
-            return merged_df
-            
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Network error loading data: {str(e)}")
-        return None
+        merged_df = pd.merge(
+            prob_df, pct_df,
+            on=['Tm', 'Batter', 'Pitcher'],
+            suffixes=('_prob', '_pct'),
+            how='inner'
+        )
+        
+        merged_df = validate_merge_quality(prob_df, pct_df, merged_df)
+        
     except Exception as e:
-        st.error(f"❌ Error processing data: {str(e)}")
+        st.error(f"❌ Failed to merge datasets: {str(e)}")
         return None
+    
+    # Calculate adjusted metrics with FIXED clipping logic
+    metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
+    
+    for metric in metrics:
+        base_col = f'{metric}_prob'
+        pct_col = f'{metric}_pct'
+        
+        if base_col in merged_df.columns and pct_col in merged_df.columns:
+            # Apply adjustment formula
+            merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
+            
+            # FIXED: Smart clipping based on metric type
+            if metric in ['K', 'BB']:
+                # K and BB can be negative - only clip upper bound
+                merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(upper=100)
+            elif metric in ['1B', 'XB', 'HR']:  # Probability metrics
+                merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
+            else:  # Other metrics (vs, RC)
+                merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0)
+    
+    # Calculate total base hit probability (key enhancement!)
+    merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
+    merged_df['total_hit_prob'] = merged_df['total_hit_prob'].clip(upper=100)  # Cap at 100%
+    
+    return merged_df
 
 def calculate_base_hit_scores(df):
     """Enhanced scoring algorithm focused specifically on base hit probability."""
