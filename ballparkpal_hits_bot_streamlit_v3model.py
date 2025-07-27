@@ -372,12 +372,26 @@ def create_league_aware_filters(df=None):
     # ADVANCED OPTIONS (Collapsible)
     with st.sidebar.expander("⚙️ Fine-Tune Filters"):
         
+        # Ensure filters values are single numbers, not lists
+        max_k_value = filters['max_k']
+        max_bb_value = filters['max_bb']
+        
+        # Handle edge case where values might be lists
+        if isinstance(max_k_value, (list, tuple)):
+            max_k_value = max_k_value[0] if max_k_value else 17.0
+        if isinstance(max_bb_value, (list, tuple)):
+            max_bb_value = max_bb_value[0] if max_bb_value else 6.0
+            
+        # Ensure values are within slider bounds
+        max_k_value = max(5.0, min(35.0, float(max_k_value)))
+        max_bb_value = max(2.0, min(15.0, float(max_bb_value)))
+        
         # Custom K% threshold
         filters['custom_max_k'] = st.slider(
             "Custom Max K% Override",
             min_value=5.0,
             max_value=35.0,
-            value=filters['max_k'],
+            value=max_k_value,
             step=0.5,
             help=f"League avg: {LEAGUE_K_AVG}% | Elite: ≤12.0%"
         )
@@ -387,7 +401,7 @@ def create_league_aware_filters(df=None):
             "Custom Max BB% Override",
             min_value=2.0,
             max_value=15.0,
-            value=filters['max_bb'],
+            value=max_bb_value,
             step=0.5,
             help=f"League avg: {LEAGUE_BB_AVG}% | Aggressive: ≤4.0%"
         )
