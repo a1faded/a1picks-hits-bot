@@ -154,7 +154,7 @@ def validate_merge_quality(prob_df, pct_df, merged_df):
 
 @st.cache_data(ttl=CONFIG['cache_ttl'])
 def load_and_process_data():
-    """Enhanced data loading and processing with validation."""
+    """Enhanced data loading and processing with detailed debugging."""
     
     # Load both CSV files
     prob_df = load_csv_with_validation(
@@ -173,6 +173,28 @@ def load_and_process_data():
         st.error("❌ Failed to load required data files")
         return None
     
+    # DEBUGGING: Show data types and sample values
+    if st.sidebar.checkbox("🔍 Debug Mode"):
+        st.subheader("🔧 Debug Information")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Base Probabilities (prob_df):**")
+            st.write(f"Shape: {prob_df.shape}")
+            st.write("Data Types:")
+            st.write(prob_df[['BB', 'K']].dtypes)
+            st.write("Sample BB/K values:")
+            st.write(prob_df[['Batter', 'BB', 'K']].head())
+        
+        with col2:
+            st.write("**Adjustment Factors (pct_df):**")
+            st.write(f"Shape: {pct_df.shape}")
+            st.write("Data Types:")
+            st.write(pct_df[['BB', 'K']].dtypes)
+            st.write("Sample BB/K values:")
+            st.write(pct_df[['Batter', 'BB', 'K']].head())
+    
     # Merge datasets
     try:
         merged_df = pd.merge(
@@ -184,11 +206,23 @@ def load_and_process_data():
         
         merged_df = validate_merge_quality(prob_df, pct_df, merged_df)
         
+        # DEBUGGING: Show merge results
+        if st.sidebar.checkbox("🔍 Debug Mode"):
+            st.write("**After Merge:**")
+            st.write(f"Merged Shape: {merged_df.shape}")
+            if 'BB_prob' in merged_df.columns and 'BB_pct' in merged_df.columns:
+                st.write("Sample merged BB data:")
+                st.write(merged_df[['Batter', 'BB_prob', 'BB_pct']].head())
+            else:
+                st.error("❌ BB columns missing after merge!")
+                st.write("Available columns:")
+                st.write(list(merged_df.columns))
+        
     except Exception as e:
         st.error(f"❌ Failed to merge datasets: {str(e)}")
         return None
     
-    # Calculate adjusted metrics with enhanced base hit focus
+    # Calculate adjusted metrics with enhanced debugging
     metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
     
     for metric in metrics:
@@ -196,6 +230,18 @@ def load_and_process_data():
         pct_col = f'{metric}_pct'
         
         if base_col in merged_df.columns and pct_col in merged_df.columns:
+            # Show calculation details for debugging
+            if st.sidebar.checkbox("🔍 Debug Mode") and metric in ['BB', 'K']:
+                st.write(f"**Calculating adj_{metric}:**")
+                sample_idx = 0
+                base_val = merged_df[base_col].iloc[sample_idx]
+                pct_val = merged_df[pct_col].iloc[sample_idx]
+                st.write(f"Base {metric}: {base_val}")
+                st.write(f"Pct Change: {pct_val}")
+                st.write(f"Formula: {base_val} * (1 + {pct_val}/100)")
+                result = base_val * (1 + pct_val/100)
+                st.write(f"Result: {result}")
+            
             # Apply adjustment formula
             merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
             
@@ -204,10 +250,15 @@ def load_and_process_data():
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
             else:  # Other metrics
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0)
+        else:
+            st.warning(f"⚠️ Missing columns for {metric}: {base_col}, {pct_col}")
     
     # Calculate total base hit probability (key enhancement!)
-    merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
-    merged_df['total_hit_prob'] = merged_df['total_hit_prob'].clip(upper=100)  # Cap at 100%
+    if all(col in merged_df.columns for col in ['adj_1B', 'adj_XB', 'adj_HR']):
+        merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
+        merged_df['total_hit_prob'] = merged_df['total_hit_prob'].clip(upper=100)  # Cap at 100%
+    else:
+        st.error("❌ Cannot calculate total hit probability - missing adjusted columns")
     
     return merged_df
 
@@ -403,15 +454,13 @@ def create_smart_filters(df=None):
             help="How well batter performs vs this pitcher type (+10=much better, -10=much worse, moderate importance)"
         )
         
-        # Walk Risk Tolerance
-        filters['max_walk'] = st.slider(
-            "Walk Risk Tolerance",
-            min_value=5,
-            max_value=25,
-            value=12,
-            step=1,
-            help="Maximum walk probability (walks aren't hits)"
+        # Walk Risk Control (simplified)
+        minimize_walks = st.checkbox(
+            "Minimize Walk Risk",
+            value=True,
+            help="Checked = ≤10% walk risk (conservative) | Unchecked = ≤20% walk risk (more options)"
         )
+        filters['max_walk'] = 10 if minimize_walks else 20
         
         # Team Selection
         team_options = []
@@ -506,7 +555,7 @@ def display_smart_results(filtered_df, filters):
         ### 💡 **Suggested Adjustments:**
         - Try **"Top 40% Hit Probability"** instead of higher tiers
         - Increase **Strikeout Risk Tolerance** to "Bottom 50%"  
-        - Use **Advanced Options** to adjust vs Pitcher or Walk tolerance
+        - Try **unchecking "Minimize Walks"** for more options
         """)
         return
     
@@ -791,7 +840,7 @@ def info_page():
         | Filter | Impact | Default | Range | Why It Matters |
         |--------|--------|---------|-------|----------------|
         | **vs Pitcher** | Moderate | 0 | -10 to +10 | Matchup advantage/disadvantage |
-        | **Walk Risk** | Low | 12% | 5-25% | Walks aren't hits |
+        | **Minimize Walks** | Low | ✅ On | ≤10% or ≤20% | Walks aren't hits (simple toggle) |
         | **Team Filter** | Situational | All | - | Focus on specific games |
         
         ### **🎁 Smart Bonuses in Scoring**
