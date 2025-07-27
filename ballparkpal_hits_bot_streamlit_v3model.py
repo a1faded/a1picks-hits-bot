@@ -184,11 +184,18 @@ def load_and_process_data():
         st.error(f"❌ Failed to merge datasets: {str(e)}")
         return None
     
-    # Calculate adjusted metrics with FIXED clipping logic
+    # Calculate adjusted metrics with CORRECTED column mapping
     metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
     
     for metric in metrics:
-        base_col = f'{metric}_prob'
+        # FIXED: Use correct columns from probabilities CSV
+        if metric in ['K', 'BB']:
+            # For K and BB, use the _1 suffix columns (actual probabilities)
+            base_col = f'{metric}_1_prob'  # Will be 'K_1_prob', 'BB_1_prob'
+        else:
+            # For other metrics, use normal naming
+            base_col = f'{metric}_prob'
+            
         pct_col = f'{metric}_pct'
         
         if base_col in merged_df.columns and pct_col in merged_df.columns:
@@ -197,8 +204,8 @@ def load_and_process_data():
             
             # FIXED: Smart clipping based on metric type
             if metric in ['K', 'BB']:
-                # K and BB can be negative - only clip upper bound
-                merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(upper=100)
+                # K and BB should be positive percentages
+                merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
             elif metric in ['1B', 'XB', 'HR']:  # Probability metrics
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
             else:  # Other metrics (vs, RC)
