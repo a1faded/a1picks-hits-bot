@@ -19,43 +19,11 @@ st.set_page_config(
     }
 )
 
-# League Average Constants (2024 MLB Data)
-LEAGUE_AVERAGES = {
-    'K_rate': 22.6,     # League average strikeout rate
-    'BB_rate': 8.5,     # League average walk rate
-    'contact_rate': 75.0,  # Approximate league average contact rate
-}
-
-# Performance Tier Thresholds (Based on League Context)
-PERFORMANCE_TIERS = {
-    'K_rate': {
-        'elite': 12.0,      # Elite contact (≤12%)
-        'above_avg': 17.0,  # Above average contact (12-17%)
-        'league_avg': 22.6, # League average (~22.6%)
-        'below_avg': 25.0   # Below average (≥25%)
-    },
-    'BB_rate': {
-        'aggressive': 4.0,  # Hyper-aggressive (≤4%)
-        'above_avg': 6.0,   # Above average aggressive (4-6%)
-        'league_avg': 8.5,  # League average (~8.5%)
-        'passive': 10.0     # Passive approach (≥10%)
-    }
-}
-
 # Constants and Configuration
 CONFIG = {
     'csv_urls': {
         'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv',
         'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv'
-    },
-    'base_hit_weights': {
-        'adj_1B': 2.0,      # Increased weight for singles (primary base hit)
-        'adj_XB': 1.8,      # High weight for extra bases (also base hits)
-        'adj_vs': 1.2,      # Matchup performance
-        'adj_RC': 0.8,      # Run creation
-        'adj_HR': 0.6,      # Home runs (also base hits)
-        'adj_K': -2.5,      # Heavy penalty for strikeouts (no hit) - increased
-        'adj_BB': -0.6      # Light penalty for walks (not hits but not terrible)
     },
     'expected_columns': ['Tm', 'Batter', 'vs', 'Pitcher', 'RC', 'HR', 'XB', '1B', 'BB', 'K'],
     'cache_ttl': 900  # 15 minutes
@@ -169,6 +137,69 @@ def validate_merge_quality(prob_df, pct_df, merged_df):
         st.error(f"🔴 Found {duplicates} duplicate matchups after merge")
     
     return merged_df
+
+def calculate_league_aware_scores(df):
+    """Enhanced scoring algorithm that considers league averages and player types."""
+    
+    # League averages for 2024
+    LEAGUE_K_AVG = 22.6
+    LEAGUE_BB_AVG = 8.5
+    
+    # Base weighted score using league-aware weights
+    weights = {
+        'adj_1B': 2.0,      # Singles (primary base hit)
+        'adj_XB': 1.8,      # Extra bases (also base hits)
+        'adj_vs': 1.2,      # Matchup performance
+        'adj_RC': 0.8,      # Run creation
+        'adj_HR': 0.6,      # Home runs (also base hits)
+        'adj_K': -2.5,      # Heavy penalty for strikeouts (no hit)
+        'adj_BB': -0.6      # Light penalty for walks (not hits but not terrible)
+    }
+    
+    df['base_score'] = sum(df[col] * weight for col, weight in weights.items() if col in df.columns)
+    
+    # League-aware bonuses
+    # Elite Contact Bonus (much better than league average K%)
+    df['elite_contact_bonus'] = np.where(
+        df['adj_K'] <= 12.0,  # Elite contact (≤12%)
+        10, 0
+    )
+    
+    # Aggressive Contact Bonus (low K% + low BB%)
+    df['aggressive_contact_bonus'] = np.where(
+        (df['adj_K'] <= 17.0) & (df['adj_BB'] <= 6.0),  # Above avg contact + aggressive
+        8, 0
+    )
+    
+    # High Hit Probability Bonus
+    df['hit_prob_bonus'] = np.where(
+        df['total_hit_prob'] > 40, 5, 0
+    )
+    
+    # Strong Matchup Bonus
+    df['matchup_bonus'] = np.where(df['adj_vs'] > 5, 3, 0)
+    
+    # League Comparison Bonus (better than league average in both K% and BB%)
+    df['league_superior_bonus'] = np.where(
+        (df['adj_K'] < LEAGUE_K_AVG) & (df['adj_BB'] < LEAGUE_BB_AVG),  # Better than league in both
+        6, 0
+    )
+    
+    # Calculate final score
+    df['Score'] = (df['base_score'] + 
+                   df['elite_contact_bonus'] + 
+                   df['aggressive_contact_bonus'] + 
+                   df['hit_prob_bonus'] + 
+                   df['matchup_bonus'] + 
+                   df['league_superior_bonus'])
+    
+    # Normalize to 0-100 scale
+    if df['Score'].max() != df['Score'].min():
+        df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
+    else:
+        df['Score'] = 50  # Default if all scores are identical
+    
+    return df.round(1)
 
 # League-aware filtering system functions
 
@@ -355,13 +386,17 @@ def create_league_aware_filters(df=None):
     """Create baseball-intelligent filtering system based on league averages and player types."""
     st.sidebar.header("🎯 Baseball-Smart Filters")
     
+    # League averages for 2024
+    LEAGUE_K_AVG = 22.6
+    LEAGUE_BB_AVG = 8.5
+    
     filters = {}
     
     # Show league context
     st.sidebar.markdown("### **📊 2024 League Context**")
     st.sidebar.markdown(f"""
-    - **K% League Avg**: {LEAGUE_AVERAGES['K_rate']}%
-    - **BB% League Avg**: {LEAGUE_AVERAGES['BB_rate']}%
+    - **K% League Avg**: {LEAGUE_K_AVG}%
+    - **BB% League Avg**: {LEAGUE_BB_AVG}%
     """)
     
     if df is not None and not df.empty:
@@ -379,26 +414,26 @@ def create_league_aware_filters(df=None):
     player_type_options = {
         "🏆 Contact-Aggressive Hitters": {
             'description': "Low K% + Low BB% (Elite for base hits)",
-            'max_k': PERFORMANCE_TIERS['K_rate']['above_avg'],  # ≤17%
-            'max_bb': PERFORMANCE_TIERS['BB_rate']['above_avg'],  # ≤6%
+            'max_k': 17.0,   # Above average contact
+            'max_bb': 6.0,   # Above average aggressive
             'min_hit_prob': 35
         },
         "⭐ Elite Contact Specialists": {
             'description': "Ultra-low K% (Pure contact)",
-            'max_k': PERFORMANCE_TIERS['K_rate']['elite'],  # ≤12%
-            'max_bb': LEAGUE_AVERAGES['BB_rate'],  # ≤8.5% (league avg)
+            'max_k': 12.0,   # Elite contact
+            'max_bb': 8.5,   # League average walks
             'min_hit_prob': 30
         },
         "⚡ Swing-Happy Hitters": {
             'description': "Ultra-low BB% (Aggressive approach)",
-            'max_k': PERFORMANCE_TIERS['K_rate']['league_avg'],  # ≤22.6% (league avg)
-            'max_bb': PERFORMANCE_TIERS['BB_rate']['aggressive'],  # ≤4%
+            'max_k': 22.6,   # League average strikeouts
+            'max_bb': 4.0,   # Hyper-aggressive
             'min_hit_prob': 32
         },
         "🔷 Above-Average Contact": {
             'description': "Better than league average K%",
-            'max_k': PERFORMANCE_TIERS['K_rate']['above_avg'],  # ≤17%
-            'max_bb': PERFORMANCE_TIERS['BB_rate']['passive'],  # ≤10%
+            'max_k': 17.0,   # Above average contact
+            'max_bb': 10.0,  # Reasonable walks
             'min_hit_prob': 28
         },
         "🌐 All Players": {
@@ -439,7 +474,7 @@ def create_league_aware_filters(df=None):
             max_value=35.0,
             value=filters['max_k'],
             step=0.5,
-            help=f"League avg: {LEAGUE_AVERAGES['K_rate']}% | Elite: ≤{PERFORMANCE_TIERS['K_rate']['elite']}%"
+            help=f"League avg: {LEAGUE_K_AVG}% | Elite: ≤12.0%"
         )
         
         # Custom BB% threshold
@@ -449,7 +484,7 @@ def create_league_aware_filters(df=None):
             max_value=15.0,
             value=filters['max_bb'],
             step=0.5,
-            help=f"League avg: {LEAGUE_AVERAGES['BB_rate']}% | Aggressive: ≤{PERFORMANCE_TIERS['BB_rate']['aggressive']}%"
+            help=f"League avg: {LEAGUE_BB_AVG}% | Aggressive: ≤4.0%"
         )
         
         # Use custom values if they differ from preset
@@ -468,14 +503,6 @@ def create_league_aware_filters(df=None):
             step=1,
             help="Matchup advantage/disadvantage vs this pitcher type"
         )
-        
-        # Minimize Walks checkbox (simplified)
-        minimize_walks = st.checkbox(
-            "Extra Walk Penalty",
-            value=False,
-            help="Apply extra penalty to walk-heavy hitters"
-        )
-        filters['extra_walk_penalty'] = minimize_walks
         
         # Team Selection
         team_options = []
@@ -518,8 +545,8 @@ def create_league_aware_filters(df=None):
                     avg_k_filtered = preview_df['adj_K'].mean()
                     avg_bb_filtered = preview_df['adj_BB'].mean()
                     
-                    k_vs_league = avg_k_filtered - LEAGUE_AVERAGES['K_rate']
-                    bb_vs_league = avg_bb_filtered - LEAGUE_AVERAGES['BB_rate']
+                    k_vs_league = avg_k_filtered - LEAGUE_K_AVG
+                    bb_vs_league = avg_bb_filtered - LEAGUE_BB_AVG
                     
                     st.sidebar.markdown(f"**📊 vs League Avg:**")
                     st.sidebar.markdown(f"K%: {k_vs_league:+.1f}% vs league")
