@@ -89,178 +89,59 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Enhanced Data Loading with Error Handling and Validation
-@st.cache_data(ttl=CONFIG['cache_ttl'])
-def load_csv_with_validation(url, description, expected_columns):
-    """Load and validate CSV data with comprehensive error handling."""
-    try:
-        with st.spinner(f'Loading {description}...'):
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
-            
-            df = pd.read_csv(StringIO(response.text))
-            
-            # Validate structure
-            if df.empty:
-                st.error(f"❌ {description}: No data found")
-                return None
-            
-            # Check for required columns
-            missing_cols = set(expected_columns) - set(df.columns)
-            if missing_cols:
-                st.error(f"❌ {description}: Missing columns {missing_cols}")
-                return None
-            
-            # Validate key columns have no nulls
-            key_cols = ['Tm', 'Batter', 'Pitcher']
-            null_counts = df[key_cols].isnull().sum()
-            if null_counts.any():
-                problematic_cols = null_counts[null_counts > 0].index.tolist()
-                st.error(f"❌ {description}: Null values in {problematic_cols}")
-                return None
-            
-            # Standardize data types
-            numeric_cols = ['HR', 'XB', '1B', 'BB', 'K', 'vs', 'RC']
-            for col in numeric_cols:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-            
-            st.success(f"✅ {description}: {len(df)} records loaded")
-            return df
-            
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Network error loading {description}: {str(e)}")
-        return None
-    except Exception as e:
-        st.error(f"❌ Error processing {description}: {str(e)}")
-        return None
-
-def validate_merge_quality(prob_df, pct_df, merged_df):
-    """Validate the quality of the merge operation."""
-    original_count = len(prob_df)
-    merged_count = len(merged_df)
-    
-    if merged_count < original_count:
-        lost_records = original_count - merged_count
-        st.warning(f"⚠️ Lost {lost_records} records during merge ({lost_records/original_count*100:.1f}%)")
-    
-    # Check for duplicates
-    merge_keys = ['Tm', 'Batter', 'Pitcher']
-    duplicates = merged_df.duplicated(subset=merge_keys).sum()
-    if duplicates > 0:
-        st.error(f"🔴 Found {duplicates} duplicate matchups after merge")
-    
-    return merged_df
+# Simplified data loading functions (back to working approach)
+# Removed: load_csv_with_validation and validate_merge_quality (were causing K% and BB% issues)
 
 @st.cache_data(ttl=CONFIG['cache_ttl'])
 def load_and_process_data():
-    """Enhanced data loading and processing with detailed debugging."""
+    """Simplified data loading using the working approach from the old version."""
     
-    # Load both CSV files
-    prob_df = load_csv_with_validation(
-        CONFIG['csv_urls']['probabilities'], 
-        "Base Probabilities", 
-        CONFIG['expected_columns']
-    )
-    
-    pct_df = load_csv_with_validation(
-        CONFIG['csv_urls']['percent_change'], 
-        "Adjustment Factors", 
-        CONFIG['expected_columns']
-    )
-    
-    if prob_df is None or pct_df is None:
-        st.error("❌ Failed to load required data files")
-        return None
-    
-    # DEBUGGING: Show data types and sample values
-    if st.sidebar.checkbox("🔍 Debug Mode"):
-        st.subheader("🔧 Debug Information")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**Base Probabilities (prob_df):**")
-            st.write(f"Shape: {prob_df.shape}")
-            st.write("Data Types:")
-            st.write(prob_df[['BB', 'K']].dtypes)
-            st.write("Sample BB/K values:")
-            st.write(prob_df[['Batter', 'BB', 'K']].head())
-        
-        with col2:
-            st.write("**Adjustment Factors (pct_df):**")
-            st.write(f"Shape: {pct_df.shape}")
-            st.write("Data Types:")
-            st.write(pct_df[['BB', 'K']].dtypes)
-            st.write("Sample BB/K values:")
-            st.write(pct_df[['Batter', 'BB', 'K']].head())
-    
-    # Merge datasets
     try:
-        merged_df = pd.merge(
-            prob_df, pct_df,
-            on=['Tm', 'Batter', 'Pitcher'],
-            suffixes=('_prob', '_pct'),
-            how='inner'
-        )
-        
-        merged_df = validate_merge_quality(prob_df, pct_df, merged_df)
-        
-        # DEBUGGING: Show merge results
-        if st.sidebar.checkbox("🔍 Debug Mode"):
-            st.write("**After Merge:**")
-            st.write(f"Merged Shape: {merged_df.shape}")
-            if 'BB_prob' in merged_df.columns and 'BB_pct' in merged_df.columns:
-                st.write("Sample merged BB data:")
-                st.write(merged_df[['Batter', 'BB_prob', 'BB_pct']].head())
-            else:
-                st.error("❌ BB columns missing after merge!")
-                st.write("Available columns:")
-                st.write(list(merged_df.columns))
-        
-    except Exception as e:
-        st.error(f"❌ Failed to merge datasets: {str(e)}")
-        return None
-    
-    # Calculate adjusted metrics with enhanced debugging
-    metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
-    
-    for metric in metrics:
-        base_col = f'{metric}_prob'
-        pct_col = f'{metric}_pct'
-        
-        if base_col in merged_df.columns and pct_col in merged_df.columns:
-            # Show calculation details for debugging
-            if st.sidebar.checkbox("🔍 Debug Mode") and metric in ['BB', 'K']:
-                st.write(f"**Calculating adj_{metric}:**")
-                sample_idx = 0
-                base_val = merged_df[base_col].iloc[sample_idx]
-                pct_val = merged_df[pct_col].iloc[sample_idx]
-                st.write(f"Base {metric}: {base_val}")
-                st.write(f"Pct Change: {pct_val}")
-                st.write(f"Formula: {base_val} * (1 + {pct_val}/100)")
-                result = base_val * (1 + pct_val/100)
-                st.write(f"Result: {result}")
+        with st.spinner('Loading and processing data...'):
+            # Simple data loading (like the old working version)
+            prob_df = pd.read_csv(StringIO(requests.get(CONFIG['csv_urls']['probabilities']).text))
+            pct_df = pd.read_csv(StringIO(requests.get(CONFIG['csv_urls']['percent_change']).text))
             
-            # Apply adjustment formula
-            merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
+            # Basic validation without aggressive type conversion
+            if prob_df.empty or pct_df.empty:
+                st.error("❌ One or both CSV files are empty")
+                return None
             
-            # Ensure realistic bounds
-            if metric in ['1B', 'XB', 'HR', 'K', 'BB']:  # Probability metrics
+            # Simple merge (like old version)
+            merged_df = pd.merge(
+                prob_df, pct_df,
+                on=['Tm', 'Batter', 'Pitcher'],
+                suffixes=('_prob', '_pct')
+            )
+            
+            if merged_df.empty:
+                st.error("❌ No matching records after merge")
+                return None
+            
+            # Calculate adjusted metrics (using old working approach)
+            metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
+            
+            for metric in metrics:
+                base_col = f'{metric}_prob'
+                pct_col = f'{metric}_pct'
+                
+                # Simple calculation like the old version
+                merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
-            else:  # Other metrics
-                merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0)
-        else:
-            st.warning(f"⚠️ Missing columns for {metric}: {base_col}, {pct_col}")
-    
-    # Calculate total base hit probability (key enhancement!)
-    if all(col in merged_df.columns for col in ['adj_1B', 'adj_XB', 'adj_HR']):
-        merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
-        merged_df['total_hit_prob'] = merged_df['total_hit_prob'].clip(upper=100)  # Cap at 100%
-    else:
-        st.error("❌ Cannot calculate total hit probability - missing adjusted columns")
-    
-    return merged_df
+            
+            # Calculate total base hit probability
+            merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
+            merged_df['total_hit_prob'] = merged_df['total_hit_prob'].clip(upper=100)
+            
+            st.success(f"✅ Successfully processed {len(merged_df)} matchups")
+            return merged_df
+            
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Network error loading data: {str(e)}")
+        return None
+    except Exception as e:
+        st.error(f"❌ Error processing data: {str(e)}")
+        return None
 
 def calculate_base_hit_scores(df):
     """Enhanced scoring algorithm focused specifically on base hit probability."""
@@ -756,7 +637,6 @@ def main_page():
     
     if df is None:
         st.error("❌ Unable to load data. Please check your internet connection and try again.")
-        st.info("💡 The app will retry automatically when you refresh the page.")
         return
     
     # Calculate scores
