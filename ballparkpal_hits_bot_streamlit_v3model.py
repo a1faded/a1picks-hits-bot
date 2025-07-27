@@ -756,6 +756,7 @@ def main_page():
     
     if df is None:
         st.error("❌ Unable to load data. Please check your internet connection and try again.")
+        st.info("💡 The app will retry automatically when you refresh the page.")
         return
     
     # Calculate scores
