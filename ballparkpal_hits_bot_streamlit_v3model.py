@@ -404,11 +404,11 @@ def create_smart_filters(df=None):
         # vs Pitcher Rating (moderate importance as requested)
         filters['min_vs_pitcher'] = st.slider(
             "vs Pitcher Rating",
-            min_value=0,
-            max_value=100,
-            value=45,
-            step=5,
-            help="How well batter performs against this pitcher type (moderate importance)"
+            min_value=-10,
+            max_value=10,
+            value=0,
+            step=1,
+            help="How well batter performs vs this pitcher type (+10=much better, -10=much worse, moderate importance)"
         )
         
         # Walk Risk Tolerance
@@ -801,11 +801,11 @@ def info_page():
         
         ### **⚙️ Advanced Options (When You Need More Control)**
         
-        | Filter | Impact | Default | Why It Matters |
-        |--------|--------|---------|----------------|
-        | **vs Pitcher** | Moderate | 45 | Matchup advantage |
-        | **Walk Risk** | Low | 12% | Walks aren't hits |
-        | **Team Filter** | Situational | All | Focus on specific games |
+        | Filter | Impact | Default | Range | Why It Matters |
+        |--------|--------|---------|-------|----------------|
+        | **vs Pitcher** | Moderate | 0 | -10 to +10 | Matchup advantage/disadvantage |
+        | **Walk Risk** | Low | 12% | 5-25% | Walks aren't hits |
+        | **Team Filter** | Situational | All | - | Focus on specific games |
         
         ### **🎁 Smart Bonuses in Scoring**
         - **Contact Bonus** (+8): Hit Prob >40% AND K Risk <18%
@@ -862,12 +862,19 @@ def info_page():
         #### **Tournament Play**
         - Focus on **Elite (Score 70+)** players only
         - Accept higher variance for upside
-        - Use vs Pitcher rating heavily
+        - Use **vs Pitcher +5 to +10** for maximum edge
         
         #### **Cash Games**
         - Target **15+ matching players**
         - Prioritize consistency over upside
+        - Keep **vs Pitcher -5 to +5** for broader options
         - Keep K risk in "Bottom 25%"
+        
+        ### **🎯 vs Pitcher Rating Guide**
+        - **+5 to +10**: Batter has significant advantage vs this pitcher type
+        - **-2 to +4**: Neutral to slight advantage (good for cash games)
+        - **-5 to -3**: Slight disadvantage but acceptable
+        - **-10 to -6**: Avoid unless other metrics are elite
         
         ### **🔍 Reading the Data Quality Dashboard**
         - **47+ matchups**: Good daily slate
