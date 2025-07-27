@@ -79,7 +79,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Enhanced Data Loading with Error Handling and Validation (RESTORED)
+# Enhanced Data Loading with Error Handling and Validation
 @st.cache_data(ttl=CONFIG['cache_ttl'])
 def load_csv_with_validation(url, description, expected_columns):
     """Load and validate CSV data with comprehensive error handling."""
@@ -827,7 +827,7 @@ def main_page():
     # Create league-aware filters with baseball intelligence
     filters = create_league_aware_filters(df)
     
-    # Calculate league-aware scores
+    # Calculate league-aware scores (FIXED function name)
     df = calculate_league_aware_scores(df)
     
     # Apply intelligent filters
