@@ -20,12 +20,6 @@ st.set_page_config(
 )
 
 # Constants and Configuration
-
-# Thresholds based on league-average per-batter data
-PER_BATTER_PA = 134
-K_PERCENT_THRESHOLD = 0.134  # 13.4%
-BB_PERCENT_THRESHOLD = 0.052  # 5.2%
-
 CONFIG = {
     'csv_urls': {
         'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv',
@@ -260,12 +254,6 @@ def calculate_base_hit_scores(df):
     else:
         df['Score'] = 50  # Default if all scores are identical
     
-
-    # Contact-first swinger logic
-    df['low_k_flag'] = df['adj_K'] <= (K_PERCENT_THRESHOLD * 100)
-    df['low_bb_flag'] = df['adj_BB'] <= (BB_PERCENT_THRESHOLD * 100)
-    df['contact_swinger'] = df['low_k_flag'] & df['low_bb_flag']
-
     return df.round(1)
 
 def create_enhanced_header():
@@ -500,13 +488,6 @@ def create_smart_filters(df=None):
         except Exception as e:
             st.sidebar.warning(f"⚠️ Filter preview unavailable: {str(e)}")
     
-    
-    filters['contact_swingers_only'] = st.sidebar.checkbox(
-        "Only show Contact-First Swingers",
-        value=False,
-        help="Filters for hitters with ≤13.4% K% and ≤5.2% BB%"
-    )
-
     return filters
 
 def apply_smart_filters(df, filters):
@@ -538,12 +519,7 @@ def apply_smart_filters(df, filters):
     
     # Apply filters with error handling
     try:
-    # Dummy operation to satisfy required indented block after try
-    pass
-    if filters.get('contact_swingers_only'):
-        query_parts.append("contact_swinger == True")
-
-    if query_parts:
+        if query_parts:
             full_query = " and ".join(query_parts)
             filtered_df = df.query(full_query)
         else:
