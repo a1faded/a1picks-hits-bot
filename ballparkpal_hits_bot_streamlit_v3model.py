@@ -298,7 +298,7 @@ def create_data_quality_dashboard(df):
         </div>
         """.format(avg_hit_prob), unsafe_allow_html=True)
 
-def create_enhanced_filters():
+def create_enhanced_filters(df=None):
     """Create enhanced filtering options focused on base hits."""
     st.sidebar.header("🎯 Base Hit Filters")
     
@@ -330,10 +330,14 @@ def create_enhanced_filters():
     filters['min_1b'] = st.sidebar.slider("Minimum Single Probability", 10, 35, 18)
     filters['min_vs'] = st.sidebar.slider("Minimum vs Pitcher", 0, 100, 50, help="Matchup rating vs opposing pitcher")
     
-    # Team filter
+    # Team filter - now properly populated
+    team_options = []
+    if df is not None and not df.empty:
+        team_options = sorted(df['Tm'].unique().tolist())
+    
     filters['selected_teams'] = st.sidebar.multiselect(
         "Filter by Teams (optional)",
-        options=[]  # Will be populated in main function
+        options=team_options
     )
     
     # Number of results
@@ -535,12 +539,8 @@ def main_page():
     # Show data quality dashboard
     create_data_quality_dashboard(df)
     
-    # Create filters (populate team options)
-    filters = create_enhanced_filters()
-    
-    # Update team filter options
-    if not df.empty:
-        st.sidebar.selectbox.__defaults__ = (sorted(df['Tm'].unique().tolist()),)
+    # Create filters with team options populated
+    filters = create_enhanced_filters(df)
     
     # Apply filters
     filtered_df = apply_enhanced_filters(df, filters)
@@ -568,7 +568,7 @@ def main_page():
     with col2:
         if st.button("🔄 Refresh Data"):
             st.cache_data.clear()
-            st.experimental_rerun()
+            st.rerun()
     
     with col3:
         st.info(f"🕐 Last updated: {datetime.now().strftime('%H:%M:%S')}")
