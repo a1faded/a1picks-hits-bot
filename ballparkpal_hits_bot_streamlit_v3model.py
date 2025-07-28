@@ -283,13 +283,21 @@ def create_league_aware_filters(df=None):
     """Create baseball-intelligent filtering system based on league averages and player types."""
     st.sidebar.header("🎯 Baseball-Smart Filters")
     
-    # Handle session state for quick exclusions
-    if 'quick_exclude_players' not in st.session_state:
-        st.session_state.quick_exclude_players = []
+    # Initialize session state for exclusions if not exists
+    if 'excluded_players' not in st.session_state:
+        st.session_state.excluded_players = []
     
+    # Handle clear exclusions command
     if 'clear_exclusions' in st.session_state and st.session_state.clear_exclusions:
-        st.session_state.quick_exclude_players = []
+        st.session_state.excluded_players = []
         st.session_state.clear_exclusions = False
+    
+    # Handle quick exclude additions
+    if 'quick_exclude_players' in st.session_state:
+        for player in st.session_state.quick_exclude_players:
+            if player not in st.session_state.excluded_players:
+                st.session_state.excluded_players.append(player)
+        st.session_state.quick_exclude_players = []  # Clear after processing
     
     # League averages for 2024
     LEAGUE_K_AVG = 22.6
@@ -442,7 +450,7 @@ def create_league_aware_filters(df=None):
             help="Choose how many results to display, or 'All' to show everyone"
         )
     
-    # LINEUP STATUS MANAGEMENT (New Section)
+    # LINEUP STATUS MANAGEMENT (Unified System)
     with st.sidebar.expander("🏟️ Lineup Status Management"):
         st.markdown("**Exclude players not in today's lineups:**")
         
@@ -451,26 +459,35 @@ def create_league_aware_filters(df=None):
         if df is not None and not df.empty:
             all_players = sorted(df['Batter'].unique().tolist())
         
-        # Combine manual exclusions with quick exclusions from session state
-        default_exclusions = list(set(st.session_state.quick_exclude_players))
+        # Use unified session state for exclusions
+        current_exclusions = st.session_state.excluded_players.copy()
         
-        filters['excluded_players'] = st.multiselect(
+        # Multiselect that syncs with session state
+        selected_exclusions = st.multiselect(
             "Players NOT Playing Today",
             options=all_players,
-            default=default_exclusions,
-            help="Select players who are confirmed out of lineups (injured, benched, etc.)"
+            default=current_exclusions,
+            help="Select players who are confirmed out of lineups (injured, benched, etc.)",
+            key="lineup_exclusions"
         )
         
-        # Show quick exclusion count if any
-        if st.session_state.quick_exclude_players:
-            quick_count = len(st.session_state.quick_exclude_players)
-            st.info(f"⚡ {quick_count} players excluded via Quick Actions")
+        # Update session state when multiselect changes
+        st.session_state.excluded_players = selected_exclusions
+        filters['excluded_players'] = selected_exclusions
+        
+        # Show current exclusion count
+        if selected_exclusions:
+            st.info(f"🚫 Currently excluding {len(selected_exclusions)} players")
+        
+        # Quick clear button for sidebar
+        if st.button("🔄 Clear All Exclusions", key="sidebar_clear"):
+            st.session_state.excluded_players = []
+            st.rerun()
         
         # Quick exclude options for common scenarios
         st.markdown("**Quick Exclude Options:**")
         
         if st.checkbox("🏥 Auto-exclude common injury-prone players"):
-            # This could be expanded with a known list of frequently injured players
             filters['auto_exclude_injured'] = True
         else:
             filters['auto_exclude_injured'] = False
@@ -483,16 +500,17 @@ def create_league_aware_filters(df=None):
     # REAL-TIME FEEDBACK with league context and lineup awareness
     if df is not None and not df.empty:
         try:
-            # Apply exclusions first
+            # Apply exclusions first using unified session state
             preview_df = df.copy()
-            if filters.get('excluded_players'):
-                preview_df = preview_df[~preview_df['Batter'].isin(filters['excluded_players'])]
+            excluded_players = st.session_state.excluded_players
+            if excluded_players:
+                preview_df = preview_df[~preview_df['Batter'].isin(excluded_players)]
             
             preview_query = f"adj_K <= {filters['max_k']:.1f} and adj_BB <= {filters['max_bb']:.1f} and total_hit_prob >= {filters['min_hit_prob']}"
             
             preview_df = preview_df.query(preview_query)
             matching_count = len(preview_df)
-            excluded_count = len(filters.get('excluded_players', []))
+            excluded_count = len(excluded_players)
             
             # Context-aware feedback with lineup information
             if matching_count == 0:
@@ -541,10 +559,11 @@ def apply_league_aware_filters(df, filters):
     if df is None or df.empty:
         return df
     
-    # First, exclude players not in lineups
-    if filters.get('excluded_players'):
-        excluded_count = len(df[df['Batter'].isin(filters['excluded_players'])])
-        df = df[~df['Batter'].isin(filters['excluded_players'])]
+    # First, exclude players not in lineups using unified session state
+    excluded_players = st.session_state.get('excluded_players', [])
+    if excluded_players:
+        excluded_count = len(df[df['Batter'].isin(excluded_players)])
+        df = df[~df['Batter'].isin(excluded_players)]
         if excluded_count > 0:
             st.info(f"🏟️ Excluded {excluded_count} players not in today's lineups")
     
@@ -765,7 +784,7 @@ def display_league_aware_results(filtered_df, filters):
     display_df['BB% vs League'] = display_df['adj_BB'] - LEAGUE_BB_AVG
     
     # Add lineup status indicators
-    excluded_players = filters.get('excluded_players', [])
+    excluded_players = st.session_state.get('excluded_players', [])
     display_df['Lineup_Status'] = display_df['Batter'].apply(
         lambda x: '🏟️' if x not in excluded_players else '❌'
     )
@@ -829,7 +848,7 @@ def display_league_aware_results(filtered_df, filters):
         st.markdown("### 🔍 **League Context Analysis**")
         
         # Smart player selection - find the best player who is actually playing
-        excluded_players = filters.get('excluded_players', [])
+        excluded_players = st.session_state.get('excluded_players', [])
         
         # Find the top player who is confirmed to be playing
         analysis_player = None
@@ -1013,7 +1032,7 @@ def main_page():
     
     with col3:
         if st.button("🏟️ Clear Exclusions"):
-            st.session_state.clear_exclusions = True
+            st.session_state.excluded_players = []
             st.rerun()
     
     with col4:
@@ -1026,7 +1045,7 @@ def main_page():
             
             # Show players in current results for quick exclusion
             result_players = filtered_df['Batter'].tolist()
-            current_exclusions = filters.get('excluded_players', [])
+            current_exclusions = st.session_state.excluded_players
             
             # Only show players not already excluded
             available_to_exclude = [p for p in result_players if p not in current_exclusions]
@@ -1038,9 +1057,9 @@ def main_page():
                     st.markdown("**Players in Current Results:**")
                     for i, player in enumerate(available_to_exclude[:5]):  # Show first 5
                         if st.button(f"❌ Exclude {player}", key=f"exclude_{i}"):
-                            if 'quick_exclude_players' not in st.session_state:
-                                st.session_state.quick_exclude_players = []
-                            st.session_state.quick_exclude_players.append(player)
+                            # Add to unified session state
+                            if player not in st.session_state.excluded_players:
+                                st.session_state.excluded_players.append(player)
                             st.rerun()
                 
                 with col_right:
@@ -1048,19 +1067,26 @@ def main_page():
                         st.markdown("**More Players:**")
                         for i, player in enumerate(available_to_exclude[5:10]):  # Show next 5
                             if st.button(f"❌ Exclude {player}", key=f"exclude_more_{i}"):
-                                if 'quick_exclude_players' not in st.session_state:
-                                    st.session_state.quick_exclude_players = []
-                                st.session_state.quick_exclude_players.append(player)
+                                # Add to unified session state
+                                if player not in st.session_state.excluded_players:
+                                    st.session_state.excluded_players.append(player)
                                 st.rerun()
+            else:
+                st.info("🎯 All players in results are already confirmed playing")
             
+            # Show currently excluded players
             if current_exclusions:
                 st.markdown("**Currently Excluded Players:**")
                 excluded_display = ", ".join(current_exclusions)
                 st.info(f"🚫 {excluded_display}")
                 
-                if st.button("🔄 Re-include All Excluded Players"):
+                # Unified clear button that works with both systems
+                if st.button("🔄 Re-include All Excluded Players", key="main_clear"):
+                    st.session_state.excluded_players = []
                     st.session_state.clear_exclusions = True
                     st.rerun()
+            else:
+                st.success("✅ All players currently included in analysis")
     
     # Bottom tips
     st.markdown("---")
