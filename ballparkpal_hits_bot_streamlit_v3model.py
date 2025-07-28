@@ -794,39 +794,44 @@ def display_league_aware_results(filtered_df, filters):
     
     styled_df = display_df[display_columns_with_status.keys()].rename(columns=display_columns_with_status)
     
-    # Enhanced formatting with league context
-    styled_df = styled_df.style.format({
-        'Hit Prob %': "{:.1f}%",
-        'Contact %': "{:.1f}%", 
-        'XB %': "{:.1f}%",
-        'HR %': "{:.1f}%",
-        'K% vs League': "{:+.1f}%",
-        'BB% vs League': "{:+.1f}%",
-        'vs Pitcher': "{:.0f}",
-        'Score': "{:.1f}"
-    }).background_gradient(
-        subset=['Score'],
-        cmap='RdYlGn',
-        vmin=0,
-        vmax=100
-    ).background_gradient(
-        subset=['Hit Prob %'],
-        cmap='Greens',
-        vmin=20,
-        vmax=50
-    ).background_gradient(
-        subset=['K% vs League'],
-        cmap='RdYlGn',  # Green = below league (good), Red = above league (bad)
-        vmin=-10,
-        vmax=10
-    ).background_gradient(
-        subset=['BB% vs League'],
-        cmap='RdYlGn',  # Green = below league (aggressive), Red = above league (passive)
-        vmin=-5,
-        vmax=5
-    )
-    
-    st.dataframe(styled_df, use_container_width=True)
+    # Create a container for screenshot capture
+    with st.container():
+        st.markdown('<div id="results-section">', unsafe_allow_html=True)
+        
+        # Enhanced formatting with league context
+        styled_df = styled_df.style.format({
+            'Hit Prob %': "{:.1f}%",
+            'Contact %': "{:.1f}%", 
+            'XB %': "{:.1f}%",
+            'HR %': "{:.1f}%",
+            'K% vs League': "{:+.1f}%",
+            'BB% vs League': "{:+.1f}%",
+            'vs Pitcher': "{:.0f}",
+            'Score': "{:.1f}"
+        }).background_gradient(
+            subset=['Score'],
+            cmap='RdYlGn',
+            vmin=0,
+            vmax=100
+        ).background_gradient(
+            subset=['Hit Prob %'],
+            cmap='Greens',
+            vmin=20,
+            vmax=50
+        ).background_gradient(
+            subset=['K% vs League'],
+            cmap='RdYlGn',  # Green = below league (good), Red = above league (bad)
+            vmin=-10,
+            vmax=10
+        ).background_gradient(
+            subset=['BB% vs League'],
+            cmap='RdYlGn',  # Green = below league (aggressive), Red = above league (passive)
+            vmin=-5,
+            vmax=5
+        )
+        
+        st.dataframe(styled_df, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # Enhanced interpretation guide with league context and lineup status
     st.markdown("""
@@ -1011,9 +1016,9 @@ def main_page():
     # Create visualizations
     create_enhanced_visualizations(df, filtered_df)
     
-    # Export functionality and lineup management
+    # Export functionality and lineup management with screenshot
     st.markdown("---")
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         if st.button("📊 Export Results to CSV"):
@@ -1026,18 +1031,233 @@ def main_page():
             )
     
     with col2:
+        if st.button("📸 Screenshot Results"):
+            # Create screenshot functionality
+            screenshot_html = f"""
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+            <script>
+            function captureResults() {{
+                // Capture the results section and key metrics
+                const captureElements = [
+                    document.querySelector('[data-testid="metric"]'),
+                    document.getElementById('results-section'),
+                    document.querySelector('.color-legend')
+                ];
+                
+                // Create a temporary container for all elements
+                const container = document.createElement('div');
+                container.style.backgroundColor = 'white';
+                container.style.padding = '20px';
+                container.style.fontFamily = 'sans-serif';
+                
+                // Add title
+                const title = document.createElement('h2');
+                title.textContent = 'MLB League-Aware Hit Predictor Results - {datetime.now().strftime("%Y-%m-%d %H:%M")}';
+                title.style.textAlign = 'center';
+                title.style.marginBottom = '20px';
+                title.style.color = '#1f1f1f';
+                container.appendChild(title);
+                
+                // Clone and append elements
+                captureElements.forEach(element => {{
+                    if (element) {{
+                        const clone = element.cloneNode(true);
+                        container.appendChild(clone);
+                    }}
+                }});
+                
+                // Temporarily add to DOM for capture
+                document.body.appendChild(container);
+                
+                html2canvas(container, {{
+                    backgroundColor: 'white',
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    height: container.scrollHeight,
+                    width: container.scrollWidth
+                }}).then(function(canvas) {{
+                    // Remove temporary container
+                    document.body.removeChild(container);
+                    
+                    // Create download link
+                    const link = document.createElement('a');
+                    link.download = 'mlb_hit_predictor_results_{datetime.now().strftime("%Y%m%d_%H%M")}.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                }}).catch(function(error) {{
+                    document.body.removeChild(container);
+                    alert('Screenshot failed. Please try again or use your browser\\'s built-in screenshot tool.');
+                    console.error('Screenshot error:', error);
+                }});
+            }}
+            
+            // Auto-trigger screenshot
+            setTimeout(captureResults, 100);
+            </script>
+            """
+            
+            components.html(screenshot_html, height=0)
+    
+    with col3:
         if st.button("🔄 Refresh Data"):
             st.cache_data.clear()
             st.rerun()
     
-    with col3:
+    with col4:
         if st.button("🏟️ Clear Exclusions"):
             st.session_state.excluded_players = []
             st.rerun()
     
-    with col4:
+    with col5:
         st.info(f"🕐 Last updated: {datetime.now().strftime('%H:%M:%S')}")
     
+    # Additional viewing options
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🖥️ Fullscreen View"):
+            # Create fullscreen modal
+            fullscreen_html = f"""
+            <style>
+            .fullscreen-modal {{
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background-color: rgba(0,0,0,0.9);
+                z-index: 9999;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 20px;
+                box-sizing: border-box;
+            }}
+            .fullscreen-content {{
+                background: white;
+                border-radius: 10px;
+                padding: 30px;
+                max-width: 95vw;
+                max-height: 95vh;
+                overflow: auto;
+                position: relative;
+            }}
+            .close-button {{
+                position: absolute;
+                top: 10px;
+                right: 15px;
+                background: #ff4444;
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                cursor: pointer;
+                font-size: 18px;
+                font-weight: bold;
+            }}
+            .close-button:hover {{
+                background: #cc0000;
+            }}
+            </style>
+            
+            <div class="fullscreen-modal" id="fullscreenModal">
+                <div class="fullscreen-content">
+                    <button class="close-button" onclick="closeFullscreen()">×</button>
+                    <div id="fullscreen-results">
+                        <h1 style="text-align: center; color: #1f1f1f; margin-bottom: 30px;">
+                            🎯 MLB League-Aware Hit Predictor Results
+                        </h1>
+                        <p style="text-align: center; color: #666; margin-bottom: 40px;">
+                            Generated on {datetime.now().strftime("%Y-%m-%d at %H:%M")}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <script>
+            function showFullscreen() {{
+                // Clone the results section
+                const resultsSection = document.getElementById('results-section');
+                const colorLegend = document.querySelector('.color-legend');
+                const metricsCards = document.querySelectorAll('[data-testid="metric"]');
+                
+                const fullscreenResults = document.getElementById('fullscreen-results');
+                
+                // Add metrics cards
+                metricsCards.forEach(card => {{
+                    if (card) {{
+                        const cardClone = card.cloneNode(true);
+                        cardClone.style.marginBottom = '20px';
+                        fullscreenResults.appendChild(cardClone);
+                    }}
+                }});
+                
+                // Add results table
+                if (resultsSection) {{
+                    const tableClone = resultsSection.cloneNode(true);
+                    tableClone.style.marginBottom = '30px';
+                    fullscreenResults.appendChild(tableClone);
+                }}
+                
+                // Add color legend
+                if (colorLegend) {{
+                    const legendClone = colorLegend.cloneNode(true);
+                    fullscreenResults.appendChild(legendClone);
+                }}
+                
+                // Show modal
+                document.getElementById('fullscreenModal').style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            }}
+            
+            function closeFullscreen() {{
+                document.getElementById('fullscreenModal').style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }}
+            
+            // Handle escape key
+            document.addEventListener('keydown', function(e) {{
+                if (e.key === 'Escape') {{
+                    closeFullscreen();
+                }}
+            }});
+            
+            // Auto-trigger fullscreen
+            setTimeout(showFullscreen, 100);
+            </script>
+            """
+            
+            components.html(fullscreen_html, height=0)
+    
+    with col2:
+        # Add print-friendly option
+        if st.button("🖨️ Print-Friendly View"):
+            st.markdown("### 📋 Print-Friendly Results")
+            
+            # Create clean, print-optimized version
+            print_df = filtered_df[['Batter', 'Tm', 'Pitcher', 'total_hit_prob', 'adj_1B', 'adj_XB', 'adj_HR', 'adj_K', 'adj_BB', 'Score']].copy()
+            print_df.columns = ['Player', 'Team', 'Pitcher', 'Hit %', '1B %', 'XB %', 'HR %', 'K %', 'BB %', 'Score']
+            
+            # Format for printing
+            for col in ['Hit %', '1B %', 'XB %', 'HR %', 'K %', 'BB %']:
+                if col in print_df.columns:
+                    print_df[col] = print_df[col].round(1).astype(str) + '%'
+            
+            print_df['Score'] = print_df['Score'].round(1)
+            
+            st.dataframe(print_df, use_container_width=True, hide_index=True)
+            
+            st.markdown(f"""
+            **Analysis Date:** {datetime.now().strftime("%Y-%m-%d %H:%M")}  
+            **Active Profile:** {filter_profile}  
+            **Results Count:** {len(filtered_df)} players  
+            **League Averages:** K% 22.6%, BB% 8.5%
+            """)
+            
+            st.info("💡 Use your browser's print function (Ctrl+P) to print this view")
+
     # Quick Lineup Management Section
     if not filtered_df.empty:
         with st.expander("⚡ Quick Lineup Management"):
