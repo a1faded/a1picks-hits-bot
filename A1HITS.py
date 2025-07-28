@@ -89,7 +89,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Enhanced Data Loading with Error Handling and Validation
+# Enhanced Data Loading with Error Handling and Validation (RESTORED)
 @st.cache_data(ttl=CONFIG['cache_ttl'])
 def load_csv_with_validation(url, description, expected_columns):
     """Load and validate CSV data with comprehensive error handling."""
@@ -119,12 +119,8 @@ def load_csv_with_validation(url, description, expected_columns):
                 st.error(f"❌ {description}: Null values in {problematic_cols}")
                 return None
             
-            # Standardize data types
-            numeric_cols = ['HR', 'XB', '1B', 'BB', 'K', 'vs', 'RC']
-            for col in numeric_cols:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-            
+            # Light data standardization (without aggressive type conversion that caused issues)
+            # Only convert obvious numeric columns, let pandas handle the rest naturally
             st.success(f"✅ {description}: {len(df)} records loaded")
             return df
             
@@ -154,9 +150,9 @@ def validate_merge_quality(prob_df, pct_df, merged_df):
 
 @st.cache_data(ttl=CONFIG['cache_ttl'])
 def load_and_process_data():
-    """Enhanced data loading and processing with validation."""
+    """Enhanced data loading and processing with validation (RESTORED with fixed clipping)."""
     
-    # Load both CSV files
+    # Load both CSV files with enhanced validation
     prob_df = load_csv_with_validation(
         CONFIG['csv_urls']['probabilities'], 
         "Base Probabilities", 
@@ -173,7 +169,7 @@ def load_and_process_data():
         st.error("❌ Failed to load required data files")
         return None
     
-    # Merge datasets
+    # Enhanced merge with validation
     try:
         merged_df = pd.merge(
             prob_df, pct_df,
@@ -188,22 +184,41 @@ def load_and_process_data():
         st.error(f"❌ Failed to merge datasets: {str(e)}")
         return None
     
-    # Calculate adjusted metrics with enhanced base hit focus
+    # Calculate adjusted metrics with CORRECTED column mapping
     metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
     
     for metric in metrics:
-        base_col = f'{metric}_prob'
+        # FIXED: Use correct columns based on actual CSV structure
+        if metric in ['K', 'BB']:
+            # For K and BB, use the .1 columns (actual probabilities)
+            base_col = f'{metric}.1'  # Will be 'K.1', 'BB.1'
+        else:
+            # For other metrics, use normal _prob suffix
+            base_col = f'{metric}_prob'
+            
         pct_col = f'{metric}_pct'
         
         if base_col in merged_df.columns and pct_col in merged_df.columns:
             # Apply adjustment formula
             merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
             
-            # Ensure realistic bounds
-            if metric in ['1B', 'XB', 'HR', 'K', 'BB']:  # Probability metrics
+            # FIXED: Smart clipping based on metric type
+            if metric in ['K', 'BB']:
+                # K and BB should be positive percentages
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
-            else:  # Other metrics
+            elif metric in ['1B', 'XB', 'HR']:  # Probability metrics
+                merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
+            else:  # Other metrics (vs, RC)
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0)
+                
+            st.success(f"✅ Created adj_{metric} using {base_col} and {pct_col}")
+        else:
+            st.error(f"❌ Missing columns for {metric}: {base_col} or {pct_col}")
+            # Create a fallback column with reasonable defaults to prevent KeyError
+            if metric in ['K', 'BB']:
+                merged_df[f'adj_{metric}'] = 20  # Default reasonable K/BB rate
+            else:
+                merged_df[f'adj_{metric}'] = 0
     
     # Calculate total base hit probability (key enhancement!)
     merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
@@ -299,7 +314,7 @@ def create_data_quality_dashboard(df):
         """.format(avg_hit_prob), unsafe_allow_html=True)
 
 def calculate_percentiles(df):
-    """Calculate percentiles for smart filtering."""
+    """Calculate percentiles for smart filtering with NaN handling."""
     if df is None or df.empty:
         return {}
     
@@ -310,13 +325,21 @@ def calculate_percentiles(df):
     
     for metric in metrics:
         if metric in df.columns:
-            percentiles[metric] = {
-                'p10': np.percentile(df[metric], 10),
-                'p25': np.percentile(df[metric], 25),
-                'p50': np.percentile(df[metric], 50),
-                'p75': np.percentile(df[metric], 75),
-                'p90': np.percentile(df[metric], 90)
-            }
+            # Remove NaN values before calculating percentiles
+            clean_data = df[metric].dropna()
+            if len(clean_data) > 0:
+                percentiles[metric] = {
+                    'p10': np.percentile(clean_data, 10),
+                    'p25': np.percentile(clean_data, 25),
+                    'p50': np.percentile(clean_data, 50),
+                    'p75': np.percentile(clean_data, 75),
+                    'p90': np.percentile(clean_data, 90)
+                }
+            else:
+                # Fallback values if no clean data
+                percentiles[metric] = {
+                    'p10': 0, 'p25': 0, 'p50': 0, 'p75': 0, 'p90': 0
+                }
     
     return percentiles
 
@@ -354,10 +377,11 @@ def create_smart_filters(df=None):
         help="Combined probability of getting ANY base hit (1B + XB + HR)"
     )
     
-    # Convert to actual threshold
+    # Convert to actual threshold with NaN handling
     percentile_val = hit_prob_options[filters['hit_prob_percentile']]
-    if percentiles and 'total_hit_prob' in percentiles:
-        filters['min_hit_prob'] = np.percentile(df['total_hit_prob'], percentile_val) if percentile_val > 0 else 0
+    if percentiles and 'total_hit_prob' in percentiles and percentile_val > 0:
+        threshold = np.percentile(df['total_hit_prob'].dropna(), percentile_val)
+        filters['min_hit_prob'] = threshold if not np.isnan(threshold) else 25  # Fallback
     else:
         # Fallback defaults
         fallback_values = {90: 45, 75: 38, 60: 32, 40: 28, 0: 0}
@@ -379,10 +403,11 @@ def create_smart_filters(df=None):
         help="Lower strikeout risk = higher chance of making contact"
     )
     
-    # Convert to actual threshold
+    # Convert to actual threshold with NaN handling
     k_percentile_val = k_risk_options[filters['k_risk_percentile']]
-    if percentiles and 'adj_K' in percentiles:
-        filters['max_k'] = np.percentile(df['adj_K'], k_percentile_val) if k_percentile_val < 100 else 100
+    if percentiles and 'adj_K' in percentiles and k_percentile_val < 100:
+        threshold = np.percentile(df['adj_K'].dropna(), k_percentile_val)
+        filters['max_k'] = threshold if not np.isnan(threshold) else 20  # Fallback
     else:
         # Fallback defaults
         k_fallback = {10: 12, 25: 16, 50: 20, 75: 25, 100: 100}
@@ -403,15 +428,13 @@ def create_smart_filters(df=None):
             help="How well batter performs vs this pitcher type (+10=much better, -10=much worse, moderate importance)"
         )
         
-        # Walk Risk Tolerance
-        filters['max_walk'] = st.slider(
-            "Walk Risk Tolerance",
-            min_value=5,
-            max_value=25,
-            value=12,
-            step=1,
-            help="Maximum walk probability (walks aren't hits)"
+        # Walk Risk Control (simplified)
+        minimize_walks = st.checkbox(
+            "Minimize Walk Risk",
+            value=True,
+            help="Checked = ≤10% walk risk (conservative) | Unchecked = ≤20% walk risk (more options)"
         )
+        filters['max_walk'] = 10 if minimize_walks else 20
         
         # Team Selection
         team_options = []
@@ -434,27 +457,36 @@ def create_smart_filters(df=None):
     # REAL-TIME FEEDBACK
     if df is not None and not df.empty:
         # Quick filter preview (simplified without redundant contact filter)
-        preview_query = f"total_hit_prob >= {filters['min_hit_prob']:.1f} and adj_K <= {filters['max_k']:.1f}"
-        
         try:
-            preview_df = df.query(preview_query)
-            matching_count = len(preview_df)
+            preview_parts = []
+            if 'min_hit_prob' in filters and not np.isnan(filters['min_hit_prob']):
+                preview_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
+            if 'max_k' in filters and not np.isnan(filters['max_k']):
+                preview_parts.append(f"adj_K <= {filters['max_k']:.1f}")
             
-            if matching_count == 0:
-                st.sidebar.error("❌ No players match current filters")
-                st.sidebar.markdown("**💡 Try:** Lower hit probability tier or increase K risk tolerance")
-            elif matching_count < 5:
-                st.sidebar.warning(f"⚠️ Only {matching_count} players match")
-                st.sidebar.markdown("**💡 Tip:** Lower hit probability tier for more options")
-            else:
-                st.sidebar.success(f"✅ {matching_count} players match your criteria")
+            if preview_parts:
+                preview_query = " and ".join(preview_parts)
+                preview_df = df.query(preview_query)
+                matching_count = len(preview_df)
                 
-                if matching_count > 0:
-                    top_hit_prob = preview_df['total_hit_prob'].max()
-                    st.sidebar.markdown(f"**🎯 Best Hit Prob:** {top_hit_prob:.1f}%")
+                if matching_count == 0:
+                    st.sidebar.error("❌ No players match current filters")
+                    st.sidebar.markdown("**💡 Try:** Lower hit probability tier or increase K risk tolerance")
+                elif matching_count < 5:
+                    st.sidebar.warning(f"⚠️ Only {matching_count} players match")
+                    st.sidebar.markdown("**💡 Tip:** Lower hit probability tier for more options")
+                else:
+                    st.sidebar.success(f"✅ {matching_count} players match your criteria")
                     
-        except Exception:
-            pass  # Don't break if query fails
+                    if matching_count > 0:
+                        top_hit_prob = preview_df['total_hit_prob'].max()
+                        st.sidebar.markdown(f"**🎯 Best Hit Prob:** {top_hit_prob:.1f}%")
+            else:
+                # No valid filters
+                st.sidebar.info("📊 All players included (no filters applied)")
+                        
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ Filter preview unavailable: {str(e)}")
     
     return filters
 
@@ -466,34 +498,44 @@ def apply_smart_filters(df, filters):
     
     query_parts = []
     
-    # Primary filters
-    query_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
-    query_parts.append(f"adj_K <= {filters['max_k']:.1f}")
-    # Contact rate now handled by Hit Probability Tier (no separate filter needed)
+    # Validate filter values and add to query
+    if 'min_hit_prob' in filters and not np.isnan(filters['min_hit_prob']):
+        query_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
     
-    # Advanced filters
-    query_parts.append(f"adj_vs >= {filters['min_vs_pitcher']}")
-    query_parts.append(f"adj_BB <= {filters['max_walk']}")
+    if 'max_k' in filters and not np.isnan(filters['max_k']):
+        query_parts.append(f"adj_K <= {filters['max_k']:.1f}")
+    
+    # Advanced filters with validation
+    if 'min_vs_pitcher' in filters and not np.isnan(filters['min_vs_pitcher']):
+        query_parts.append(f"adj_vs >= {filters['min_vs_pitcher']}")
+    
+    if 'max_walk' in filters and not np.isnan(filters['max_walk']):
+        query_parts.append(f"adj_BB <= {filters['max_walk']}")
     
     # Team filter
-    if filters['selected_teams']:
+    if filters.get('selected_teams'):
         team_filter = "Tm in " + str(filters['selected_teams'])
         query_parts.append(team_filter)
     
     # Apply filters with error handling
     try:
-        full_query = " and ".join(query_parts)
-        filtered_df = df.query(full_query)
+        if query_parts:
+            full_query = " and ".join(query_parts)
+            filtered_df = df.query(full_query)
+        else:
+            filtered_df = df  # No filters applied
         
         # Sort by score and limit results
-        result_df = filtered_df.sort_values('Score', ascending=False).head(filters['result_count'])
+        result_count = filters.get('result_count', 15)
+        result_df = filtered_df.sort_values('Score', ascending=False).head(result_count)
         
         return result_df
         
     except Exception as e:
         st.error(f"❌ Filter error: {str(e)}")
         # Return top players by score if filtering fails
-        return df.sort_values('Score', ascending=False).head(filters['result_count'])
+        result_count = filters.get('result_count', 15)
+        return df.sort_values('Score', ascending=False).head(result_count)
 
 def display_smart_results(filtered_df, filters):
     """Display results with intelligent insights and feedback."""
@@ -506,7 +548,7 @@ def display_smart_results(filtered_df, filters):
         ### 💡 **Suggested Adjustments:**
         - Try **"Top 40% Hit Probability"** instead of higher tiers
         - Increase **Strikeout Risk Tolerance** to "Bottom 50%"  
-        - Use **Advanced Options** to adjust vs Pitcher or Walk tolerance
+        - Try **unchecking "Minimize Walks"** for more options
         """)
         return
     
@@ -791,7 +833,7 @@ def info_page():
         | Filter | Impact | Default | Range | Why It Matters |
         |--------|--------|---------|-------|----------------|
         | **vs Pitcher** | Moderate | 0 | -10 to +10 | Matchup advantage/disadvantage |
-        | **Walk Risk** | Low | 12% | 5-25% | Walks aren't hits |
+        | **Minimize Walks** | Low | ✅ On | ≤10% or ≤20% | Walks aren't hits (simple toggle) |
         | **Team Filter** | Situational | All | - | Focus on specific games |
         
         ### **🎁 Smart Bonuses in Scoring**
