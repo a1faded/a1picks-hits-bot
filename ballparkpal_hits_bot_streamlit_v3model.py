@@ -7,6 +7,8 @@ import streamlit.components.v1 as components
 import numpy as np
 from datetime import datetime, timedelta
 import time
+import json
+import os
 
 # Configure Streamlit page
 st.set_page_config(
@@ -26,8 +28,158 @@ CONFIG = {
         'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv'
     },
     'expected_columns': ['Tm', 'Batter', 'vs', 'Pitcher', 'RC', 'HR', 'XB', '1B', 'BB', 'K'],
-    'cache_ttl': 900  # 15 minutes
+    'cache_ttl': 900,  # 15 minutes
+    'tracking_files': {
+        'picks': 'player_picks.csv',
+        'results': 'player_results.csv'
+    }
 }
+
+# Player Tracking System
+def initialize_tracking_system():
+    """Initialize the player tracking system and load historical data."""
+    
+    # Initialize picks file if it doesn't exist
+    picks_file = CONFIG['tracking_files']['picks']
+    if not os.path.exists(picks_file):
+        picks_df = pd.DataFrame(columns=['Date', 'Player', 'Team', 'Opponent', 'Score', 'Hit_Prob', 'Status'])
+        picks_df.to_csv(picks_file, index=False)
+    
+    # Initialize results file if it doesn't exist  
+    results_file = CONFIG['tracking_files']['results']
+    if not os.path.exists(results_file):
+        results_df = pd.DataFrame(columns=['Date', 'Player', 'Team', 'Opponent', 'Predicted_Score', 'Got_Hit', 'Actual_Hits', 'Notes'])
+        results_df.to_csv(results_file, index=False)
+
+def load_player_history():
+    """Load historical player performance data."""
+    try:
+        results_file = CONFIG['tracking_files']['results']
+        if os.path.exists(results_file):
+            history_df = pd.read_csv(results_file)
+            history_df['Date'] = pd.to_datetime(history_df['Date'])
+            return history_df
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error loading player history: {e}")
+        return pd.DataFrame()
+
+def calculate_recent_form_adjustment(player_name, history_df, days_back=10):
+    """Calculate recent form adjustment based on historical performance."""
+    if history_df.empty:
+        return 0
+    
+    # Get recent performance for this player
+    cutoff_date = datetime.now() - timedelta(days=days_back)
+    recent_games = history_df[
+        (history_df['Player'] == player_name) & 
+        (history_df['Date'] >= cutoff_date) &
+        (history_df['Got_Hit'].notna())
+    ]
+    
+    if len(recent_games) < 3:  # Need at least 3 games for adjustment
+        return 0
+    
+    # Calculate hit rate over recent games
+    hit_rate = recent_games['Got_Hit'].mean()
+    league_avg_hit_rate = 0.25  # Approximate league average hit rate
+    
+    # Convert to adjustment factor (-10 to +10 points)
+    adjustment = (hit_rate - league_avg_hit_rate) * 40
+    return max(-10, min(10, adjustment))
+
+def save_player_picks(selected_players, filtered_df):
+    """Save selected players as today's picks."""
+    try:
+        picks_file = CONFIG['tracking_files']['picks']
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        # Load existing picks
+        if os.path.exists(picks_file):
+            existing_picks = pd.read_csv(picks_file)
+            # Remove today's picks if they exist (allow overwriting)
+            existing_picks = existing_picks[existing_picks['Date'] != today]
+        else:
+            existing_picks = pd.DataFrame()
+        
+        # Create new picks data
+        new_picks = []
+        for player_name in selected_players:
+            player_data = filtered_df[filtered_df['Batter'] == player_name]
+            if not player_data.empty:
+                player_row = player_data.iloc[0]
+                new_picks.append({
+                    'Date': today,
+                    'Player': player_name,
+                    'Team': player_row['Tm'],
+                    'Opponent': player_row['Pitcher'],
+                    'Score': player_row['Score'],
+                    'Hit_Prob': player_row['total_hit_prob'],
+                    'Status': 'Pending'
+                })
+        
+        if new_picks:
+            new_picks_df = pd.DataFrame(new_picks)
+            updated_picks = pd.concat([existing_picks, new_picks_df], ignore_index=True)
+            updated_picks.to_csv(picks_file, index=False)
+            return len(new_picks)
+        return 0
+    except Exception as e:
+        st.error(f"Error saving picks: {e}")
+        return 0
+
+def load_pending_picks():
+    """Load picks that need result verification."""
+    try:
+        picks_file = CONFIG['tracking_files']['picks']
+        if os.path.exists(picks_file):
+            picks_df = pd.read_csv(picks_file)
+            pending_picks = picks_df[picks_df['Status'] == 'Pending'].copy()
+            pending_picks['Date'] = pd.to_datetime(pending_picks['Date'])
+            return pending_picks.sort_values('Date', ascending=False)
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error loading picks: {e}")
+        return pd.DataFrame()
+
+def update_pick_results(pick_index, got_hit, actual_hits=None, notes=""):
+    """Update the results for a specific pick."""
+    try:
+        picks_file = CONFIG['tracking_files']['picks']
+        results_file = CONFIG['tracking_files']['results']
+        
+        # Load current picks
+        picks_df = pd.read_csv(picks_file)
+        pick_row = picks_df.iloc[pick_index].copy()
+        
+        # Update pick status
+        picks_df.loc[pick_index, 'Status'] = 'Verified'
+        picks_df.to_csv(picks_file, index=False)
+        
+        # Add to results file
+        if os.path.exists(results_file):
+            results_df = pd.read_csv(results_file)
+        else:
+            results_df = pd.DataFrame()
+        
+        new_result = {
+            'Date': pick_row['Date'],
+            'Player': pick_row['Player'],
+            'Team': pick_row['Team'],
+            'Opponent': pick_row['Opponent'],
+            'Predicted_Score': pick_row['Score'],
+            'Got_Hit': got_hit,
+            'Actual_Hits': actual_hits if actual_hits is not None else (1 if got_hit else 0),
+            'Notes': notes
+        }
+        
+        new_results_df = pd.concat([results_df, pd.DataFrame([new_result])], ignore_index=True)
+        new_results_df.to_csv(results_file, index=False)
+        
+        return True
+    except Exception as e:
+        st.error(f"Error updating results: {e}")
+        return False
 
 # Custom CSS with enhanced styling
 st.markdown("""
@@ -217,7 +369,11 @@ def load_and_process_data():
     return merged_df
 
 def calculate_league_aware_scores(df):
-    """Enhanced scoring algorithm that considers league averages and player types."""
+    """Enhanced scoring algorithm that considers league averages, player types, and recent form."""
+    
+    # Initialize tracking system and load historical data
+    initialize_tracking_system()
+    history_df = load_player_history()
     
     # League averages for 2024
     LEAGUE_K_AVG = 22.6
@@ -263,13 +419,24 @@ def calculate_league_aware_scores(df):
         6, 0
     )
     
-    # Calculate final score
+    # NEW: Recent Form Adjustment based on historical tracking data
+    df['recent_form_adjustment'] = df['Batter'].apply(
+        lambda player: calculate_recent_form_adjustment(player, history_df)
+    )
+    
+    # Add form indicators for display
+    df['form_indicator'] = df['recent_form_adjustment'].apply(
+        lambda adj: "🔥" if adj > 3 else "❄️" if adj < -3 else "➡️"
+    )
+    
+    # Calculate final score including recent form
     df['Score'] = (df['base_score'] + 
                    df['elite_contact_bonus'] + 
                    df['aggressive_contact_bonus'] + 
                    df['hit_prob_bonus'] + 
                    df['matchup_bonus'] + 
-                   df['league_superior_bonus'])
+                   df['league_superior_bonus'] +
+                   df['recent_form_adjustment'])  # NEW: Include recent form
     
     # Normalize to 0-100 scale
     if df['Score'].max() != df['Score'].min():
@@ -763,8 +930,9 @@ def display_league_aware_results(filtered_df, filters):
     
     st.markdown(f"**🎯 Active Profile:** {filter_profile}")
     
-    # Enhanced results table with league context and lineup awareness
+    # Enhanced results table with league context, lineup awareness, and recent form
     display_columns = {
+        'form_indicator': 'Form',
         'Batter': 'Batter',
         'Tm': 'Team',
         'Pitcher': 'Pitcher',
@@ -828,11 +996,12 @@ def display_league_aware_results(filtered_df, filters):
     
     st.dataframe(styled_df, use_container_width=True)
     
-    # Enhanced interpretation guide with league context and lineup status
+    # Enhanced interpretation guide with league context, lineup status, and form indicators
     st.markdown("""
     <div class="color-legend">
-        <strong>📊 League-Aware Color Guide:</strong><br>
+        <strong>📊 Enhanced Color Guide:</strong><br>
         <strong>Status:</strong> 🏟️ = Confirmed Playing | ❌ = Excluded from Lineups<br>
+        <strong>Form:</strong> 🔥 = Hot Streak | ➡️ = Normal | ❄️ = Cold Streak<br>
         <strong>Score:</strong> <span style="color: #1a9641;">●</span> Elite (70+) | 
         <span style="color: #fdae61;">●</span> Good (50-69) | 
         <span style="color: #d7191c;">●</span> Risky (<50)<br>
@@ -1091,6 +1260,215 @@ def main_page():
     # Create visualizations
     create_enhanced_visualizations(df, filtered_df)
     
+    # Player Tracking System
+    st.markdown("---")
+    st.header("🎯 Player Tracking & Performance Analysis")
+    
+    # Create tabs for different tracking functions
+    tab1, tab2, tab3 = st.tabs(["📝 Save Today's Picks", "✅ Verify Results", "📊 Performance History"])
+    
+    with tab1:
+        st.subheader("📝 Save Your Player Selections")
+        st.markdown("Select players from today's results to track their performance:")
+        
+        if not filtered_df.empty:
+            # Player selection interface
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                # Multi-select for players
+                available_players = filtered_df['Batter'].tolist()
+                selected_players = st.multiselect(
+                    "Select Players to Track",
+                    options=available_players,
+                    help="Choose players you want to bet on and track their results"
+                )
+                
+                if selected_players:
+                    # Show selected players preview
+                    st.markdown("**Selected Players Preview:**")
+                    preview_df = filtered_df[filtered_df['Batter'].isin(selected_players)]
+                    
+                    preview_display = preview_df[['form_indicator', 'Batter', 'Tm', 'Pitcher', 'total_hit_prob', 'Score']].copy()
+                    preview_display.columns = ['Form', 'Player', 'Team', 'vs Pitcher', 'Hit Prob %', 'Score']
+                    preview_display['Hit Prob %'] = preview_display['Hit Prob %'].apply(lambda x: f"{x:.1f}%")
+                    preview_display['Score'] = preview_display['Score'].apply(lambda x: f"{x:.1f}")
+                    
+                    st.dataframe(preview_display, use_container_width=True, hide_index=True)
+            
+            with col2:
+                st.markdown("**Quick Stats:**")
+                if selected_players:
+                    selected_data = filtered_df[filtered_df['Batter'].isin(selected_players)]
+                    
+                    st.metric("Players Selected", len(selected_players))
+                    st.metric("Avg Hit Probability", f"{selected_data['total_hit_prob'].mean():.1f}%")
+                    st.metric("Avg Score", f"{selected_data['Score'].mean():.1f}")
+                    
+                    # Form distribution
+                    hot_count = (selected_data['form_indicator'] == '🔥').sum()
+                    cold_count = (selected_data['form_indicator'] == '❄️').sum()
+                    normal_count = (selected_data['form_indicator'] == '➡️').sum()
+                    
+                    if hot_count > 0:
+                        st.success(f"🔥 {hot_count} Hot Streak Players")
+                    if cold_count > 0:
+                        st.warning(f"❄️ {cold_count} Cold Streak Players")
+                    if normal_count > 0:
+                        st.info(f"➡️ {normal_count} Normal Form Players")
+                else:
+                    st.info("Select players to see statistics")
+            
+            # Save picks button
+            if selected_players:
+                if st.button("💾 Save Today's Picks", type="primary"):
+                    saved_count = save_player_picks(selected_players, filtered_df)
+                    if saved_count > 0:
+                        st.success(f"✅ Successfully saved {saved_count} player picks for today!")
+                        st.info("You can verify results in the 'Verify Results' tab after games are complete.")
+                    else:
+                        st.error("❌ Failed to save picks. Please try again.")
+        else:
+            st.info("No players available to track. Adjust your filters to see more options.")
+    
+    with tab2:
+        st.subheader("✅ Verify Player Results")
+        st.markdown("Update results for your previous picks:")
+        
+        # Load pending picks
+        pending_picks = load_pending_picks()
+        
+        if not pending_picks.empty:
+            st.markdown(f"**📋 You have {len(pending_picks)} picks awaiting verification:**")
+            
+            # Group picks by date for better organization
+            for date in pending_picks['Date'].dt.date.unique():
+                date_picks = pending_picks[pending_picks['Date'].dt.date == date]
+                
+                with st.expander(f"📅 {date} ({len(date_picks)} picks)", expanded=date == datetime.now().date()):
+                    
+                    for idx, (_, pick) in enumerate(date_picks.iterrows()):
+                        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                        
+                        with col1:
+                            st.markdown(f"**{pick['Player']}** ({pick['Team']}) vs {pick['Opponent']}")
+                            st.caption(f"Predicted: {pick['Score']:.1f} score, {pick['Hit_Prob']:.1f}% hit prob")
+                        
+                        with col2:
+                            got_hit = st.selectbox(
+                                "Got Hit?",
+                                options=["Select...", "Yes", "No"],
+                                key=f"hit_{pick.name}_{idx}"
+                            )
+                        
+                        with col3:
+                            actual_hits = st.number_input(
+                                "# of Hits",
+                                min_value=0,
+                                max_value=5,
+                                value=0,
+                                key=f"hits_{pick.name}_{idx}",
+                                help="Total hits in the game"
+                            )
+                        
+                        with col4:
+                            if got_hit != "Select...":
+                                if st.button("💾 Save Result", key=f"save_{pick.name}_{idx}"):
+                                    hit_result = got_hit == "Yes"
+                                    actual_pick_index = pick.name
+                                    
+                                    if update_pick_results(actual_pick_index, hit_result, actual_hits):
+                                        st.success(f"✅ Updated result for {pick['Player']}")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Failed to save result")
+        else:
+            st.info("🎯 No pending picks to verify. Save some picks in the first tab to get started!")
+    
+    with tab3:
+        st.subheader("📊 Historical Performance Analysis")
+        
+        # Load and display historical data
+        history_df = load_player_history()
+        
+        if not history_df.empty:
+            # Performance summary
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                total_picks = len(history_df)
+                st.metric("Total Tracked Picks", total_picks)
+            
+            with col2:
+                hit_rate = history_df['Got_Hit'].mean() * 100 if 'Got_Hit' in history_df.columns else 0
+                st.metric("Overall Hit Rate", f"{hit_rate:.1f}%")
+            
+            with col3:
+                recent_picks = history_df[history_df['Date'] >= (datetime.now() - timedelta(days=7))]
+                recent_count = len(recent_picks)
+                st.metric("Picks Last 7 Days", recent_count)
+            
+            with col4:
+                if not recent_picks.empty and 'Got_Hit' in recent_picks.columns:
+                    recent_hit_rate = recent_picks['Got_Hit'].mean() * 100
+                    st.metric("Recent Hit Rate", f"{recent_hit_rate:.1f}%")
+                else:
+                    st.metric("Recent Hit Rate", "N/A")
+            
+            # Player performance breakdown
+            st.markdown("**🏆 Top Performing Players:**")
+            
+            if 'Got_Hit' in history_df.columns:
+                player_stats = history_df.groupby('Player').agg({
+                    'Got_Hit': ['count', 'sum', 'mean'],
+                    'Predicted_Score': 'mean'
+                }).round(3)
+                
+                player_stats.columns = ['Total_Picks', 'Total_Hits', 'Hit_Rate', 'Avg_Predicted_Score']
+                player_stats = player_stats[player_stats['Total_Picks'] >= 3]  # At least 3 picks
+                player_stats = player_stats.sort_values('Hit_Rate', ascending=False)
+                
+                if not player_stats.empty:
+                    # Format for display
+                    display_stats = player_stats.reset_index()
+                    display_stats['Hit_Rate'] = display_stats['Hit_Rate'].apply(lambda x: f"{x*100:.1f}%")
+                    display_stats['Avg_Predicted_Score'] = display_stats['Avg_Predicted_Score'].apply(lambda x: f"{x:.1f}")
+                    display_stats.columns = ['Player', 'Total Picks', 'Total Hits', 'Hit Rate', 'Avg Score']
+                    
+                    st.dataframe(display_stats, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Need at least 3 picks per player to show performance statistics.")
+            
+            # Recent picks history
+            if st.checkbox("📋 Show Recent Pick History"):
+                recent_history = history_df.sort_values('Date', ascending=False).head(20)
+                
+                display_history = recent_history[['Date', 'Player', 'Team', 'Opponent', 'Predicted_Score', 'Got_Hit', 'Actual_Hits']].copy()
+                display_history['Date'] = display_history['Date'].dt.strftime('%Y-%m-%d')
+                display_history['Got_Hit'] = display_history['Got_Hit'].map({True: '✅', False: '❌', 1: '✅', 0: '❌'})
+                display_history['Predicted_Score'] = display_history['Predicted_Score'].apply(lambda x: f"{x:.1f}")
+                display_history.columns = ['Date', 'Player', 'Team', 'vs Pitcher', 'Predicted Score', 'Got Hit', 'Total Hits']
+                
+                st.dataframe(display_history, use_container_width=True, hide_index=True)
+        else:
+            st.info("📈 No historical data yet. Start by saving and verifying some picks to build your performance database!")
+            
+            # Quick start guide
+            st.markdown("""
+            **🚀 Quick Start Guide:**
+            1. **Save Picks**: Go to 'Save Today's Picks' tab and select players
+            2. **Wait for Games**: Let the games complete
+            3. **Verify Results**: Come back and update whether players got hits
+            4. **Track Performance**: Historical data will appear here and influence future scores
+            
+            **💡 Benefits:**
+            - Identify hot and cold streaks (🔥❄️ indicators)
+            - Improve scoring accuracy over time
+            - Track your betting success rate
+            - Build a database of player performance
+            """)
+    
+    
     # Export functionality and lineup management
     st.markdown("---")
     col1, col2, col3, col4 = st.columns(4)
@@ -1171,10 +1549,13 @@ def main_page():
     # Bottom tips
     st.markdown("---")
     st.markdown("""
-    ### 💡 **League-Aware Strategy Tips**
+    ### 💡 **Enhanced Strategy Tips**
+    - **🔥❄️ Form Indicators**: Hot/cold streaks now influence player scores based on recent performance
+    - **📝 Track Your Picks**: Save players and verify results to build performance history
     - **Green K% vs League**: Much better contact than average (prioritize these)
     - **Scores 70+**: Elite opportunities with league-superior metrics
     - **Multiple Bonuses**: Players with 2+ bonuses are premium picks
+    - **📊 Historical Data**: Your tracking data improves future recommendations
     - **Always verify lineups and weather before finalizing picks**
     """)
 
