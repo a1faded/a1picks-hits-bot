@@ -51,8 +51,7 @@ def get_or_create_user_id():
             username = st.sidebar.text_input(
                 "Enter Your Username",
                 placeholder="e.g., BaseballFan123",
-                help="This keeps your picks private while contributing to community insights",
-                key="user_setup_username_input"
+                help="This keeps your picks private while contributing to community insights"
             )
             
             if username:
