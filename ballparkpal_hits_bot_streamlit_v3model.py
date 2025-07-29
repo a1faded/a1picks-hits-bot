@@ -201,9 +201,7 @@ def load_and_process_data():
             else:  # Other metrics (vs, RC)
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0)
                 
-            st.success(f"✅ Created adj_{metric} using {base_col} and {pct_col}")
         else:
-            st.error(f"❌ Missing columns for {metric}: {base_col} or {pct_col}")
             # Create a fallback column with reasonable defaults to prevent KeyError
             if metric in ['K', 'BB']:
                 merged_df[f'adj_{metric}'] = 20  # Default reasonable K/BB rate
@@ -431,6 +429,13 @@ def create_league_aware_filters(df=None):
             help="Matchup advantage/disadvantage vs this pitcher type"
         )
         
+        # Best Player Per Team Filter
+        filters['best_per_team_only'] = st.checkbox(
+            "🏟️ Show only best player per team",
+            value=False,
+            help="Filter to show only the highest-scoring player from each team (ideal for diversified betting)"
+        )
+        
         # Team Selection
         team_options = []
         if df is not None and not df.empty:
@@ -509,6 +514,11 @@ def create_league_aware_filters(df=None):
             preview_query = f"adj_K <= {filters['max_k']:.1f} and adj_BB <= {filters['max_bb']:.1f} and total_hit_prob >= {filters['min_hit_prob']}"
             
             preview_df = preview_df.query(preview_query)
+            
+            # Apply best per team filter in preview if enabled
+            if filters.get('best_per_team_only', False):
+                preview_df = preview_df.loc[preview_df.groupby('Tm')['Score'].idxmax()]
+            
             matching_count = len(preview_df)
             excluded_count = len(excluded_players)
             
@@ -522,11 +532,17 @@ def create_league_aware_filters(df=None):
                 st.sidebar.warning(f"⚠️ Only {matching_count} players match")
                 if excluded_count > 0:
                     st.sidebar.markdown(f"**📊 Pool:** {matching_count} playing + {excluded_count} excluded")
+                if filters.get('best_per_team_only', False):
+                    st.sidebar.markdown(f"**🏟️ Teams:** {len(preview_df['Tm'].unique())} teams represented")
                 st.sidebar.markdown("**💡 Consider:** Less restrictive profile or custom settings")
             else:
                 st.sidebar.success(f"✅ {matching_count} players match profile")
                 if excluded_count > 0:
                     st.sidebar.markdown(f"**📊 Lineup Status:** {matching_count} confirmed playing, {excluded_count} excluded")
+                
+                if filters.get('best_per_team_only', False):
+                    unique_teams = len(preview_df['Tm'].unique())
+                    st.sidebar.markdown(f"**🏟️ Team Diversity:** Best player from {unique_teams} teams")
                 
                 if matching_count > 0:
                     # Show league context comparison for playing players only
@@ -595,6 +611,16 @@ def apply_league_aware_filters(df, filters):
             filtered_df = df.query(full_query)
         else:
             filtered_df = df  # No filters applied
+        
+        # Apply "Best Player Per Team" filter if enabled
+        if filters.get('best_per_team_only', False):
+            # Group by team and keep only the highest scoring player from each team
+            best_per_team = filtered_df.loc[filtered_df.groupby('Tm')['Score'].idxmax()]
+            filtered_df = best_per_team.copy()
+            
+            # Show info about team filtering
+            unique_teams = len(filtered_df['Tm'].unique())
+            st.info(f"🏟️ Showing best player from each of {unique_teams} teams")
         
         # Sort by score and limit results
         result_count = filters.get('result_count', 15)
@@ -694,12 +720,20 @@ def display_league_aware_results(filtered_df, filters):
         """)
         return
     
-    # Display header with dynamic count
+    # Display header with dynamic count and filter info
     result_count = filters.get('result_count', 15)
-    if result_count == "All":
-        st.subheader(f"🎯 All {len(filtered_df)} Base Hit Candidates")
+    best_per_team = filters.get('best_per_team_only', False)
+    
+    if best_per_team:
+        if result_count == "All":
+            st.subheader(f"🏟️ Best Player from Each Team ({len(filtered_df)} teams)")
+        else:
+            st.subheader(f"🏟️ Top {len(filtered_df)} Teams - Best Player Each")
     else:
-        st.subheader(f"🎯 Top {len(filtered_df)} Base Hit Candidates")
+        if result_count == "All":
+            st.subheader(f"🎯 All {len(filtered_df)} Base Hit Candidates")
+        else:
+            st.subheader(f"🎯 Top {len(filtered_df)} Base Hit Candidates")
     
     # Enhanced key insights with league context
     col1, col2, col3, col4 = st.columns(4)
@@ -843,59 +877,139 @@ def display_league_aware_results(filtered_df, filters):
     </div>
     """, unsafe_allow_html=True)
     
-    # Performance insights with league context - ENHANCED with lineup awareness
+    # Performance insights with league context - ENHANCED with multi-profile analysis
     if len(filtered_df) >= 3:
-        st.markdown("### 🔍 **League Context Analysis**")
+        st.markdown("### 🔍 **Advanced League Context Analysis**")
         
-        # Smart player selection - find the best player who is actually playing
+        # Define profile criteria for analysis
+        profile_criteria = {
+            "🏆 Contact-Aggressive": {"max_k": 17.0, "max_bb": 6.0, "icon": "🏆"},
+            "⭐ Elite Contact": {"max_k": 12.0, "max_bb": 8.5, "icon": "⭐"},
+            "⚡ Swing-Happy": {"max_k": 22.6, "max_bb": 4.0, "icon": "⚡"},
+            "🔷 Above-Average": {"max_k": 17.0, "max_bb": 10.0, "icon": "🔷"}
+        }
+        
         excluded_players = st.session_state.get('excluded_players', [])
         
-        # Find the top player who is confirmed to be playing
-        analysis_player = None
-        analysis_player_index = 0
+        # Find best player for each profile
+        profile_analysis = {}
         
-        for i, (idx, player) in enumerate(filtered_df.iterrows()):
-            if player['Batter'] not in excluded_players:
-                analysis_player = player
-                analysis_player_index = i
-                break
-        
-        if analysis_player is not None:
-            # Show which player analysis is based on and why
-            if analysis_player_index > 0:
-                st.info(f"🏟️ **Analysis based on {analysis_player['Batter']}** (#{analysis_player_index + 1} ranked player) - higher ranked players not in confirmed lineups")
-            else:
-                st.success(f"🎯 **Analysis based on {analysis_player['Batter']}** (Top ranked player confirmed playing)")
+        for profile_name, criteria in profile_criteria.items():
+            # Filter players that meet this profile's criteria
+            profile_players = filtered_df[
+                (filtered_df['adj_K'] <= criteria['max_k']) & 
+                (filtered_df['adj_BB'] <= criteria['max_bb']) &
+                (~filtered_df['Batter'].isin(excluded_players))  # Exclude non-playing players
+            ].copy()
             
-            k_improvement = LEAGUE_K_AVG - analysis_player['adj_K']
-            bb_improvement = LEAGUE_BB_AVG - analysis_player['adj_BB']
+            if not profile_players.empty:
+                # Get the top player for this profile
+                best_player = profile_players.iloc[0]
+                profile_analysis[profile_name] = {
+                    'player': best_player,
+                    'rank_overall': filtered_df[filtered_df['Batter'] == best_player['Batter']].index[0] + 1,
+                    'count_in_profile': len(profile_players)
+                }
+        
+        # Display analysis for each profile that has players
+        if profile_analysis:
+            st.markdown("**🎯 Top Player by Profile:**")
+            
+            # Create columns for profile analysis
+            num_profiles = len(profile_analysis)
+            if num_profiles == 1:
+                cols = [st.columns(1)[0]]
+            elif num_profiles == 2:
+                cols = st.columns(2)
+            elif num_profiles <= 4:
+                cols = st.columns(min(num_profiles, 4))
+            else:
+                cols = st.columns(4)
+            
+            for i, (profile_name, analysis) in enumerate(profile_analysis.items()):
+                player = analysis['player']
+                overall_rank = analysis['rank_overall']
+                profile_count = analysis['count_in_profile']
+                
+                with cols[i % len(cols)]:
+                    # Profile header with icon
+                    icon = profile_criteria[profile_name]['icon']
+                    st.markdown(f"**{icon} {profile_name.split(' ', 1)[1]}**")  # Remove icon from name since we show it
+                    
+                    # Player name with rank indication
+                    if overall_rank == 1:
+                        st.success(f"🥇 **{player['Batter']}** (#{overall_rank})")
+                    elif overall_rank <= 3:
+                        st.info(f"🥈 **{player['Batter']}** (#{overall_rank})")
+                    else:
+                        st.info(f"**{player['Batter']}** (#{overall_rank})")
+                    
+                    # Key metrics
+                    k_vs_league = player['adj_K'] - LEAGUE_K_AVG
+                    bb_vs_league = player['adj_BB'] - LEAGUE_BB_AVG
+                    
+                    st.markdown(f"""
+                    **Hit Prob:** {player['total_hit_prob']:.1f}%  
+                    **K% vs League:** {k_vs_league:+.1f}%  
+                    **BB% vs League:** {bb_vs_league:+.1f}%  
+                    **Score:** {player['Score']:.1f}
+                    """)
+                    
+                    # Profile pool size
+                    st.caption(f"📊 {profile_count} players in profile")
+            
+            # Summary insights across profiles
+            st.markdown("---")
+            st.markdown("**📋 Profile Summary:**")
             
             insights = []
             
-            if k_improvement > 5:
-                insights.append(f"**{analysis_player['Batter']}** has elite contact skills ({k_improvement:.1f}% better K% than league)")
+            # Find the highest scoring player across all profiles
+            best_overall_player = max(profile_analysis.values(), key=lambda x: x['player']['Score'])
+            best_player_name = best_overall_player['player']['Batter']
+            best_profile = [k for k, v in profile_analysis.items() if v['player']['Batter'] == best_player_name][0]
             
-            if bb_improvement > 2:
-                insights.append(f"**{analysis_player['Batter']}** is aggressive at the plate ({bb_improvement:.1f}% fewer walks than league)")
+            insights.append(f"🏆 **Overall Best**: {best_player_name} ({best_profile})")
             
-            if analysis_player['total_hit_prob'] > 40:
-                insights.append(f"**{analysis_player['Batter']}** has excellent hit probability ({analysis_player['total_hit_prob']:.1f}%)")
-                
-            # Show additional context if this isn't the #1 player
-            if analysis_player_index > 0:
-                insights.append(f"**{analysis_player['Batter']}** provides elite opportunity among confirmed lineup players")
+            # Check for elite contact across profiles
+            elite_contact_players = [analysis['player']['Batter'] for analysis in profile_analysis.values() 
+                                   if analysis['player']['adj_K'] <= 12.0]
+            if elite_contact_players:
+                insights.append(f"⭐ **Elite Contact Available**: {', '.join(elite_contact_players)}")
             
-            for insight in insights[:3]:  # Show top 3 insights
+            # Check for high hit probability players
+            high_hit_prob_players = [analysis['player']['Batter'] for analysis in profile_analysis.values() 
+                                   if analysis['player']['total_hit_prob'] > 40]
+            if high_hit_prob_players:
+                insights.append(f"🎯 **40%+ Hit Probability**: {', '.join(high_hit_prob_players)}")
+            
+            # Show profile diversity
+            total_profiles_available = len(profile_analysis)
+            insights.append(f"📊 **Profile Diversity**: {total_profiles_available}/4 profiles have viable options")
+            
+            for insight in insights:
                 st.success(insight)
                 
-            # Show lineup status warnings if enabled
-            if filters.get('show_lineup_warnings', False) and excluded_players:
-                st.warning(f"⚠️ **Lineup Alert**: {len(excluded_players)} players excluded from analysis due to lineup uncertainty")
-                
-        else:
-            st.warning("⚠️ Unable to provide League Context Analysis - no confirmed lineup players available")
+            # Strategic recommendations based on available profiles
+            st.markdown("**💡 Strategic Recommendations:**")
             
+            if "🏆 Contact-Aggressive" in profile_analysis and "⚡ Swing-Happy" in profile_analysis:
+                st.info("🎮 **Balanced Strategy**: Both conservative (Contact-Aggressive) and leverage (Swing-Happy) plays available")
+            elif "⭐ Elite Contact" in profile_analysis:
+                st.info("🎯 **Premium Strategy**: Elite contact player available - ideal for high-stakes situations")
+            elif "🏆 Contact-Aggressive" in profile_analysis:
+                st.info("🛡️ **Safety Strategy**: Focus on Contact-Aggressive for consistent base hits")
+            elif "⚡ Swing-Happy" in profile_analysis:
+                st.info("🔥 **Aggressive Strategy**: Swing-Happy options available for leverage plays")
+            
+        else:
+            st.warning("⚠️ No players available in any standard profiles after exclusions")
+            st.markdown("**💡 Suggestions:**")
+            st.markdown("- Try reducing exclusions or expanding to 'All Players' profile")
+            st.markdown("- Check if filters are too restrictive for today's slate")
+        
         # Additional lineup management tips
+        excluded_players = st.session_state.get('excluded_players', [])
         if excluded_players:
             with st.expander("💡 Lineup Management Tips"):
                 st.markdown(f"""
