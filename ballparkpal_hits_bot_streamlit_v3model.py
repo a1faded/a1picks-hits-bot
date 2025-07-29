@@ -25,6 +25,15 @@ CONFIG = {
         'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv',
         'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv'
     },
+    'base_hit_weights': {
+        'adj_1B': 2.0,      # Singles (primary base hit)
+        'adj_XB': 1.8,      # Extra bases (also base hits)
+        'adj_vs': 1.2,      # Matchup performance
+        'adj_RC': 0.8,      # Run creation
+        'adj_HR': 0.6,      # Home runs (also base hits)
+        'adj_K': -2.0,      # Heavy penalty for strikeouts (no hit)
+        'adj_BB': -0.8      # Moderate penalty for walks (not hits)
+    },
     'expected_columns': ['Tm', 'Batter', 'vs', 'Pitcher', 'RC', 'HR', 'XB', '1B', 'BB', 'K'],
     'cache_ttl': 900  # 15 minutes
 }
@@ -192,7 +201,7 @@ def load_and_process_data():
             # Apply adjustment formula
             merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
             
-            # FIXED: Smart clipping based on metric type
+            # Smart clipping based on metric type
             if metric in ['K', 'BB']:
                 # K and BB should be positive percentages
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
@@ -215,61 +224,32 @@ def load_and_process_data():
     return merged_df
 
 def calculate_league_aware_scores(df):
-    """Enhanced scoring algorithm that considers league averages and player types."""
+    """Enhanced scoring algorithm that matches the old script approach."""
     
-    # League averages for 2024
-    LEAGUE_K_AVG = 22.6
-    LEAGUE_BB_AVG = 8.5
+    # Use the same weights as the old script
+    weights = CONFIG['base_hit_weights']
     
-    # Base weighted score using league-aware weights
-    weights = {
-        'adj_1B': 2.0,      # Singles (primary base hit)
-        'adj_XB': 1.8,      # Extra bases (also base hits)
-        'adj_vs': 1.2,      # Matchup performance
-        'adj_RC': 0.8,      # Run creation
-        'adj_HR': 0.6,      # Home runs (also base hits)
-        'adj_K': -2.5,      # Heavy penalty for strikeouts (no hit)
-        'adj_BB': -0.6      # Light penalty for walks (not hits but not terrible)
-    }
-    
+    # Base weighted score calculation (same as old script)
     df['base_score'] = sum(df[col] * weight for col, weight in weights.items() if col in df.columns)
     
-    # League-aware bonuses
-    # Elite Contact Bonus (much better than league average K%)
-    df['elite_contact_bonus'] = np.where(
-        df['adj_K'] <= 12.0,  # Elite contact (≤12%)
-        10, 0
+    # League-aware bonuses (enhanced from old script)
+    # Contact bonus (similar to old script's contact_bonus)
+    df['contact_bonus'] = np.where(
+        (df['total_hit_prob'] > 40) & (df['adj_K'] < 18), 8, 0
     )
     
-    # Aggressive Contact Bonus (low K% + low BB%)
-    df['aggressive_contact_bonus'] = np.where(
-        (df['adj_K'] <= 17.0) & (df['adj_BB'] <= 6.0),  # Above avg contact + aggressive
-        8, 0
+    # Consistency bonus (similar to old script's consistency_bonus)
+    df['consistency_bonus'] = np.where(
+        (df['adj_1B'] > 20) & (df['adj_XB'] > 8), 5, 0
     )
     
-    # High Hit Probability Bonus
-    df['hit_prob_bonus'] = np.where(
-        df['total_hit_prob'] > 40, 5, 0
-    )
-    
-    # Strong Matchup Bonus
+    # Matchup bonus (same as old script)
     df['matchup_bonus'] = np.where(df['adj_vs'] > 5, 3, 0)
     
-    # League Comparison Bonus (better than league average in both K% and BB%)
-    df['league_superior_bonus'] = np.where(
-        (df['adj_K'] < LEAGUE_K_AVG) & (df['adj_BB'] < LEAGUE_BB_AVG),  # Better than league in both
-        6, 0
-    )
+    # Calculate final score (same approach as old script)
+    df['Score'] = df['base_score'] + df['contact_bonus'] + df['consistency_bonus'] + df['matchup_bonus']
     
-    # Calculate final score
-    df['Score'] = (df['base_score'] + 
-                   df['elite_contact_bonus'] + 
-                   df['aggressive_contact_bonus'] + 
-                   df['hit_prob_bonus'] + 
-                   df['matchup_bonus'] + 
-                   df['league_superior_bonus'])
-    
-    # Normalize to 0-100 scale
+    # Normalize to 0-100 scale (same as old script)
     if df['Score'].max() != df['Score'].min():
         df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
     else:
@@ -806,13 +786,13 @@ def display_league_aware_results(filtered_df, filters):
         'adj_1B': 'Contact %',
         'adj_XB': 'XB %',
         'adj_HR': 'HR %',
-        'K% vs League': 'K% vs League',  # This will be the calculated difference
-        'BB% vs League': 'BB% vs League', # This will be the calculated difference
+        'adj_K': 'K% vs League',
+        'adj_BB': 'BB% vs League',
         'adj_vs': 'vs Pitcher',
         'Score': 'Score'
     }
     
-    # Add league context columns to filtered_df - FIXED calculation
+    # Add league context columns to filtered_df
     display_df = filtered_df.copy()
     display_df['K% vs League'] = display_df['adj_K'] - LEAGUE_K_AVG
     display_df['BB% vs League'] = display_df['adj_BB'] - LEAGUE_BB_AVG
