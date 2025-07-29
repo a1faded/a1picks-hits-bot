@@ -192,6 +192,11 @@ def load_and_process_data():
             # Apply adjustment formula
             merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
             
+            # DEBUG: Show sample K and BB calculations
+            if metric in ['K', 'BB'] and len(merged_df) > 0:
+                sample_player = merged_df.iloc[0]
+                st.info(f"🔍 DEBUG {metric}: {sample_player['Batter']} - Base: {sample_player[base_col]:.1f}, Change: {sample_player[pct_col]:+.1f}%, Result: {sample_player[f'adj_{metric}']:.1f}%")
+            
             # FIXED: Smart clipping based on metric type
             if metric in ['K', 'BB']:
                 # K and BB should be positive percentages
@@ -211,6 +216,11 @@ def load_and_process_data():
     # Calculate total base hit probability (key enhancement!)
     merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
     merged_df['total_hit_prob'] = merged_df['total_hit_prob'].clip(upper=100)  # Cap at 100%
+    
+    # DEBUG: Show sample final values
+    if len(merged_df) > 0:
+        sample = merged_df.iloc[0]
+        st.info(f"🔍 SAMPLE RESULT: {sample['Batter']} - K%: {sample['adj_K']:.1f}%, BB%: {sample['adj_BB']:.1f}%, Hit Prob: {sample['total_hit_prob']:.1f}%")
     
     return merged_df
 
