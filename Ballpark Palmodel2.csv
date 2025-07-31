@@ -17,6 +17,7 @@ CIN,Austin Hays,2,Carrasco,17,35,2,0,5,-4
 ATL,Nick Allen,-5,Abbott,17,77,20,1,-26,-15
 ATL,Austin Riley,1,Abbott,12,36,0,1,-32,-13
 ATL,Sean Murphy,-4,Abbott,12,23,10,10,-38,-10
+TB,Jonny DeLuca,6,Stroman,11,10,9,28,-4,-32
 TB,Brandon Lowe,10,Stroman,10,6,4,22,10,-37
 SEA,Jorge Polanco,9,Rocker,10,24,-4,11,5,-6
 SEA,Randy Arozarena,6,Rocker,10,12,-4,7,5,-5
@@ -29,7 +30,6 @@ TB,Nick Fortes,8,Stroman,6,-10,14,23,-3,-32
 TB,Taylor Walls,7,Stroman,6,-4,-11,33,0,-36
 SEA,Eugenio Suarez,6,Rocker,5,11,-10,9,-1,2
 TB,Junior Caminero,8,Stroman,5,-14,11,24,1,-39
-TB,Jake Mangum,4,Stroman,4,-16,-1,21,-8,-43
 TB,Josh Lowe,9,Stroman,4,-12,-5,22,6,-39
 SEA,Josh Naylor,8,Rocker,4,15,-9,10,0,0
 SEA,J.P. Crawford,8,Rocker,3,16,4,8,-13,-3
@@ -38,7 +38,6 @@ ATL,Matt Olson,2,Abbott,1,10,-11,13,-28,-17
 TEX,Wyatt Langford,1,Kirby,-4,4,-9,6,-23,8
 TEX,Joc Pederson,-1,Kirby,-7,4,-15,1,-14,16
 TEX,Josh Smith,4,Kirby,-7,1,-9,0,-16,7
-NYY,Trent Grisham,8,Pepiot,-7,28,-8,-21,20,10
 TEX,Corey Seager,8,Kirby,-8,-11,-7,4,-16,8
 TEX,Evan Carter,-4,Kirby,-9,-11,-7,-1,-18,10
 TEX,Marcus Semien,3,Kirby,-10,-4,-15,-3,-17,7
@@ -46,8 +45,9 @@ TEX,Kyle Higashioka,3,Kirby,-11,-6,-14,3,-27,14
 TEX,Josh Jung,-5,Kirby,-13,-22,-27,7,-16,12
 NYY,Ben Rice,5,Pepiot,-14,16,-11,-31,26,23
 NYY,Cody Bellinger,6,Pepiot,-14,26,-19,-23,28,22
+NYY,Austin Slater,-1,Pepiot,-16,29,1,-21,14,23
 NYY,Anthony Volpe,-3,Pepiot,-18,35,-9,-15,-4,19
-NYY,Austin Wells,-3,Pepiot,-18,29,-5,-24,3,16
+NYY,Paul Goldschmidt,1,Pepiot,-18,46,-8,-27,-6,23
 TEX,Adolis Garcia,-6,Kirby,-19,-8,-25,-5,-27,22
 NYY,Ryan McMahon,-2,Pepiot,-19,15,0,-19,12,18
 NYY,Jasson Dominguez,-3,Pepiot,-21,33,0,-30,5,19

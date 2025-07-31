@@ -17,6 +17,7 @@ CIN,Austin Hays,2,Carrasco,17,5,-4,4.3,5.3,15.4,7.9,25.8
 ATL,Nick Allen,-5,Abbott,17,-26,-15,1.9,5.6,16.7,5.2,21.2
 ATL,Austin Riley,1,Abbott,12,-32,-13,5.1,5.5,14.1,5.6,26
 ATL,Sean Murphy,-4,Abbott,12,-38,-10,4.3,5.2,12.9,5.8,29.7
+TB,Jonny DeLuca,6,Stroman,11,-4,-32,2.4,5.9,20,5.7,14.5
 TB,Brandon Lowe,10,Stroman,10,10,-37,4.1,5.6,17.2,9.2,17.3
 SEA,Jorge Polanco,9,Rocker,10,5,-6,3.9,5.2,14.7,11.9,17.8
 SEA,Randy Arozarena,6,Rocker,10,5,-5,3.8,4.5,13.6,11.8,27.3
@@ -29,7 +30,6 @@ TB,Nick Fortes,8,Stroman,6,-3,-32,1.9,6.2,20.3,6.6,10.2
 TB,Taylor Walls,7,Stroman,6,0,-36,2.1,4.3,20.1,10.2,15.5
 SEA,Eugenio Suarez,6,Rocker,5,-1,2,5.2,5.3,12.2,8.8,29.7
 TB,Junior Caminero,8,Stroman,5,1,-39,2.8,6,18.2,7.8,14.2
-TB,Jake Mangum,4,Stroman,4,-8,-43,1.3,4.9,22.2,4.2,9.8
 TB,Josh Lowe,9,Stroman,4,6,-39,2.1,5.1,19.2,10.8,15.8
 SEA,Josh Naylor,8,Rocker,4,0,0,3.5,5.4,17.6,7.1,18.5
 SEA,J.P. Crawford,8,Rocker,3,-13,-3,2.4,4.8,18.1,11,18.2
@@ -38,7 +38,6 @@ ATL,Matt Olson,2,Abbott,1,-28,-17,3.5,4.5,14.7,10.2,19.7
 TEX,Wyatt Langford,1,Kirby,-4,-23,8,3.9,4.3,13.6,8.2,30.1
 TEX,Joc Pederson,-1,Kirby,-7,-14,16,2.8,3.8,13.8,10.5,28.3
 TEX,Josh Smith,4,Kirby,-7,-16,7,2.8,5.2,14.9,8.7,20.9
-NYY,Trent Grisham,8,Pepiot,-7,20,10,4.8,4.1,10.4,17.6,26.7
 TEX,Corey Seager,8,Kirby,-8,-16,8,3.7,5.1,15.5,11,24.7
 TEX,Evan Carter,-4,Kirby,-9,-18,10,2.2,4.3,13.2,8.7,28.4
 TEX,Marcus Semien,3,Kirby,-10,-17,7,3.4,4.5,12.7,9.8,21.8
@@ -46,8 +45,9 @@ TEX,Kyle Higashioka,3,Kirby,-11,-27,14,3.5,4.9,15.3,6.3,25.3
 TEX,Josh Jung,-5,Kirby,-13,-16,12,1.8,4,16.3,6.4,28.5
 NYY,Ben Rice,5,Pepiot,-14,26,23,4.8,4.8,8.6,15.7,27.8
 NYY,Cody Bellinger,6,Pepiot,-14,28,22,3.9,4.3,13.4,11.5,18.6
+NYY,Austin Slater,-1,Pepiot,-16,14,23,3.5,5.3,12.7,11.5,31.8
 NYY,Anthony Volpe,-3,Pepiot,-18,-4,19,3.8,4.4,11.9,10.2,30.8
-NYY,Austin Wells,-3,Pepiot,-18,3,16,4.4,5,9.7,8.4,32.4
+NYY,Paul Goldschmidt,1,Pepiot,-18,-6,23,4.4,5.1,11.7,7.8,25.5
 TEX,Adolis Garcia,-6,Kirby,-19,-27,22,3.1,4.3,12.6,5.8,35.3
 NYY,Ryan McMahon,-2,Pepiot,-19,12,18,3.8,4.8,9.4,13.5,39.2
 NYY,Jasson Dominguez,-3,Pepiot,-21,5,19,3.7,5.3,10.5,8.2,31.1
