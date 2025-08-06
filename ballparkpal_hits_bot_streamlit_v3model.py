@@ -961,14 +961,14 @@ def display_league_aware_results(filtered_df, filters):
     if len(filtered_df) >= 3:
         st.markdown("### 🔍 **Advanced League Context Analysis**")
         
-        # Define profile criteria for analysis (including power profiles)
+        # Define profile criteria for analysis (UPDATED with more inclusive thresholds)
         profile_criteria = {
-            "🏆 Contact-Aggressive": {"max_k": 17.0, "max_bb": 6.0, "icon": "🏆", "type": "contact"},
-            "⭐ Elite Contact": {"max_k": 12.0, "max_bb": 8.5, "icon": "⭐", "type": "contact"},
-            "⚡ Swing-Happy": {"max_k": 22.6, "max_bb": 4.0, "icon": "⚡", "type": "contact"},
-            "🔷 Above-Average": {"max_k": 17.0, "max_bb": 10.0, "icon": "🔷", "type": "contact"},
-            "💥 Contact Power": {"max_k": 17.0, "max_bb": 10.0, "min_xb": 8.0, "min_hr": 3.0, "icon": "💥", "type": "power"},
-            "🚀 Pure Power": {"max_k": 100, "max_bb": 100, "min_xb": 10.0, "min_hr": 4.0, "icon": "🚀", "type": "power"},
+            "🏆 Contact-Aggressive": {"max_k": 19.0, "max_bb": 7.0, "icon": "🏆", "type": "contact"},
+            "⭐ Elite Contact": {"max_k": 14.0, "max_bb": 9.5, "icon": "⭐", "type": "contact"},
+            "⚡ Swing-Happy": {"max_k": 24.0, "max_bb": 5.0, "icon": "⚡", "type": "contact"},
+            "🔷 Above-Average": {"max_k": 20.0, "max_bb": 12.0, "icon": "🔷", "type": "contact"},
+            "💥 Contact Power": {"max_k": 20.0, "max_bb": 12.0, "min_xb": 7.0, "min_hr": 2.5, "icon": "💥", "type": "power"},
+            "🚀 Pure Power": {"max_k": 100, "max_bb": 100, "min_xb": 9.0, "min_hr": 3.5, "icon": "🚀", "type": "power"},
             "⚾ All Power": {"max_k": 100, "max_bb": 100, "min_xb": 0, "min_hr": 0, "icon": "⚾", "type": "power"}
         }
         
@@ -1320,16 +1320,17 @@ def main_page():
     # Bottom tips with FIXED explanations
     st.markdown("---")
     st.markdown("""
-    ### 💡 **COMPLETE Power-Aware Strategy Tips**
+    ### 💡 **V2.3 UPDATED Strategy Tips**
     - **Positive K% Better**: Player strikes out less than league average (GOOD!)
     - **Positive BB% More Aggressive**: Player walks less than league average (more swings = more hit chances)
     - **Scores 70+**: Elite opportunities with league-superior metrics
-    - **💥 NEW: 3 Power Profiles**: Contact Power, Pure Power, and All Power Players
-    - **XB% + HR% = Power Combo**: Target 12%+ combined for elite power threats
-    - **⚾ All Power Players**: Use for research to find hidden power gems
+    - **🔥 NEW: Relaxed Thresholds**: Profiles now catch more "hidden gems" automatically
+    - **💎 Less Manual Searching**: Reduced need to dig through All Players for overlooked options
+    - **XB% + HR% = Power Combo**: Target 10%+ combined for solid power threats (lowered from 12%)
+    - **⚾ All Power Players**: Use for research to find remaining hidden power gems
     - **Always verify lineups and weather before finalizing picks**
     
-    **✅ Complete Power System: Contact Specialists + Power Specialists + Everything In Between!**
+    **✅ Hidden Gem Revolution: Now Automatically Find Players Just Outside Old Thresholds!**
     """)
 
 def info_page():
@@ -1355,7 +1356,23 @@ def info_page():
         - **BB% More Aggressive: +3.1%** = Player walks 3.1% less than league average (more swings!)
         - **Positive values = Better performance** (no more confusing negative numbers)
         
+        ### **✅ V2.3 Profile Updates: Real-World Performance Based**
+        **Why we updated the criteria:**
+        - **Hidden Gems Discovery**: Players just outside old thresholds were performing well in real games
+        - **Reduced Manual Searching**: Less need to manually scan "All Players" for overlooked options
+        - **Broader Safety Nets**: Slightly wider criteria catch more viable players without sacrificing quality
+        - **Real-World Validation**: Thresholds adjusted based on actual player performance data
+        
+        **Key Changes:**
+        - **Contact profiles**: 1-2% more flexible on K% and BB% thresholds
+        - **Power profiles**: 0.5-1% more accessible power requirements
+        - **Hit probability minimums**: Slightly lowered to be more inclusive
+        - **Matchup requirements**: Slightly more lenient to catch good players with tough matchups
+        
         ### **💡 Key Insight: Contact vs Aggression**
+        - **Low K% = Better Contact** (fewer strikeouts = more balls in play)
+        - **Low BB% = More Aggressive** (fewer walks = more swinging, quicker at-bats)
+        - **Sweet Spot**: Low K% + Low BB% = Contact hitters who attack the zone
         - **Low K% = Better Contact** (fewer strikeouts = more balls in play)
         - **Low BB% = More Aggressive** (fewer walks = more swinging, quicker at-bats)
         - **Sweet Spot**: Low K% + Low BB% = Contact hitters who attack the zone
@@ -1366,7 +1383,12 @@ def info_page():
         ## **When to Use Each Profile: Detailed Breakdown**
         
         ### **🏆 Contact-Aggressive Hitters** ⭐ RECOMMENDED DEFAULT
-        **Profile**: K% ≤17%, BB% ≤6% | **Historical Examples**: Luis Arraez, José Altuve (prime), Tony Gwynn (all-time)
+        **Profile**: K% ≤19%, BB% ≤7% | **Historical Examples**: Luis Arraez, José Altuve (prime), Tony Gwynn (all-time)
+        
+        #### **✅ UPDATED: More Inclusive Criteria**
+        - **Expanded K% threshold** from 17% to 19% - captures more aggressive contact hitters
+        - **Expanded BB% threshold** from 6% to 7% - includes players who are still aggressive but not ultra-selective
+        - **Real-world benefit**: Catches players who perform well but were just outside old thresholds
         
         #### **✅ Use This Profile When:**
         - **Daily Fantasy Sports** - Maximum safety and consistency
@@ -1413,7 +1435,13 @@ def info_page():
         ---
         
         ### **💥 Contact Power Hitters** ⚡ TOURNAMENT CEILING
-        **Profile**: K% ≤17%, XB% ≥8%, HR% ≥3% | **Historical Examples**: Mookie Betts, Freddie Freeman, Vladimir Guerrero Jr.
+        **Profile**: K% ≤20%, XB% ≥7%, HR% ≥2.5% | **Historical Examples**: Mookie Betts, Freddie Freeman, Vladimir Guerrero Jr.
+        
+        #### **✅ UPDATED: More Inclusive Power Criteria**
+        - **Expanded K% threshold** from 17% to 20% - more contact power options
+        - **Lowered XB% requirement** from 8% to 7% - catches emerging power players
+        - **Lowered HR% requirement** from 3% to 2.5% - includes developing power hitters
+        - **Real-world benefit**: Finds players with legitimate power potential just below old elite thresholds
         
         #### **✅ Use This Profile When:**
         - **Tournament Play** - Need ceiling without sacrificing too much floor
@@ -1435,7 +1463,12 @@ def info_page():
         ---
         
         ### **🚀 Pure Power Sluggers** 💥 GPP LEVERAGE
-        **Profile**: XB% ≥10%, HR% ≥4% (K% and BB% flexible) | **Historical Examples**: Aaron Judge, Mike Trout, Pete Alonso
+        **Profile**: XB% ≥9%, HR% ≥3.5% (K% and BB% flexible) | **Historical Examples**: Aaron Judge, Mike Trout, Pete Alonso
+        
+        #### **✅ UPDATED: More Accessible Power Thresholds**
+        - **Lowered XB% requirement** from 10% to 9% - catches more power players
+        - **Lowered HR% requirement** from 4% to 3.5% - includes near-elite power hitters
+        - **Real-world benefit**: Players just below old elite thresholds often still provide excellent power production
         
         #### **✅ Use This Profile When:**
         - **GPP Tournaments** - Maximum ceiling plays for large field events
@@ -1546,7 +1579,7 @@ def info_page():
     - **Pure Power**: GPP leverage and contrarian plays  
     - **All Power**: Research mode to find hidden power gems
     
-    *Master the Art of Baseball Analytics | A1FADED V2.3 Complete Power Edition*
+    *Master the Art of Baseball Analytics | A1FADED V2.3 Hidden Gems Edition*
     """)
 
 def main():
@@ -1576,7 +1609,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.3** | Complete Power Edition")
+    st.sidebar.markdown("**V2.3** | Hidden Gems Edition")
 
 if __name__ == "__main__":
     main()
