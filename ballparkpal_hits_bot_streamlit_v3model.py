@@ -118,8 +118,6 @@ def load_csv_with_validation(url, description, expected_columns):
                 st.error(f"❌ {description}: Null values in {problematic_cols}")
                 return None
             
-            # Light data standardization (without aggressive type conversion that caused issues)
-            # Only convert obvious numeric columns, let pandas handle the rest naturally
             st.success(f"✅ {description}: {len(df)} records loaded")
             return df
             
@@ -149,7 +147,7 @@ def validate_merge_quality(prob_df, pct_df, merged_df):
 
 @st.cache_data(ttl=CONFIG['cache_ttl'])
 def load_and_process_data():
-    """Enhanced data loading and processing with validation (RESTORED with fixed clipping)."""
+    """Enhanced data loading and processing with validation."""
     
     # Load both CSV files with enhanced validation
     prob_df = load_csv_with_validation(
@@ -525,19 +523,20 @@ def create_league_aware_filters(df=None):
                     st.sidebar.markdown(f"**🏟️ Team Diversity:** Best player from {unique_teams} teams")
                 
                 if matching_count > 0:
-                    # Show league context comparison for playing players only
+                    # Show league context comparison for playing players only - FIXED CALCULATION
                     avg_k_filtered = preview_df['adj_K'].mean()
                     avg_bb_filtered = preview_df['adj_BB'].mean()
                     
-                    k_vs_league = avg_k_filtered - LEAGUE_K_AVG
-                    bb_vs_league = avg_bb_filtered - LEAGUE_BB_AVG
+                    # FIXED: Make positive values = better performance
+                    k_improvement = LEAGUE_K_AVG - avg_k_filtered  # League - Player (positive = better)
+                    bb_improvement = LEAGUE_BB_AVG - avg_bb_filtered  # League - Player (positive = more aggressive)
                     
                     result_count = filters.get('result_count', 15)
                     display_count = matching_count if result_count == "All" else min(matching_count, result_count)
                     
                     st.sidebar.markdown(f"**📊 vs League Avg (Playing Players):**")
-                    st.sidebar.markdown(f"K%: {k_vs_league:+.1f}% vs league")
-                    st.sidebar.markdown(f"BB%: {bb_vs_league:+.1f}% vs league")
+                    st.sidebar.markdown(f"K%: {k_improvement:+.1f}% better than league" if k_improvement > 0 else f"K%: {k_improvement:+.1f}% worse than league")
+                    st.sidebar.markdown(f"BB%: {bb_improvement:+.1f}% more aggressive than league" if bb_improvement > 0 else f"BB%: {bb_improvement:+.1f}% less aggressive than league")
                     
                     if result_count == "All":
                         st.sidebar.markdown(f"**📋 Showing:** All {matching_count} players")
@@ -730,24 +729,26 @@ def display_league_aware_results(filtered_df, filters):
     
     with col2:
         avg_k = filtered_df['adj_K'].mean()
-        k_vs_league = avg_k - LEAGUE_K_AVG
-        color = "success-card" if k_vs_league < -5 else "metric-card"
+        # FIXED: Make positive = better (League - Player)
+        k_improvement = LEAGUE_K_AVG - avg_k
+        color = "success-card" if k_improvement > 2 else "metric-card"
         st.markdown(f"""
         <div class="{color}">
-            <h4>⚾ Avg K% vs League</h4>
-            <h2>{k_vs_league:+.1f}%</h2>
+            <h4>⚾ K% vs League</h4>
+            <h2>{k_improvement:+.1f}%</h2>
             <small>League: {LEAGUE_K_AVG}%</small>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
         avg_bb = filtered_df['adj_BB'].mean()
-        bb_vs_league = avg_bb - LEAGUE_BB_AVG
-        color = "success-card" if bb_vs_league < -2 else "metric-card"
+        # FIXED: Make positive = more aggressive (League - Player)
+        bb_improvement = LEAGUE_BB_AVG - avg_bb
+        color = "success-card" if bb_improvement > 1 else "metric-card"
         st.markdown(f"""
         <div class="{color}">
-            <h4>🚶 Avg BB% vs League</h4>
-            <h2>{bb_vs_league:+.1f}%</h2>
+            <h4>🚶 BB% vs League</h4>
+            <h2>{bb_improvement:+.1f}%</h2>
             <small>League: {LEAGUE_BB_AVG}%</small>
         </div>
         """, unsafe_allow_html=True)
@@ -777,7 +778,7 @@ def display_league_aware_results(filtered_df, filters):
     
     st.markdown(f"**🎯 Active Profile:** {filter_profile}")
     
-    # Enhanced results table with league context and lineup awareness
+    # Enhanced results table with FIXED league context calculations
     display_columns = {
         'Batter': 'Batter',
         'Tm': 'Team',
@@ -786,16 +787,17 @@ def display_league_aware_results(filtered_df, filters):
         'adj_1B': 'Contact %',
         'adj_XB': 'XB %',
         'adj_HR': 'HR %',
-        'adj_K': 'K% vs League',
-        'adj_BB': 'BB% vs League',
+        'K_vs_League': 'K% Better',
+        'BB_vs_League': 'BB% More Aggressive',
         'adj_vs': 'vs Pitcher',
         'Score': 'Score'
     }
     
-    # Add league context columns to filtered_df
+    # Add FIXED league context columns to filtered_df
     display_df = filtered_df.copy()
-    display_df['K% vs League'] = display_df['adj_K'] - LEAGUE_K_AVG
-    display_df['BB% vs League'] = display_df['adj_BB'] - LEAGUE_BB_AVG
+    # FIXED: Make positive values = better performance
+    display_df['K_vs_League'] = LEAGUE_K_AVG - display_df['adj_K']  # League - Player (positive = better contact)
+    display_df['BB_vs_League'] = LEAGUE_BB_AVG - display_df['adj_BB']  # League - Player (positive = more aggressive)
     
     # Add lineup status indicators
     excluded_players = st.session_state.get('excluded_players', [])
@@ -808,14 +810,14 @@ def display_league_aware_results(filtered_df, filters):
     
     styled_df = display_df[display_columns_with_status.keys()].rename(columns=display_columns_with_status)
     
-    # Enhanced formatting with league context
+    # Enhanced formatting with FIXED league context
     styled_df = styled_df.style.format({
         'Hit Prob %': "{:.1f}%",
         'Contact %': "{:.1f}%", 
         'XB %': "{:.1f}%",
         'HR %': "{:.1f}%",
-        'K% vs League': "{:+.1f}%",
-        'BB% vs League': "{:+.1f}%",
+        'K% Better': "{:+.1f}%",
+        'BB% More Aggressive': "{:+.1f}%",
         'vs Pitcher': "{:.0f}",
         'Score': "{:.1f}"
     }).background_gradient(
@@ -829,35 +831,36 @@ def display_league_aware_results(filtered_df, filters):
         vmin=20,
         vmax=50
     ).background_gradient(
-        subset=['K% vs League'],
-        cmap='RdYlGn',  # Green = below league (good), Red = above league (bad)
-        vmin=-10,
+        subset=['K% Better'],
+        cmap='RdYlGn',  # Green = positive (better), Red = negative (worse)
+        vmin=-5,
         vmax=10
     ).background_gradient(
-        subset=['BB% vs League'],
-        cmap='RdYlGn',  # Green = below league (aggressive), Red = above league (passive)
-        vmin=-5,
-        vmax=5
+        subset=['BB% More Aggressive'],
+        cmap='RdYlGn',  # Green = positive (more aggressive), Red = negative (less aggressive)
+        vmin=-3,
+        vmax=6
     )
     
     st.dataframe(styled_df, use_container_width=True)
     
-    # Enhanced interpretation guide with league context and lineup status
+    # FIXED interpretation guide with intuitive color meanings
     st.markdown("""
     <div class="color-legend">
-        <strong>📊 League-Aware Color Guide:</strong><br>
+        <strong>📊 FIXED League-Aware Color Guide:</strong><br>
         <strong>Status:</strong> 🏟️ = Confirmed Playing | ❌ = Excluded from Lineups<br>
         <strong>Score:</strong> <span style="color: #1a9641;">●</span> Elite (70+) | 
         <span style="color: #fdae61;">●</span> Good (50-69) | 
         <span style="color: #d7191c;">●</span> Risky (<50)<br>
-        <strong>K% vs League:</strong> <span style="color: #1a9641;">●</span> Much Better | 
-        <span style="color: #d7191c;">●</span> Much Worse<br>
-        <strong>BB% vs League:</strong> <span style="color: #1a9641;">●</span> More Aggressive | 
-        <span style="color: #d7191c;">●</span> More Passive
+        <strong>K% Better:</strong> <span style="color: #1a9641;">●</span> Much Better Contact | 
+        <span style="color: #d7191c;">●</span> Worse Contact<br>
+        <strong>BB% More Aggressive:</strong> <span style="color: #1a9641;">●</span> More Aggressive | 
+        <span style="color: #d7191c;">●</span> Less Aggressive<br>
+        <strong>✅ NOW: Positive Numbers = Better Performance!</strong>
     </div>
     """, unsafe_allow_html=True)
     
-    # Performance insights with league context - ENHANCED with multi-profile analysis
+    # Performance insights with FIXED league context - multi-profile analysis
     if len(filtered_df) >= 3:
         st.markdown("### 🔍 **Advanced League Context Analysis**")
         
@@ -924,14 +927,14 @@ def display_league_aware_results(filtered_df, filters):
                     else:
                         st.info(f"**{player['Batter']}** (#{overall_rank})")
                     
-                    # Key metrics
-                    k_vs_league = player['adj_K'] - LEAGUE_K_AVG
-                    bb_vs_league = player['adj_BB'] - LEAGUE_BB_AVG
+                    # Key metrics with FIXED calculations
+                    k_better = LEAGUE_K_AVG - player['adj_K']  # Positive = better
+                    bb_more_aggressive = LEAGUE_BB_AVG - player['adj_BB']  # Positive = more aggressive
                     
                     st.markdown(f"""
                     **Hit Prob:** {player['total_hit_prob']:.1f}%  
-                    **K% vs League:** {k_vs_league:+.1f}%  
-                    **BB% vs League:** {bb_vs_league:+.1f}%  
+                    **K% Better:** {k_better:+.1f}%  
+                    **BB% More Aggressive:** {bb_more_aggressive:+.1f}%  
                     **Score:** {player['Score']:.1f}
                     """)
                     
@@ -1093,7 +1096,7 @@ def main_page():
     # Create league-aware filters with baseball intelligence
     filters = create_league_aware_filters(df)
     
-    # Calculate league-aware scores (FIXED function name)
+    # Calculate league-aware scores
     df = calculate_league_aware_scores(df)
     
     # Apply intelligent filters
@@ -1182,14 +1185,16 @@ def main_page():
             else:
                 st.success("✅ All players currently included in analysis")
     
-    # Bottom tips
+    # Bottom tips with FIXED explanations
     st.markdown("---")
     st.markdown("""
-    ### 💡 **League-Aware Strategy Tips**
-    - **Green K% vs League**: Much better contact than average (prioritize these)
+    ### 💡 **FIXED League-Aware Strategy Tips**
+    - **Positive K% Better**: Player strikes out less than league average (GOOD!)
+    - **Positive BB% More Aggressive**: Player walks less than league average (more swings = more hit chances)
     - **Scores 70+**: Elite opportunities with league-superior metrics
-    - **Multiple Bonuses**: Players with 2+ bonuses are premium picks
     - **Always verify lineups and weather before finalizing picks**
+    
+    **✅ Now: Green/Positive Numbers = Better Performance = Easier to Read!**
     """)
 
 def info_page():
@@ -1208,6 +1213,12 @@ def info_page():
         | **K%** | ≤12.0% | 12.0-17.0% | ~22.6% | ≥25.0% |
         | **BB%** | ≤4.0% | 4.0-6.0% | ~8.5% | ≥10.0% |
         | **BABIP** | ≥.320 | .300-.320 | ~.290 | ≤.280 |
+        
+        ### **✅ FIXED Display Logic**
+        **Now the numbers make intuitive sense:**
+        - **K% Better: +5.2%** = Player strikes out 5.2% less than league average (GOOD!)
+        - **BB% More Aggressive: +3.1%** = Player walks 3.1% less than league average (more swings!)
+        - **Positive values = Better performance** (no more confusing negative numbers)
         
         ### **💡 Key Insight: Contact vs Aggression**
         - **Low K% = Better Contact** (fewer strikeouts = more balls in play)
@@ -1305,388 +1316,26 @@ def info_page():
         - Good balance of contact and patience
         - Suitable for most game types
         - Less volatile than extreme profiles
-        
-        ---
-        
-        ### **🌐 All Players** 📊 RESEARCH MODE
-        **Profile**: No restrictions | **Use**: Analysis and research
-        
-        #### **✅ Use This Profile When:**
-        - **Initial Research** - See the full landscape
-        - **Looking for Outliers** - Find unique opportunities
-        - **Checking Your Logic** - Validate other profiles
-        - **Large Field Tournaments** - Need maximum differentiation
-        """)
-    
-    with st.expander("🎮 Game Theory & Strategy Selection", expanded=False):
-        st.markdown("""
-        ## **Choosing Profiles Based on Contest Type**
-        
-        ### **💰 Cash Games Strategy**
-        **Goal**: Consistent base hits, minimize risk
-        
-        **Primary**: 🏆 Contact-Aggressive Hitters (80% of plays)
-        **Secondary**: ⭐ Elite Contact Specialists (20% of plays)
-        **Avoid**: ⚡ Swing-Happy Hitters (too volatile)
-        
-        **Why This Works:**
-        - Cash games reward consistency over ceiling
-        - Contact-Aggressive gives you 10-15 reliable options
-        - Elite Contact for when you need absolute best
-        
-        ---
-        
-        ### **🏆 Tournament Strategy**
-        **Goal**: High ceiling, willing to accept some risk
-        
-        **Core Approach (60%)**: 🏆 Contact-Aggressive Hitters
-        **Leverage Plays (25%)**: ⚡ Swing-Happy Hitters  
-        **Elite Spots (15%)**: ⭐ Elite Contact Specialists
-        
-        **Why This Mix:**
-        - Contact-Aggressive as foundation (safe)
-        - Swing-Happy for contrarian leverage (differentiation)
-        - Elite Contact for absolute premium spots
-        
-        ---
-        
-        ### **⚖️ 50/50 & Double-Ups**
-        **Goal**: Finish in top 50%, moderate safety
-        
-        **Primary**: 🏆 Contact-Aggressive Hitters (70%)
-        **Secondary**: 🔷 Above-Average Contact (30%)
-        
-        **Strategy**: Cast wider net while maintaining quality floor
-        
-        ---
-        
-        ### **🎯 Head-to-Head**
-        **Goal**: Beat one opponent, balanced approach
-        
-        **Flexible Mix**: All profiles depending on opponent tendencies
-        - vs Conservative opponents: Use ⚡ Swing-Happy for leverage
-        - vs Aggressive opponents: Use ⭐ Elite Contact for safety
-        """)
-    
-    with st.expander("🌤️ Situational Profile Selection", expanded=False):
-        st.markdown("""
-        ## **Environmental & Matchup Factors**
-        
-        ### **⛈️ Weather Considerations**
-        
-        #### **Wind Blowing In/Cold Weather**
-        - **Use**: 🏆 Contact-Aggressive or ⭐ Elite Contact
-        - **Avoid**: Power-dependent profiles
-        - **Why**: Contact becomes more valuable when power is suppressed
-        
-        #### **Wind Blowing Out/Hot Weather** 
-        - **Use**: ⚡ Swing-Happy or 🔷 Above-Average Contact
-        - **Why**: More aggressive swings can benefit from offensive conditions
-        
-        #### **Rain/Poor Conditions**
-        - **Use**: ⭐ Elite Contact Specialists only
-        - **Why**: Only the best contact skills succeed in tough conditions
-        
-        ---
-        
-        ### **🏟️ Ballpark Factors**
-        
-        #### **Pitcher-Friendly Parks** (Marlins Park, Tropicana, etc.)
-        - **Use**: ⭐ Elite Contact Specialists
-        - **Secondary**: 🏆 Contact-Aggressive  
-        - **Avoid**: ⚡ Swing-Happy (strikeouts are killers)
-        
-        #### **Hitter-Friendly Parks** (Coors, Yankees, etc.)
-        - **Use**: ⚡ Swing-Happy for leverage
-        - **Why**: Aggressive approaches can capitalize on friendly environments
-        
-        #### **Neutral Parks**
-        - **Use**: 🏆 Contact-Aggressive (default approach works)
-        
-        ---
-        
-        ### **🥎 Pitching Matchup Analysis**
-        
-        #### **Ace Pitcher Slates** (Cy Young candidates, sub-3.00 ERA)
-        - **Use**: ⭐ Elite Contact Specialists ONLY
-        - **Why**: Only elite contact skills can handle top-tier pitching
-        - **Target**: Players with -8% or better K% vs League
-        
-        #### **Mixed Pitching Quality**
-        - **Use**: 🏆 Contact-Aggressive (handles variety well)
-        - **Why**: Balanced approach works against varied competition
-        
-        #### **Weak Pitching Slates** (ERA 4.50+, high walk rates)
-        - **Use**: ⚡ Swing-Happy for maximum leverage
-        - **Secondary**: 🔷 Above-Average Contact
-        - **Why**: Aggressive approaches can feast on poor pitching
-        
-        #### **Rookie/Unknown Pitchers**
-        - **Use**: ⚡ Swing-Happy + 🔷 Above-Average Contact
-        - **Why**: Aggressive veterans often handle inexperienced pitching well
-        """)
-    
-    with st.expander("📊 Advanced Metrics & Profile Optimization", expanded=False):
-        st.markdown("""
-        ## **Reading Between the Numbers**
-        
-        ### **🎯 Key Metrics by Profile**
-        
-        #### **🏆 Contact-Aggressive: What to Look For**
-        - **K% vs League**: -3% to -8% (significantly better)
-        - **BB% vs League**: -2% to -4% (moderately aggressive)
-        - **Hit Probability**: 35-45% (solid chance)
-        - **Ideal Score Range**: 60-80 points
-        
-        #### **⭐ Elite Contact: Premium Indicators**
-        - **K% vs League**: -8% or better (elite tier)
-        - **BB% vs League**: -1% to +1% (doesn't matter much)
-        - **Hit Probability**: 40%+ (high confidence)
-        - **Ideal Score Range**: 75-95 points
-        - **Bonus Requirements**: Must have Elite Contact Bonus
-        
-        #### **⚡ Swing-Happy: Leverage Markers**
-        - **K% vs League**: -2% to +2% (near league average acceptable)
-        - **BB% vs League**: -4% or better (very aggressive)
-        - **Hit Probability**: 30-40% (moderate chance but high volume)
-        - **Ideal Score Range**: 45-70 points
-        
-        ---
-        
-        ### **🎁 Bonus Combinations to Target**
-        
-        #### **Premium Combinations (Prioritize These)**
-        1. **Elite Contact + League Superior** = 16 bonus points
-        2. **Aggressive Contact + Hit Probability** = 13 bonus points  
-        3. **Elite Contact + Hit Probability** = 15 bonus points
-        
-        #### **Solid Combinations**
-        - **League Superior + Hit Probability** = 11 bonus points
-        - **Aggressive Contact + Matchup** = 11 bonus points
-        
-        #### **Red Flags (Avoid)**
-        - **No bonuses** = Likely poor matchup
-        - **Only Matchup bonus** = Weak underlying skills
-        
-        ---
-        
-        ### **🔍 Profile Validation Checklist**
-        
-        #### **Before Selecting Contact-Aggressive:**
-        - [ ] 10+ players available in filter?
-        - [ ] Average K% vs League better than -2%?
-        - [ ] Multiple players with 2+ bonuses?
-        
-        #### **Before Selecting Elite Contact:**
-        - [ ] 5+ players available in filter?
-        - [ ] All players have Elite Contact bonus?
-        - [ ] Hit probability 38%+ on top options?
-        
-        #### **Before Selecting Swing-Happy:**
-        - [ ] Offensive environment confirmed?
-        - [ ] Players have very low BB% (-3% vs league)?
-        - [ ] Contrarian edge available (low ownership)?
-        """)
-    
-    with st.expander("⚡ Real-Time Strategy Adjustments", expanded=False):
-        st.markdown("""
-        ## **Dynamic Profile Selection**
-        
-        ### **📈 Slate Development Strategy**
-        
-        #### **Early in Day (Morning)**
-        1. Start with **🌐 All Players** - Survey the landscape
-        2. Check weather, lineups, and pitching
-        3. Narrow to appropriate profile based on conditions
-        4. Build initial lineups with chosen profile
-        
-        #### **Mid-Day Adjustments**
-        1. Monitor lineup changes and weather updates
-        2. If conditions worsen → Move to **⭐ Elite Contact**
-        3. If conditions improve → Consider **⚡ Swing-Happy**
-        4. Always maintain **🏆 Contact-Aggressive** as backup
-        
-        #### **Late Swaps (30min before games)**
-        1. **🏆 Contact-Aggressive** only (safest pivots)
-        2. Quick substitutions within same profile
-        3. Avoid profile switching this late
-        
-        ---
-        
-        ### **🎪 Contest-Specific Adaptations**
-        
-        #### **Large Field GPPs (1000+ entries)**
-        - **Primary**: 🏆 Contact-Aggressive (60%)
-        - **Leverage**: ⚡ Swing-Happy (30%)
-        - **Premium**: ⭐ Elite Contact (10%)
-        - **Goal**: Balance safety with differentiation
-        
-        #### **Small Field GPPs (<100 entries)**
-        - **Primary**: ⭐ Elite Contact (70%)
-        - **Secondary**: 🏆 Contact-Aggressive (30%)
-        - **Goal**: Maximum quality, less differentiation needed
-        
-        #### **Beginner Contests**
-        - **Primary**: 🏆 Contact-Aggressive (90%)
-        - **Secondary**: 🔷 Above-Average Contact (10%)
-        - **Goal**: Learn tool without high risk
-        
-        ---
-        
-        ### **🚨 Emergency Situations**
-        
-        #### **No Elite Options Available**
-        - Fall back to **🔷 Above-Average Contact**
-        - Widen search to **🌐 All Players**
-        - Focus on matchup and ballpark advantages
-        
-        #### **Too Many Good Options**
-        - Tighten to **⭐ Elite Contact Specialists**
-        - Look for multiple bonus combinations
-        - Prioritize proven performers in big spots
-        
-        #### **Slate Looking Chalky**
-        - Shift to **⚡ Swing-Happy** for differentiation
-        - Target players with good metrics but lower expected ownership
-        - Accept higher risk for tournament leverage
-        """)
-    
-    with st.expander("📚 Study Examples & Case Studies", expanded=False):
-        st.markdown("""
-        ## **Real-World Application Examples**
-        
-        ### **📖 Case Study 1: Pitcher's Duel Slate**
-        **Scenario**: Two aces facing off, low run total (7.5 under)
-        
-        **Wrong Approach**: Using ⚡ Swing-Happy (high strikeout risk)
-        **Correct Approach**: ⭐ Elite Contact Specialists
-        
-        **Key Metrics to Target**:
-        - K% vs League: -8% or better
-        - Hit Probability: 35%+ minimum
-        - Must have Elite Contact bonus
-        
-        **Expected Results**: Lower ownership, higher hit rates
-        
-        ---
-        
-        ### **📖 Case Study 2: Coors Field Explosion**
-        **Scenario**: High run total (11+ runs), wind blowing out
-        
-        **Wrong Approach**: Being too conservative with ⭐ Elite Contact
-        **Correct Approach**: ⚡ Swing-Happy for leverage
-        
-        **Key Metrics to Target**:
-        - BB% vs League: -4% or better (very aggressive)
-        - Total Hit Probability: 30%+ (volume matters)
-        - Target players others might avoid due to K%
-        
-        **Expected Results**: Higher variance but massive upside
-        
-        ---
-        
-        ### **📖 Case Study 3: Mixed Quality Slate**
-        **Scenario**: Some good pitching, some bad, normal conditions
-        
-        **Optimal Approach**: 🏆 Contact-Aggressive Hitters
-        **Why**: Handles variety well, good sample size
-        
-        **Portfolio Allocation**:
-        - 70% Contact-Aggressive
-        - 20% Elite Contact (premium spots)
-        - 10% Swing-Happy (contrarian)
-        
-        ---
-        
-        ### **🎯 Success Patterns to Recognize**
-        
-        #### **High Success Indicators**
-        1. Profile matches environmental conditions
-        2. 2+ bonuses on most selected players
-        3. Good sample size (8+ viable options)
-        4. K% vs League consistently negative
-        
-        #### **Warning Signs**
-        1. Forcing a profile despite conditions
-        2. Very limited options (2-3 players)
-        3. No players with multiple bonuses
-        4. Having to reach for players with positive K% vs League
-        """)
-    
-    with st.expander("🎓 Quick Reference & Cheat Sheets", expanded=False):
-        st.markdown("""
-        ## **Quick Decision Framework**
-        
-        ### **⚡ 30-Second Profile Selection**
-        
-        #### **Ask Yourself:**
-        1. **What's the weather?** Bad → Elite Contact | Good → More options
-        2. **What's the pitching?** Aces → Elite Contact | Weak → Swing-Happy
-        3. **What's the contest?** Cash → Contact-Aggressive | GPP → Mix
-        4. **What's your experience?** New → Contact-Aggressive | Advanced → Mix
-        
-        #### **Default Decision Tree:**
-        ```
-        Cash Game? → Contact-Aggressive (80%) + Elite Contact (20%)
-        ↓
-        Tournament? → Contact-Aggressive (60%) + Swing-Happy (25%) + Elite (15%)
-        ↓
-        Bad Weather/Aces? → Elite Contact Only
-        ↓
-        Great Conditions? → Add more Swing-Happy
-        ```
-        
-        ---
-        
-        ### **📊 Profile Comparison at a Glance**
-        
-        | Profile | Player Pool | Safety | Upside | Best For |
-        |---------|-------------|--------|--------|----------|
-        | **🏆 Contact-Aggressive** | 10-15 | High | Medium | Default choice |
-        | **⭐ Elite Contact** | 3-8 | Highest | Medium | Premium spots |
-        | **⚡ Swing-Happy** | 8-20 | Medium | High | Leverage plays |
-        | **🔷 Above-Average** | 15-25 | Medium | Medium | Learning/mixed |
-        | **🌐 All Players** | 30+ | Low | Highest | Research only |
-        
-        ---
-        
-        ### **🚨 Emergency Cheat Sheet**
-        
-        #### **When Everything Looks Bad:**
-        1. Switch to **🌐 All Players**
-        2. Sort by Score (highest first)
-        3. Look for hidden gems with good vs Pitcher ratings
-        4. Focus on players with any bonuses
-        
-        #### **When You Can't Decide:**
-        1. Default to **🏆 Contact-Aggressive**
-        2. It works in 80% of situations
-        3. Safe choice that rarely fails completely
-        
-        #### **When You're Behind in Tournament:**
-        1. Switch to **⚡ Swing-Happy**
-        2. Accept higher risk for differentiation
-        3. Look for contrarian plays others avoid
         """)
     
     st.markdown("---")
     st.markdown("""
     **🔥 Complete Strategy System Features:**
+    - ✅ **FIXED intuitive metrics** - Positive numbers = better performance
     - 5 distinct player profiles for every situation
     - Environmental and matchup-based selection guides
-    - Contest-specific strategy recommendations
-    - Real-time adjustment frameworks
-    - Detailed case studies and examples
-    - Quick reference decision trees
+    - Real-time league context comparisons
+    - Multi-profile analysis system
+    - Lineup management with session persistence
     
-    *Master the Art of Baseball Analytics | A1FADED V2.0 Complete Guide*
+    *Master the Art of Baseball Analytics | A1FADED V2.1 Fixed Edition*
     """)
 
 def main():
     """Enhanced main function with league-aware navigation."""
     st.sidebar.title("🏟️ Navigation")
     
-    # Optional music controls (improved)
+    # Optional music controls
     st.sidebar.markdown("---")
     if st.sidebar.checkbox("🎵 Background Music"):
         audio_url = "https://github.com/a1faded/a1picks-hits-bot/raw/refs/heads/main/Take%20Me%20Out%20to%20the%20Ballgame%20-%20Nancy%20Bea%20-%20Dodger%20Stadium%20Organ.mp3"
@@ -1709,7 +1358,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.0** | League-Average Intelligence")
+    st.sidebar.markdown("**V2.1** | Fixed Intuitive Metrics")
 
 if __name__ == "__main__":
     main()
