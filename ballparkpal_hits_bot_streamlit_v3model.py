@@ -368,7 +368,7 @@ def create_league_aware_filters(df=None):
             'min_hit_prob': 28,
             'profile_type': 'contact'
         },
-        "💥 Contact Power Hitters": {
+        "💥 (HR)Contact Power Hitters": {
             'description': "Low K% + High XB% & HR% (Power with contact)",
             'max_k': 17.0,   # Good contact
             'max_bb': 10.0,  # Reasonable walks
@@ -377,7 +377,7 @@ def create_league_aware_filters(df=None):
             'min_vs': -5,    # Reasonable matchup
             'profile_type': 'power'
         },
-        "🚀 Pure Power Sluggers": {
+        "🚀 (HR)Pure Power Sluggers": {
             'description': "High XB% & HR% (Power over contact)",
             'max_k': 100,    # Accept high strikeouts
             'max_bb': 100,   # Accept high walks
