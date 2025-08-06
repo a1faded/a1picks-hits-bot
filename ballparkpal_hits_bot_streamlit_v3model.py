@@ -607,20 +607,20 @@ def create_league_aware_filters(df=None):
                     st.sidebar.markdown(f"**🏟️ Team Diversity:** Best player from {unique_teams} teams")
                 
                 if matching_count > 0:
-                    # Show league context comparison for playing players only - FIXED CALCULATION
+                    # Show corrected league vs player calculations
                     avg_k_filtered = preview_df['adj_K'].mean()
                     avg_bb_filtered = preview_df['adj_BB'].mean()
                     
-                    # FIXED: Make positive values = better performance
-                    k_improvement = LEAGUE_K_AVG - avg_k_filtered  # League - Player (positive = better)
-                    bb_improvement = LEAGUE_BB_AVG - avg_bb_filtered  # League - Player (positive = more aggressive)
+                    # CORRECTED: League - Player = Positive when player is better
+                    k_vs_league = LEAGUE_K_AVG - avg_k_filtered  # Positive = better contact
+                    bb_vs_league = LEAGUE_BB_AVG - avg_bb_filtered  # Positive = more aggressive
                     
                     result_count = filters.get('result_count', 15)
                     display_count = matching_count if result_count == "All" else min(matching_count, result_count)
                     
-                    st.sidebar.markdown(f"**📊 vs League Avg (Playing Players):**")
-                    st.sidebar.markdown(f"K%: {k_improvement:+.1f}% better than league" if k_improvement > 0 else f"K%: {k_improvement:+.1f}% worse than league")
-                    st.sidebar.markdown(f"BB%: {bb_improvement:+.1f}% more aggressive than league" if bb_improvement > 0 else f"BB%: {bb_improvement:+.1f}% less aggressive than league")
+                    st.sidebar.markdown(f"**📊 vs League (Playing Players):**")
+                    st.sidebar.markdown(f"K%: {k_vs_league:+.1f}% {'better' if k_vs_league > 0 else 'worse'} than league")
+                    st.sidebar.markdown(f"BB%: {bb_vs_league:+.1f}% {'more aggressive' if bb_vs_league > 0 else 'less aggressive'} than league")
                     
                     if result_count == "All":
                         st.sidebar.markdown(f"**📋 Showing:** All {matching_count} players")
@@ -826,26 +826,24 @@ def display_league_aware_results(filtered_df, filters):
     
     with col2:
         avg_k = filtered_df['adj_K'].mean()
-        # FIXED: Make positive = better (League - Player)
-        k_improvement = LEAGUE_K_AVG - avg_k
-        color = "success-card" if k_improvement > 2 else "metric-card"
+        k_vs_league = LEAGUE_K_AVG - avg_k  # Positive = better contact
+        color = "success-card" if k_vs_league > 0 else "metric-card"
         st.markdown(f"""
         <div class="{color}">
             <h4>⚾ K% vs League</h4>
-            <h2>{k_improvement:+.1f}%</h2>
+            <h2>{k_vs_league:+.1f}%</h2>
             <small>League: {LEAGUE_K_AVG}%</small>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
         avg_bb = filtered_df['adj_BB'].mean()
-        # FIXED: Make positive = more aggressive (League - Player)
-        bb_improvement = LEAGUE_BB_AVG - avg_bb
-        color = "success-card" if bb_improvement > 1 else "metric-card"
+        bb_vs_league = LEAGUE_BB_AVG - avg_bb  # Positive = more aggressive
+        color = "success-card" if bb_vs_league > 0 else "metric-card"
         st.markdown(f"""
         <div class="{color}">
             <h4>🚶 BB% vs League</h4>
-            <h2>{bb_improvement:+.1f}%</h2>
+            <h2>{bb_vs_league:+.1f}%</h2>
             <small>League: {LEAGUE_BB_AVG}%</small>
         </div>
         """, unsafe_allow_html=True)
@@ -875,7 +873,7 @@ def display_league_aware_results(filtered_df, filters):
     
     st.markdown(f"**🎯 Active Profile:** {filter_profile}")
     
-    # Enhanced results table with FIXED league context calculations
+    # Enhanced results table with CORRECTED league context calculations
     display_columns = {
         'Batter': 'Batter',
         'Tm': 'Team',
@@ -884,17 +882,17 @@ def display_league_aware_results(filtered_df, filters):
         'adj_1B': 'Contact %',
         'adj_XB': 'XB %',
         'adj_HR': 'HR %',
-        'K_vs_League': 'K% Better',
-        'BB_vs_League': 'BB% More Aggressive',
+        'K_vs_League': 'K% vs League',
+        'BB_vs_League': 'BB% vs League',
         'adj_vs': 'vs Pitcher',
         'Score': 'Score'
     }
     
-    # Add FIXED league context columns to filtered_df
+    # Add CORRECTED league context columns
     display_df = filtered_df.copy()
-    # FIXED: Make positive values = better performance
-    display_df['K_vs_League'] = LEAGUE_K_AVG - display_df['adj_K']  # League - Player (positive = better contact)
-    display_df['BB_vs_League'] = LEAGUE_BB_AVG - display_df['adj_BB']  # League - Player (positive = more aggressive)
+    # CORRECTED: League - Player = Positive when player is better (lower K%, lower BB%)
+    display_df['K_vs_League'] = LEAGUE_K_AVG - display_df['adj_K']    # 22.6 - 15.0 = +7.6 (better contact)
+    display_df['BB_vs_League'] = LEAGUE_BB_AVG - display_df['adj_BB']  # 8.5 - 5.0 = +3.5 (more aggressive)
     
     # Add lineup status indicators
     excluded_players = st.session_state.get('excluded_players', [])
@@ -907,14 +905,14 @@ def display_league_aware_results(filtered_df, filters):
     
     styled_df = display_df[display_columns_with_status.keys()].rename(columns=display_columns_with_status)
     
-    # Enhanced formatting with FIXED league context
+    # CORRECTED formatting with proper vs league calculations
     styled_df = styled_df.style.format({
         'Hit Prob %': "{:.1f}%",
         'Contact %': "{:.1f}%", 
         'XB %': "{:.1f}%",
         'HR %': "{:.1f}%",
-        'K% Better': "{:+.1f}%",
-        'BB% More Aggressive': "{:+.1f}%",
+        'K% vs League': "{:+.1f}%",     # +7.6% = better contact (green)
+        'BB% vs League': "{:+.1f}%",    # +3.5% = more aggressive (green)
         'vs Pitcher': "{:.0f}",
         'Score': "{:.1f}"
     }).background_gradient(
@@ -928,32 +926,32 @@ def display_league_aware_results(filtered_df, filters):
         vmin=20,
         vmax=50
     ).background_gradient(
-        subset=['K% Better'],
-        cmap='RdYlGn',  # Red = worse contact, Green = better contact
-        vmin=-8,   # Very bad contact (much worse than league)
-        vmax=15    # Elite contact (much better than league)  
+        subset=['K% vs League'],
+        cmap='RdYlGn',  # Positive = better contact = Green, Negative = worse contact = Red
+        vmin=-8,        # Much worse than league (red)
+        vmax=12         # Much better than league (green)
     ).background_gradient(
-        subset=['BB% More Aggressive'],
-        cmap='RdYlGn',  # Red = less aggressive, Green = more aggressive
-        vmin=-4,   # Much less aggressive than league
-        vmax=8     # Much more aggressive than league
+        subset=['BB% vs League'], 
+        cmap='RdYlGn',  # Positive = more aggressive = Green, Negative = less aggressive = Red
+        vmin=-5,        # Much less aggressive than league (red)
+        vmax=6          # Much more aggressive than league (green)
     )
     
     st.dataframe(styled_df, use_container_width=True)
     
-    # FIXED interpretation guide with intuitive color meanings
+    # CORRECTED interpretation guide
     st.markdown("""
     <div class="color-legend">
-        <strong>📊 FIXED League-Aware Color Guide:</strong><br>
+        <strong>📊 CORRECTED League vs Player Guide:</strong><br>
         <strong>Status:</strong> 🏟️ = Confirmed Playing | ❌ = Excluded from Lineups<br>
         <strong>Score:</strong> <span style="color: #1a9641;">●</span> Elite (70+) | 
         <span style="color: #fdae61;">●</span> Good (50-69) | 
         <span style="color: #d7191c;">●</span> Risky (<50)<br>
-        <strong>K% Better:</strong> <span style="color: #1a9641;">●</span> Much Better Contact | 
-        <span style="color: #d7191c;">●</span> Worse Contact<br>
-        <strong>BB% More Aggressive:</strong> <span style="color: #1a9641;">●</span> More Aggressive | 
-        <span style="color: #d7191c;">●</span> Less Aggressive<br>
-        <strong>✅ NOW: Positive Numbers = Better Performance!</strong>
+        <strong>K% vs League:</strong> <span style="color: #1a9641;">●</span> Positive = Better Contact (strikes out less) | 
+        <span style="color: #d7191c;">●</span> Negative = Worse Contact (strikes out more)<br>
+        <strong>BB% vs League:</strong> <span style="color: #1a9641;">●</span> Positive = More Aggressive (walks less) | 
+        <span style="color: #d7191c;">●</span> Negative = Less Aggressive (walks more)<br>
+        <strong>✅ Rule: Positive vs League = Better Performance = Green!</strong>
     </div>
     """, unsafe_allow_html=True)
     
@@ -961,7 +959,7 @@ def display_league_aware_results(filtered_df, filters):
     if len(filtered_df) >= 3:
         st.markdown("### 🔍 **Advanced League Context Analysis**")
         
-        # Define profile criteria for analysis (UPDATED with more inclusive thresholds)
+        # Define profile criteria for analysis (UPDATED with All Power Players added back)
         profile_criteria = {
             "🏆 Contact-Aggressive": {"max_k": 19.0, "max_bb": 7.0, "icon": "🏆", "type": "contact"},
             "⭐ Elite Contact": {"max_k": 14.0, "max_bb": 9.5, "icon": "⭐", "type": "contact"},
@@ -1038,10 +1036,7 @@ def display_league_aware_results(filtered_df, filters):
                     else:
                         st.info(f"**{player['Batter']}** (#{overall_rank})")
                     
-                    # Key metrics with FIXED calculations
-                    k_better = LEAGUE_K_AVG - player['adj_K']  # Positive = better
-                    bb_more_aggressive = LEAGUE_BB_AVG - player['adj_BB']  # Positive = more aggressive
-                    
+                    # Key metrics with CORRECTED vs league calculations
                     if criteria["type"] == "power":
                         # Power-focused metrics
                         st.markdown(f"""
@@ -1050,11 +1045,14 @@ def display_league_aware_results(filtered_df, filters):
                         **vs Pitcher:** {player['adj_vs']:.0f} | **Score:** {player['Score']:.1f}
                         """)
                     else:
-                        # Contact-focused metrics
+                        # Contact-focused metrics with corrected calculations
+                        k_vs_league = LEAGUE_K_AVG - player['adj_K']    # Positive = better contact
+                        bb_vs_league = LEAGUE_BB_AVG - player['adj_BB']  # Positive = more aggressive
+                        
                         st.markdown(f"""
                         **Hit Prob:** {player['total_hit_prob']:.1f}%  
-                        **K% Better:** {k_better:+.1f}%  
-                        **BB% More Aggressive:** {bb_more_aggressive:+.1f}%  
+                        **K% vs League:** {k_vs_league:+.1f}%  
+                        **BB% vs League:** {bb_vs_league:+.1f}%  
                         **Score:** {player['Score']:.1f}
                         """)
                     
@@ -1317,20 +1315,20 @@ def main_page():
             else:
                 st.success("✅ All players currently included in analysis")
     
-    # Bottom tips with FIXED explanations
+    # Bottom tips with CORRECTED explanations
     st.markdown("---")
     st.markdown("""
-    ### 💡 **V2.3 UPDATED Strategy Tips**
-    - **Positive K% Better**: Player strikes out less than league average (GOOD!)
-    - **Positive BB% More Aggressive**: Player walks less than league average (more swings = more hit chances)
+    ### 💡 **V2.3 CORRECTED Strategy Tips**
+    - **Positive K% vs League**: Player strikes out less than league average (BETTER CONTACT = GREEN!)
+    - **Positive BB% vs League**: Player walks less than league average (MORE AGGRESSIVE = GREEN!)
     - **Scores 70+**: Elite opportunities with league-superior metrics
     - **🔥 NEW: Relaxed Thresholds**: Profiles now catch more "hidden gems" automatically
     - **💎 Less Manual Searching**: Reduced need to dig through All Players for overlooked options
-    - **XB% + HR% = Power Combo**: Target 10%+ combined for solid power threats (lowered from 12%)
+    - **XB% + HR% = Power Combo**: Target 10%+ combined for solid power threats
     - **⚾ All Power Players**: Use for research to find remaining hidden power gems
     - **Always verify lineups and weather before finalizing picks**
     
-    **✅ Hidden Gem Revolution: Now Automatically Find Players Just Outside Old Thresholds!**
+    **✅ Corrected Logic: Positive vs League Numbers = Better Performance = Green Colors!**
     """)
 
 def info_page():
@@ -1579,7 +1577,7 @@ def info_page():
     - **Pure Power**: GPP leverage and contrarian plays  
     - **All Power**: Research mode to find hidden power gems
     
-    *Master the Art of Baseball Analytics | A1FADED V2.3 Hidden Gems Edition*
+    *Master the Art of Baseball Analytics | A1FADED V2.3 Corrected & Complete Edition*
     """)
 
 def main():
@@ -1609,7 +1607,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.3** | Hidden Gems Edition")
+    st.sidebar.markdown("**V2.3** | Corrected & Complete")
 
 if __name__ == "__main__":
     main()
