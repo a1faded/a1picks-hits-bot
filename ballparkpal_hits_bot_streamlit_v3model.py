@@ -368,7 +368,7 @@ def create_league_aware_filters(df=None):
             'min_hit_prob': 28,
             'profile_type': 'contact'
         },
-        "💥 (HR)Contact Power Hitters": {
+        "💥 Contact Power Hitters": {
             'description': "Low K% + High XB% & HR% (Power with contact)",
             'max_k': 17.0,   # Good contact
             'max_bb': 10.0,  # Reasonable walks
@@ -377,7 +377,7 @@ def create_league_aware_filters(df=None):
             'min_vs': -5,    # Reasonable matchup
             'profile_type': 'power'
         },
-        "🚀 (HR)Pure Power Sluggers": {
+        "🚀 Pure Power Sluggers": {
             'description': "High XB% & HR% (Power over contact)",
             'max_k': 100,    # Accept high strikeouts
             'max_bb': 100,   # Accept high walks
@@ -968,7 +968,8 @@ def display_league_aware_results(filtered_df, filters):
             "⚡ Swing-Happy": {"max_k": 22.6, "max_bb": 4.0, "icon": "⚡", "type": "contact"},
             "🔷 Above-Average": {"max_k": 17.0, "max_bb": 10.0, "icon": "🔷", "type": "contact"},
             "💥 Contact Power": {"max_k": 17.0, "max_bb": 10.0, "min_xb": 8.0, "min_hr": 3.0, "icon": "💥", "type": "power"},
-            "🚀 Pure Power": {"max_k": 100, "max_bb": 100, "min_xb": 10.0, "min_hr": 4.0, "icon": "🚀", "type": "power"}
+            "🚀 Pure Power": {"max_k": 100, "max_bb": 100, "min_xb": 10.0, "min_hr": 4.0, "icon": "🚀", "type": "power"},
+            "⚾ All Power": {"max_k": 100, "max_bb": 100, "min_xb": 0, "min_hr": 0, "icon": "⚾", "type": "power"}
         }
         
         excluded_players = st.session_state.get('excluded_players', [])
@@ -1319,15 +1320,16 @@ def main_page():
     # Bottom tips with FIXED explanations
     st.markdown("---")
     st.markdown("""
-    ### 💡 **ENHANCED League-Aware Strategy Tips**
+    ### 💡 **COMPLETE Power-Aware Strategy Tips**
     - **Positive K% Better**: Player strikes out less than league average (GOOD!)
     - **Positive BB% More Aggressive**: Player walks less than league average (more swings = more hit chances)
     - **Scores 70+**: Elite opportunities with league-superior metrics
-    - **💥 NEW: Power Profiles**: Contact Power for tournaments, Pure Power for GPPs
+    - **💥 NEW: 3 Power Profiles**: Contact Power, Pure Power, and All Power Players
     - **XB% + HR% = Power Combo**: Target 12%+ combined for elite power threats
+    - **⚾ All Power Players**: Use for research to find hidden power gems
     - **Always verify lineups and weather before finalizing picks**
     
-    **✅ Power Revolution: Now Find Both Contact Kings AND Home Run Threats!**
+    **✅ Complete Power System: Contact Specialists + Power Specialists + Everything In Between!**
     """)
 
 def info_page():
@@ -1383,6 +1385,30 @@ def info_page():
         #### **⚠️ Avoid When:**
         - Offensive explosion expected (too conservative)
         - Tournament play where you need ceiling (limits upside)
+        
+        ---
+        
+        ### **⚾ All Power Players** 📊 POWER RESEARCH MODE
+        **Profile**: No restrictions on K%, BB%, XB%, or HR% | **Use**: Complete power landscape analysis
+        
+        #### **✅ Use This Profile When:**
+        - **Initial Power Research** - See the full power spectrum
+        - **Looking for Hidden Power** - Find overlooked players with decent power metrics
+        - **Contrarian GPP Strategy** - Players others might miss due to high K% or low traditional power
+        - **Large Field Tournaments** - Need maximum differentiation in power plays
+        - **Salary Cap Constraints** - Find cheaper power options that don't meet elite thresholds
+        
+        #### **📈 Why It's Valuable:**
+        - Uses power scoring algorithm on entire player pool
+        - Reveals players with moderate power who score well due to good matchups
+        - Shows complete power hierarchy for the slate
+        - Can find value plays overlooked by restrictive power filters
+        
+        #### **⚠️ Remember:**
+        - Still uses power scoring (emphasizes XB%, HR%, reduces singles weight)
+        - May include players with very low power numbers
+        - Requires more manual filtering of results
+        - Best used for research, not final selections
         
         ---
         
@@ -1500,12 +1526,12 @@ def info_page():
     st.markdown("""
     **🔥 Complete Strategy System Features:**
     - ✅ **FIXED intuitive metrics** - Positive numbers = better performance
-    - ✅ **NEW: Power Hitter Profiles** - XB% and HR% focused analysis
-    - 7 distinct player profiles including power specialists
+    - ✅ **NEW: Complete Power System** - 3 power profiles for every power need
+    - 8 distinct player profiles including complete power spectrum
     - Profile-specific scoring (contact vs power algorithms)
     - Environmental and matchup-based selection guides
     - Real-time league context comparisons
-    - Multi-profile analysis system with power players
+    - Multi-profile analysis system with all power players
     - Lineup management with session persistence
     
     ### **🎯 Profile Selection Quick Guide:**
@@ -1513,8 +1539,14 @@ def info_page():
     **GPP Tournaments:** 40% Contact-Aggressive, 20% Contact Power, 20% Pure Power, 20% Other
     **Hitter-Friendly Parks:** Increase Power profiles by 15-20%
     **Pitcher's Parks:** Stick to Elite Contact and Contact-Aggressive
+    **Power Research:** Use "All Power Players" to see complete power landscape
     
-    *Master the Art of Baseball Analytics | A1FADED V2.2 Power Edition*
+    ### **⚾ Power Profile Usage:**
+    - **Contact Power**: Tournament ceiling with safety net
+    - **Pure Power**: GPP leverage and contrarian plays  
+    - **All Power**: Research mode to find hidden power gems
+    
+    *Master the Art of Baseball Analytics | A1FADED V2.3 Complete Power Edition*
     """)
 
 def main():
@@ -1544,7 +1576,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.2** | Power Hitter Edition")
+    st.sidebar.markdown("**V2.3** | Complete Power Edition")
 
 if __name__ == "__main__":
     main()
