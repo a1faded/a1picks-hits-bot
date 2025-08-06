@@ -221,33 +221,72 @@ def load_and_process_data():
     
     return merged_df
 
-def calculate_league_aware_scores(df):
-    """Enhanced scoring algorithm that matches the old script approach."""
+def calculate_league_aware_scores(df, profile_type='contact'):
+    """Enhanced scoring algorithm that adapts based on profile type."""
     
-    # Use the same weights as the old script
-    weights = CONFIG['base_hit_weights']
+    if profile_type == 'power':
+        # Power-focused scoring weights
+        weights = {
+            'adj_XB': 3.0,      # Primary focus: Extra bases
+            'adj_HR': 2.5,      # Primary focus: Home runs  
+            'adj_vs': 1.5,      # Enhanced matchup importance for power
+            'adj_RC': 1.0,      # Run creation
+            'adj_1B': 0.5,      # Reduced singles weight (not relevant for power)
+            'adj_K': -1.0,      # Reduced K penalty (power hitters strike out more)
+            'adj_BB': -0.3      # Minimal BB penalty (some power hitters walk more)
+        }
+        
+        # Power-specific bonuses
+        df['power_bonus'] = np.where(
+            (df['adj_XB'] > 10) & (df['adj_HR'] > 4), 12, 0  # Elite power combo
+        )
+        
+        df['clutch_power_bonus'] = np.where(
+            (df['adj_XB'] > 8) & (df['adj_vs'] > 5), 8, 0  # Good power + good matchup
+        )
+        
+        df['consistent_power_bonus'] = np.where(
+            (df['adj_HR'] > 3) & (df['adj_K'] < 25), 5, 0  # HR power without excessive Ks
+        )
+        
+        # Calculate power probability instead of hit probability
+        df['power_prob'] = df['adj_XB'] + df['adj_HR']
+        df['power_prob'] = df['power_prob'].clip(upper=50)  # Cap at reasonable power rate
+        
+        bonus_cols = ['power_bonus', 'clutch_power_bonus', 'consistent_power_bonus']
+        
+    else:
+        # Contact-focused scoring weights (original system)
+        weights = {
+            'adj_1B': 2.0,      # Singles (primary base hit)
+            'adj_XB': 1.8,      # Extra bases (also base hits)
+            'adj_vs': 1.2,      # Matchup performance
+            'adj_RC': 0.8,      # Run creation
+            'adj_HR': 0.6,      # Home runs (also base hits)
+            'adj_K': -2.0,      # Heavy penalty for strikeouts (no hit)
+            'adj_BB': -0.8      # Moderate penalty for walks (not hits)
+        }
+        
+        # Contact-focused bonuses
+        df['contact_bonus'] = np.where(
+            (df['total_hit_prob'] > 40) & (df['adj_K'] < 18), 8, 0
+        )
+        
+        df['consistency_bonus'] = np.where(
+            (df['adj_1B'] > 20) & (df['adj_XB'] > 8), 5, 0
+        )
+        
+        df['matchup_bonus'] = np.where(df['adj_vs'] > 5, 3, 0)
+        
+        bonus_cols = ['contact_bonus', 'consistency_bonus', 'matchup_bonus']
     
-    # Base weighted score calculation (same as old script)
+    # Base weighted score calculation
     df['base_score'] = sum(df[col] * weight for col, weight in weights.items() if col in df.columns)
     
-    # League-aware bonuses (enhanced from old script)
-    # Contact bonus (similar to old script's contact_bonus)
-    df['contact_bonus'] = np.where(
-        (df['total_hit_prob'] > 40) & (df['adj_K'] < 18), 8, 0
-    )
+    # Calculate final score with appropriate bonuses
+    df['Score'] = df['base_score'] + sum(df[col] for col in bonus_cols if col in df.columns)
     
-    # Consistency bonus (similar to old script's consistency_bonus)
-    df['consistency_bonus'] = np.where(
-        (df['adj_1B'] > 20) & (df['adj_XB'] > 8), 5, 0
-    )
-    
-    # Matchup bonus (same as old script)
-    df['matchup_bonus'] = np.where(df['adj_vs'] > 5, 3, 0)
-    
-    # Calculate final score (same approach as old script)
-    df['Score'] = df['base_score'] + df['contact_bonus'] + df['consistency_bonus'] + df['matchup_bonus']
-    
-    # Normalize to 0-100 scale (same as old script)
+    # Normalize to 0-100 scale
     if df['Score'].max() != df['Score'].min():
         df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
     else:
@@ -305,31 +344,54 @@ def create_league_aware_filters(df=None):
             'description': "Low K% + Low BB% (Elite for base hits)",
             'max_k': 17.0,   # Above average contact
             'max_bb': 6.0,   # Above average aggressive
-            'min_hit_prob': 35
+            'min_hit_prob': 35,
+            'profile_type': 'contact'
         },
         "⭐ Elite Contact Specialists": {
             'description': "Ultra-low K% (Pure contact)",
             'max_k': 12.0,   # Elite contact
             'max_bb': 8.5,   # League average walks
-            'min_hit_prob': 30
+            'min_hit_prob': 30,
+            'profile_type': 'contact'
         },
         "⚡ Swing-Happy Hitters": {
             'description': "Ultra-low BB% (Aggressive approach)",
             'max_k': 22.6,   # League average strikeouts
             'max_bb': 4.0,   # Hyper-aggressive
-            'min_hit_prob': 32
+            'min_hit_prob': 32,
+            'profile_type': 'contact'
         },
         "🔷 Above-Average Contact": {
             'description': "Better than league average K%",
             'max_k': 17.0,   # Above average contact
             'max_bb': 10.0,  # Reasonable walks
-            'min_hit_prob': 28
+            'min_hit_prob': 28,
+            'profile_type': 'contact'
+        },
+        "💥 Contact Power Hitters": {
+            'description': "Low K% + High XB% & HR% (Power with contact)",
+            'max_k': 17.0,   # Good contact
+            'max_bb': 10.0,  # Reasonable walks
+            'min_xb': 8.0,   # Strong extra base rate
+            'min_hr': 3.0,   # Solid HR rate
+            'min_vs': -5,    # Reasonable matchup
+            'profile_type': 'power'
+        },
+        "🚀 Pure Power Sluggers": {
+            'description': "High XB% & HR% (Power over contact)",
+            'max_k': 100,    # Accept high strikeouts
+            'max_bb': 100,   # Accept high walks
+            'min_xb': 10.0,  # Elite extra base rate
+            'min_hr': 4.0,   # Elite HR rate
+            'min_vs': -10,   # Any matchup if power is elite
+            'profile_type': 'power'
         },
         "🌐 All Players": {
-            'description': "No K% or BB% restrictions",
+            'description': "No restrictions",
             'max_k': 100,
             'max_bb': 100,
-            'min_hit_prob': 20
+            'min_hit_prob': 20,
+            'profile_type': 'all'
         }
     }
     
@@ -344,14 +406,32 @@ def create_league_aware_filters(df=None):
     type_config = player_type_options[selected_type]
     filters['max_k'] = type_config['max_k']
     filters['max_bb'] = type_config['max_bb']
-    filters['min_hit_prob'] = type_config['min_hit_prob']
+    filters['profile_type'] = type_config['profile_type']
+    
+    # Profile-specific criteria
+    if type_config['profile_type'] == 'power':
+        filters['min_xb'] = type_config.get('min_xb', 0)
+        filters['min_hr'] = type_config.get('min_hr', 0)
+        filters['min_vs'] = type_config.get('min_vs', -10)
+        filters['min_hit_prob'] = 0  # Not used for power profiles
+    else:
+        filters['min_hit_prob'] = type_config.get('min_hit_prob', 20)
+        filters['min_xb'] = 0
+        filters['min_hr'] = 0
+        filters['min_vs'] = -10
     
     # Show what this means
     st.sidebar.markdown(f"**📋 {selected_type}**")
     st.sidebar.markdown(f"*{type_config['description']}*")
     st.sidebar.markdown(f"- Max K%: {filters['max_k']:.1f}%")
     st.sidebar.markdown(f"- Max BB%: {filters['max_bb']:.1f}%")
-    st.sidebar.markdown(f"- Min Hit Prob: {filters['min_hit_prob']}%")
+    
+    if type_config['profile_type'] == 'power':
+        st.sidebar.markdown(f"- Min XB%: {filters['min_xb']:.1f}%")
+        st.sidebar.markdown(f"- Min HR%: {filters['min_hr']:.1f}%")
+        st.sidebar.markdown(f"- Min vs Pitcher: {filters['min_vs']}")
+    else:
+        st.sidebar.markdown(f"- Min Hit Prob: {filters['min_hit_prob']}%")
     
     # ADVANCED OPTIONS (Collapsible)
     with st.sidebar.expander("⚙️ Fine-Tune Filters"):
@@ -489,7 +569,11 @@ def create_league_aware_filters(df=None):
             if excluded_players:
                 preview_df = preview_df[~preview_df['Batter'].isin(excluded_players)]
             
-            preview_query = f"adj_K <= {filters['max_k']:.1f} and adj_BB <= {filters['max_bb']:.1f} and total_hit_prob >= {filters['min_hit_prob']}"
+            # Build query based on profile type
+            if filters.get('profile_type') == 'power':
+                preview_query = f"adj_K <= {filters['max_k']:.1f} and adj_BB <= {filters['max_bb']:.1f} and adj_XB >= {filters['min_xb']:.1f} and adj_HR >= {filters['min_hr']:.1f} and adj_vs >= {filters['min_vs']}"
+            else:
+                preview_query = f"adj_K <= {filters['max_k']:.1f} and adj_BB <= {filters['max_bb']:.1f} and total_hit_prob >= {filters['min_hit_prob']}"
             
             preview_df = preview_df.query(preview_query)
             
@@ -571,8 +655,21 @@ def apply_league_aware_filters(df, filters):
     if 'max_bb' in filters and filters['max_bb'] < 100:
         query_parts.append(f"adj_BB <= {filters['max_bb']:.1f}")
     
-    if 'min_hit_prob' in filters and filters['min_hit_prob'] > 0:
-        query_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
+    # Profile-specific filters
+    if filters.get('profile_type') == 'power':
+        # Power profile filters
+        if 'min_xb' in filters and filters['min_xb'] > 0:
+            query_parts.append(f"adj_XB >= {filters['min_xb']:.1f}")
+        
+        if 'min_hr' in filters and filters['min_hr'] > 0:
+            query_parts.append(f"adj_HR >= {filters['min_hr']:.1f}")
+        
+        if 'min_vs' in filters and filters['min_vs'] > -10:
+            query_parts.append(f"adj_vs >= {filters['min_vs']}")
+    else:
+        # Contact profile filters
+        if 'min_hit_prob' in filters and filters['min_hit_prob'] > 0:
+            query_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
     
     # Advanced filters
     if 'min_vs_pitcher' in filters and filters['min_vs_pitcher'] != 0:
@@ -864,12 +961,14 @@ def display_league_aware_results(filtered_df, filters):
     if len(filtered_df) >= 3:
         st.markdown("### 🔍 **Advanced League Context Analysis**")
         
-        # Define profile criteria for analysis
+        # Define profile criteria for analysis (including power profiles)
         profile_criteria = {
-            "🏆 Contact-Aggressive": {"max_k": 17.0, "max_bb": 6.0, "icon": "🏆"},
-            "⭐ Elite Contact": {"max_k": 12.0, "max_bb": 8.5, "icon": "⭐"},
-            "⚡ Swing-Happy": {"max_k": 22.6, "max_bb": 4.0, "icon": "⚡"},
-            "🔷 Above-Average": {"max_k": 17.0, "max_bb": 10.0, "icon": "🔷"}
+            "🏆 Contact-Aggressive": {"max_k": 17.0, "max_bb": 6.0, "icon": "🏆", "type": "contact"},
+            "⭐ Elite Contact": {"max_k": 12.0, "max_bb": 8.5, "icon": "⭐", "type": "contact"},
+            "⚡ Swing-Happy": {"max_k": 22.6, "max_bb": 4.0, "icon": "⚡", "type": "contact"},
+            "🔷 Above-Average": {"max_k": 17.0, "max_bb": 10.0, "icon": "🔷", "type": "contact"},
+            "💥 Contact Power": {"max_k": 17.0, "max_bb": 10.0, "min_xb": 8.0, "min_hr": 3.0, "icon": "💥", "type": "power"},
+            "🚀 Pure Power": {"max_k": 100, "max_bb": 100, "min_xb": 10.0, "min_hr": 4.0, "icon": "🚀", "type": "power"}
         }
         
         excluded_players = st.session_state.get('excluded_players', [])
@@ -879,11 +978,22 @@ def display_league_aware_results(filtered_df, filters):
         
         for profile_name, criteria in profile_criteria.items():
             # Filter players that meet this profile's criteria
-            profile_players = filtered_df[
-                (filtered_df['adj_K'] <= criteria['max_k']) & 
-                (filtered_df['adj_BB'] <= criteria['max_bb']) &
-                (~filtered_df['Batter'].isin(excluded_players))  # Exclude non-playing players
-            ].copy()
+            if criteria["type"] == "power":
+                # Power profile filtering
+                profile_players = filtered_df[
+                    (filtered_df['adj_K'] <= criteria['max_k']) & 
+                    (filtered_df['adj_BB'] <= criteria['max_bb']) &
+                    (filtered_df['adj_XB'] >= criteria.get('min_xb', 0)) &
+                    (filtered_df['adj_HR'] >= criteria.get('min_hr', 0)) &
+                    (~filtered_df['Batter'].isin(excluded_players))  # Exclude non-playing players
+                ].copy()
+            else:
+                # Contact profile filtering
+                profile_players = filtered_df[
+                    (filtered_df['adj_K'] <= criteria['max_k']) & 
+                    (filtered_df['adj_BB'] <= criteria['max_bb']) &
+                    (~filtered_df['Batter'].isin(excluded_players))  # Exclude non-playing players
+                ].copy()
             
             if not profile_players.empty:
                 # Get the top player for this profile
@@ -931,12 +1041,21 @@ def display_league_aware_results(filtered_df, filters):
                     k_better = LEAGUE_K_AVG - player['adj_K']  # Positive = better
                     bb_more_aggressive = LEAGUE_BB_AVG - player['adj_BB']  # Positive = more aggressive
                     
-                    st.markdown(f"""
-                    **Hit Prob:** {player['total_hit_prob']:.1f}%  
-                    **K% Better:** {k_better:+.1f}%  
-                    **BB% More Aggressive:** {bb_more_aggressive:+.1f}%  
-                    **Score:** {player['Score']:.1f}
-                    """)
+                    if criteria["type"] == "power":
+                        # Power-focused metrics
+                        st.markdown(f"""
+                        **XB%:** {player['adj_XB']:.1f}% | **HR%:** {player['adj_HR']:.1f}%  
+                        **Power Combo:** {(player['adj_XB'] + player['adj_HR']):.1f}%  
+                        **vs Pitcher:** {player['adj_vs']:.0f} | **Score:** {player['Score']:.1f}
+                        """)
+                    else:
+                        # Contact-focused metrics
+                        st.markdown(f"""
+                        **Hit Prob:** {player['total_hit_prob']:.1f}%  
+                        **K% Better:** {k_better:+.1f}%  
+                        **BB% More Aggressive:** {bb_more_aggressive:+.1f}%  
+                        **Score:** {player['Score']:.1f}
+                        """)
                     
                     # Profile pool size
                     st.caption(f"📊 {profile_count} players in profile")
@@ -954,17 +1073,23 @@ def display_league_aware_results(filtered_df, filters):
             
             insights.append(f"🏆 **Overall Best**: {best_player_name} ({best_profile})")
             
-            # Check for elite contact across profiles
-            elite_contact_players = [analysis['player']['Batter'] for analysis in profile_analysis.values() 
-                                   if analysis['player']['adj_K'] <= 12.0]
-            if elite_contact_players:
-                insights.append(f"⭐ **Elite Contact Available**: {', '.join(elite_contact_players)}")
+            # Check for elite power across profiles
+            elite_power_players = [analysis['player']['Batter'] for analysis in profile_analysis.values() 
+                                 if analysis['player']['adj_XB'] + analysis['player']['adj_HR'] > 12]
+            if elite_power_players:
+                insights.append(f"💥 **Elite Power Available**: {', '.join(elite_power_players)}")
             
-            # Check for high hit probability players
+            # Check for high hit probability players (contact profiles)
             high_hit_prob_players = [analysis['player']['Batter'] for analysis in profile_analysis.values() 
                                    if analysis['player']['total_hit_prob'] > 40]
             if high_hit_prob_players:
                 insights.append(f"🎯 **40%+ Hit Probability**: {', '.join(high_hit_prob_players)}")
+            
+            # Check for power+contact combo players
+            power_contact_players = [analysis['player']['Batter'] for analysis in profile_analysis.values() 
+                                   if analysis['player']['adj_XB'] + analysis['player']['adj_HR'] > 10 and analysis['player']['adj_K'] <= 17]
+            if power_contact_players:
+                insights.append(f"⚡ **Power + Contact Combo**: {', '.join(power_contact_players)}")
             
             # Show profile diversity
             total_profiles_available = len(profile_analysis)
@@ -976,10 +1101,15 @@ def display_league_aware_results(filtered_df, filters):
             # Strategic recommendations based on available profiles
             st.markdown("**💡 Strategic Recommendations:**")
             
-            if "🏆 Contact-Aggressive" in profile_analysis and "⚡ Swing-Happy" in profile_analysis:
-                st.info("🎮 **Balanced Strategy**: Both conservative (Contact-Aggressive) and leverage (Swing-Happy) plays available")
-            elif "⭐ Elite Contact" in profile_analysis:
-                st.info("🎯 **Premium Strategy**: Elite contact player available - ideal for high-stakes situations")
+            power_available = any("Power" in p for p in profile_analysis.keys())
+            contact_available = any(p in ["🏆 Contact-Aggressive", "⭐ Elite Contact"] for p in profile_analysis.keys())
+            
+            if power_available and contact_available:
+                st.info("⚖️ **Balanced Strategy**: Both power and contact options available - diversify based on contest type")
+            elif "💥 Contact Power" in profile_analysis:
+                st.info("🎯 **Premium Power Strategy**: Contact power player available - ideal for tournaments needing ceiling")
+            elif "🚀 Pure Power" in profile_analysis:
+                st.info("💥 **High-Risk/High-Reward**: Pure power available - perfect for GPP leverage plays")
             elif "🏆 Contact-Aggressive" in profile_analysis:
                 st.info("🛡️ **Safety Strategy**: Focus on Contact-Aggressive for consistent base hits")
             elif "⚡ Swing-Happy" in profile_analysis:
@@ -1096,8 +1226,9 @@ def main_page():
     # Create league-aware filters with baseball intelligence
     filters = create_league_aware_filters(df)
     
-    # Calculate league-aware scores
-    df = calculate_league_aware_scores(df)
+    # Calculate league-aware scores with profile-specific logic
+    profile_type = filters.get('profile_type', 'contact')
+    df = calculate_league_aware_scores(df, profile_type)
     
     # Apply intelligent filters
     filtered_df = apply_league_aware_filters(df, filters)
@@ -1188,13 +1319,15 @@ def main_page():
     # Bottom tips with FIXED explanations
     st.markdown("---")
     st.markdown("""
-    ### 💡 **FIXED League-Aware Strategy Tips**
+    ### 💡 **ENHANCED League-Aware Strategy Tips**
     - **Positive K% Better**: Player strikes out less than league average (GOOD!)
     - **Positive BB% More Aggressive**: Player walks less than league average (more swings = more hit chances)
     - **Scores 70+**: Elite opportunities with league-superior metrics
+    - **💥 NEW: Power Profiles**: Contact Power for tournaments, Pure Power for GPPs
+    - **XB% + HR% = Power Combo**: Target 12%+ combined for elite power threats
     - **Always verify lineups and weather before finalizing picks**
     
-    **✅ Now: Green/Positive Numbers = Better Performance = Easier to Read!**
+    **✅ Power Revolution: Now Find Both Contact Kings AND Home Run Threats!**
     """)
 
 def info_page():
@@ -1250,6 +1383,51 @@ def info_page():
         #### **⚠️ Avoid When:**
         - Offensive explosion expected (too conservative)
         - Tournament play where you need ceiling (limits upside)
+        
+        ---
+        
+        ### **💥 Contact Power Hitters** ⚡ TOURNAMENT CEILING
+        **Profile**: K% ≤17%, XB% ≥8%, HR% ≥3% | **Historical Examples**: Mookie Betts, Freddie Freeman, Vladimir Guerrero Jr.
+        
+        #### **✅ Use This Profile When:**
+        - **Tournament Play** - Need ceiling without sacrificing too much floor
+        - **Hitter-Friendly Parks** - Coors, Yankee Stadium, etc.
+        - **Weak Pitching** - Taking advantage of poor opposing pitching
+        - **Medium-Stakes Contests** - Balance of safety and upside
+        - **Good Weather Conditions** - Wind helping, warm temperatures
+        
+        #### **📈 Why It Works:**
+        - Combines contact skills with legitimate power
+        - Lower strikeout risk than pure sluggers
+        - Can provide 2+ total bases consistently
+        - Multiple ways to return value (singles, doubles, HRs)
+        
+        #### **⚠️ Considerations:**
+        - Higher salary cost than contact-only players
+        - Weather-dependent (cold/wind affects power more)
+        
+        ---
+        
+        ### **🚀 Pure Power Sluggers** 💥 GPP LEVERAGE
+        **Profile**: XB% ≥10%, HR% ≥4% (K% and BB% flexible) | **Historical Examples**: Aaron Judge, Mike Trout, Pete Alonso
+        
+        #### **✅ Use This Profile When:**
+        - **GPP Tournaments** - Maximum ceiling plays for large field events
+        - **Offensive Environments** - Coors Field, Camden Yards, favorable weather
+        - **Contrarian Strategy** - When others focus on contact in tough conditions  
+        - **Late Slate Pivots** - Quick recognition of power spots
+        - **Stacking Strategy** - Building around explosive offensive potential
+        
+        #### **📈 Why It's Valuable:**
+        - Highest ceiling potential (3+ total base upside)
+        - Lower ownership when conditions appear tough
+        - Game-changing potential in tournaments
+        - Can overcome poor matchups with raw power
+        
+        #### **⚠️ High Risk:**
+        - High strikeout rates acceptable but risky
+        - Weather/park dependent
+        - Boom or bust nature unsuitable for cash games
         
         ---
         
@@ -1322,13 +1500,21 @@ def info_page():
     st.markdown("""
     **🔥 Complete Strategy System Features:**
     - ✅ **FIXED intuitive metrics** - Positive numbers = better performance
-    - 5 distinct player profiles for every situation
+    - ✅ **NEW: Power Hitter Profiles** - XB% and HR% focused analysis
+    - 7 distinct player profiles including power specialists
+    - Profile-specific scoring (contact vs power algorithms)
     - Environmental and matchup-based selection guides
     - Real-time league context comparisons
-    - Multi-profile analysis system
+    - Multi-profile analysis system with power players
     - Lineup management with session persistence
     
-    *Master the Art of Baseball Analytics | A1FADED V2.1 Fixed Edition*
+    ### **🎯 Profile Selection Quick Guide:**
+    **Cash Games:** 80% Contact-Aggressive, 15% Elite Contact, 5% Contact Power
+    **GPP Tournaments:** 40% Contact-Aggressive, 20% Contact Power, 20% Pure Power, 20% Other
+    **Hitter-Friendly Parks:** Increase Power profiles by 15-20%
+    **Pitcher's Parks:** Stick to Elite Contact and Contact-Aggressive
+    
+    *Master the Art of Baseball Analytics | A1FADED V2.2 Power Edition*
     """)
 
 def main():
@@ -1358,7 +1544,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.1** | Fixed Intuitive Metrics")
+    st.sidebar.markdown("**V2.2** | Power Hitter Edition")
 
 if __name__ == "__main__":
     main()
