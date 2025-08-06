@@ -524,9 +524,16 @@ with st.sidebar.expander("⚙️ Fine-Tune Filters"):
         team_options = sorted(df['Tm'].unique().tolist())
     
     filters['selected_teams'] = st.multiselect(
-        "Filter by Teams",
+        "Filter by Teams (Include Only)",
         options=team_options,
         help="Leave empty to include all teams"
+    )
+    
+    # Team Exclusion  
+    filters['excluded_teams'] = st.multiselect(
+        "Exclude Teams",
+        options=team_options,
+        help="Select teams to completely exclude from analysis (weather delays, poor matchups, etc.)"
     )
     
     # Result count
@@ -593,6 +600,16 @@ if df is not None and not df.empty:
         if excluded_players:
             preview_df = preview_df[~preview_df['Batter'].isin(excluded_players)]
         
+        # Apply team exclusions
+        excluded_teams = filters.get('excluded_teams', [])
+        if excluded_teams:
+            preview_df = preview_df[~preview_df['Tm'].isin(excluded_teams)]
+        
+        # Apply team selections (include only)
+        selected_teams = filters.get('selected_teams', [])
+        if selected_teams:
+            preview_df = preview_df[preview_df['Tm'].isin(selected_teams)]
+        
         # Build query based on profile type
         if filters.get('profile_type') == 'power':
             preview_query = f"adj_K <= {filters['max_k']:.1f} and adj_BB <= {filters['max_bb']:.1f} and adj_XB >= {filters['min_xb']:.1f} and adj_HR >= {filters['min_hr']:.1f} and adj_vs >= {filters['min_vs']}"
@@ -607,17 +624,22 @@ if df is not None and not df.empty:
         
         matching_count = len(preview_df)
         excluded_count = len(excluded_players)
+        excluded_teams_count = len(excluded_teams) if excluded_teams else 0
         
-        # Context-aware feedback with lineup information
+        # Context-aware feedback with lineup and team information
         if matching_count == 0:
             st.sidebar.error("❌ No players match current profile")
             if excluded_count > 0:
                 st.sidebar.markdown(f"**💡 Note:** {excluded_count} players excluded due to lineup status")
+            if excluded_teams_count > 0:
+                st.sidebar.markdown(f"**🚫 Teams:** {excluded_teams_count} teams excluded")
             st.sidebar.markdown("**💡 Try:** Different player type or use custom overrides")
         elif matching_count < 5:
             st.sidebar.warning(f"⚠️ Only {matching_count} players match")
             if excluded_count > 0:
                 st.sidebar.markdown(f"**📊 Pool:** {matching_count} playing + {excluded_count} excluded")
+            if excluded_teams_count > 0:
+                st.sidebar.markdown(f"**🚫 Teams:** {excluded_teams_count} teams excluded")
             if filters.get('best_per_team_only', False):
                 st.sidebar.markdown(f"**🏟️ Teams:** {len(preview_df['Tm'].unique())} teams represented")
             st.sidebar.markdown("**💡 Consider:** Less restrictive profile or custom settings")
@@ -625,6 +647,9 @@ if df is not None and not df.empty:
             st.sidebar.success(f"✅ {matching_count} players match profile")
             if excluded_count > 0:
                 st.sidebar.markdown(f"**📊 Lineup Status:** {matching_count} confirmed playing, {excluded_count} excluded")
+            if excluded_teams_count > 0:
+                excluded_team_names = ", ".join(excluded_teams)
+                st.sidebar.markdown(f"**🚫 Excluded Teams:** {excluded_team_names}")
             
             if filters.get('best_per_team_only', False):
                 unique_teams = len(preview_df['Tm'].unique())
@@ -672,6 +697,15 @@ if excluded_players:
     if excluded_count > 0:
         st.info(f"🏟️ Excluded {excluded_count} players not in today's lineups")
 
+# Apply team exclusions first (before other filters)
+excluded_teams = filters.get('excluded_teams', [])
+if excluded_teams:
+    excluded_team_players = len(df[df['Tm'].isin(excluded_teams)])
+    df = df[~df['Tm'].isin(excluded_teams)]
+    if excluded_team_players > 0:
+        excluded_team_names = ", ".join(excluded_teams)
+        st.info(f"🚫 Excluded {excluded_team_players} players from teams: {excluded_team_names}")
+
 query_parts = []
 
 # Primary filters based on player type
@@ -701,10 +735,15 @@ else:
 if 'min_vs_pitcher' in filters and filters['min_vs_pitcher'] != 0:
     query_parts.append(f"adj_vs >= {filters['min_vs_pitcher']}")
 
-# Team filter
+# Team filters
 if filters.get('selected_teams'):
     team_filter = "Tm in " + str(filters['selected_teams'])
     query_parts.append(team_filter)
+
+# Team exclusions
+if filters.get('excluded_teams'):
+    team_exclude_filter = "Tm not in " + str(filters['excluded_teams'])
+    query_parts.append(team_exclude_filter)
 
 # Apply filters with error handling
 try:
@@ -1364,10 +1403,11 @@ st.markdown("""
 - **💎 Hidden Gems Profiles**: Updated thresholds catch more viable players automatically
 - **XB% + HR% = Power Combo**: Target 10%+ combined for solid power threats
 - **⚾ All Power Players**: Complete power research - find overlooked gems
+- **🚫 NEW: Team Exclusion**: Exclude entire teams for weather delays, tough matchups, or strategic fades
 - **📊 Weather & Parks**: Already factored into data - focus on lineup verification and strategy
 - **Always verify lineups before finalizing picks**
 
-**✅ Complete System: 8 Profiles | Power + Contact | Pre-Integrated Environmental Data**
+**✅ Complete System: 8 Profiles | Team + Player Exclusions | Pre-Integrated Environmental Data**
 """)
 ```
 
@@ -1425,1078 +1465,6 @@ with st.expander("📖 Script Overview", expanded=True):
     - **Baseball Analysts**: Research and player evaluation
     """)
 
-with st.expander("⚙️ How the System Works - Technical Workflow"):
-    st.markdown("""
-    ## 🔄 **Step-by-Step System Workflow**
-    
-    ### **Phase 1: Data Acquisition & Validation**
-    
-    #### **Data Sources:**
-    1. **Base Probabilities CSV**: Core hitting metrics from ballpark-adjusted models
-    2. **Adjustment Factors CSV**: Performance modifiers based on recent form, matchups, conditions
-    
-    **Note: Both data sources already incorporate:**
-    - Weather conditions (temperature, wind, humidity)
-    - Ballpark factors (dimensions, altitude, environmental conditions)  
-    - Pitcher-specific matchup adjustments
-    - Recent form and trend analysis
-    
-    #### **Validation Process:**
-    ```python
-    # Data validation checks:
-    - File accessibility and download success
-    - Required columns present: ['Tm', 'Batter', 'vs', 'Pitcher', 'RC', 'HR', 'XB', '1B', 'BB', 'K']
-    - No null values in key identification fields
-    - Reasonable data ranges (percentages 0-100, etc.)
-    ```
-    
-    ### **Phase 2: Data Processing & Metric Calculation**
-    
-    #### **Merge Operation:**
-    ```python
-    # Combine datasets on player-pitcher matchup
-    merged_df = pd.merge(probabilities, adjustments,
-                       on=['Tm', 'Batter', 'Pitcher'],
-                       how='inner')
-    ```
-    
-    #### **Adjusted Metric Calculations:**
-    For each core metric (1B, XB, HR, K, BB, vs, RC):
-    ```python
-    # Formula: Base Probability × (1 + Adjustment Factor)
-    adj_metric = base_probability × (1 + percentage_change/100)
-    
-    # Example: 
-    # Base K% = 15.0%, Adjustment = +10%
-    # Adjusted K% = 15.0 × (1 + 10/100) = 16.5%
-    ```
-    
-    #### **Key Derived Metrics:**
-    ```python
-    # Total Hit Probability (capped at 100%)
-    total_hit_prob = adj_1B + adj_XB + adj_HR
-    
-    # League Context Calculations
-    K_vs_League = 22.6 - adj_K    # Positive = better contact
-    BB_vs_League = 8.5 - adj_BB   # Positive = more aggressive
-    
-    # Power Probability (for power profiles)
-    power_prob = adj_XB + adj_HR  # Excludes singles
-    ```
-    
-    ### **Phase 3: Profile-Based Scoring**
-    
-    #### **Contact Scoring Algorithm:**
-    ```python
-    contact_weights = {
-        'adj_1B': 2.0,      # Primary base hit source
-        'adj_XB': 1.8,      # Extra base hits
-        'adj_vs': 1.2,      # Matchup performance
-        'adj_RC': 0.8,      # Run creation
-        'adj_HR': 0.6,      # Home runs
-        'adj_K': -2.0,      # Heavy strikeout penalty
-        'adj_BB': -0.8      # Walk penalty (not hits)
-    }
-    ```
-    
-    #### **Power Scoring Algorithm:**
-    ```python
-    power_weights = {
-        'adj_XB': 3.0,      # Primary power focus
-        'adj_HR': 2.5,      # Home run emphasis  
-        'adj_vs': 1.5,      # Enhanced matchup weight
-        'adj_RC': 1.0,      # Run creation
-        'adj_1B': 0.5,      # Reduced singles focus
-        'adj_K': -1.0,      # Reduced K penalty
-        'adj_BB': -0.3      # Minimal walk penalty
-    }
-    ```
-    
-    #### **Bonus Calculations:**
-    ```python
-    # Contact Bonuses
-    contact_bonus = +8 if (hit_prob > 40% AND K% < 18%)
-    consistency_bonus = +5 if (1B% > 20% AND XB% > 8%)
-    matchup_bonus = +3 if (vs_pitcher > 5)
-    
-    # Power Bonuses  
-    elite_power_bonus = +12 if (XB% > 10% AND HR% > 4%)
-    clutch_power_bonus = +8 if (XB% > 8% AND vs_pitcher > 5)
-    consistent_power_bonus = +5 if (HR% > 3% AND K% < 25%)
-    ```
-    
-    ### **Phase 4: Filtering & Ranking**
-    
-    #### **Profile Application:**
-    Each profile applies specific filters:
-    ```python
-    # Example: Contact-Aggressive profile
-    filtered_players = players.query(
-        "adj_K <= 19.0 and adj_BB <= 7.0 and total_hit_prob >= 32"
-    )
-    ```
-    
-    #### **Final Score Calculation:**
-    ```python
-    # Weighted sum + bonuses
-    base_score = sum(metric × weight for metric, weight in weights.items())
-    final_score = base_score + sum(applicable_bonuses)
-    
-    # Normalize to 0-100 scale
-    normalized_score = (score - min_score) / (max_score - min_score) × 100
-    ```
-    
-    ### **Phase 5: Results & Analysis**
-    
-    #### **Multi-Profile Analysis:**
-    System runs all 8 profiles simultaneously to identify:
-    - Best player from each approach
-    - Profile diversity available
-    - Strategic recommendations based on available options
-    
-    #### **Real-Time Feedback:**
-    Sidebar provides live preview showing:
-    - Number of players matching current filters
-    - Average performance vs league metrics
-    - Exclusion impact from lineup management
-    """)
-
-with st.expander("🧮 Calculation Methods - Formulas & Logic"):
-    st.markdown("""
-    ## 📐 **Core Metric Calculations**
-    
-    ### **Base Metric Adjustments**
-    
-    #### **Adjustment Formula:**
-    ```python
-    # For all metrics (K, BB, 1B, XB, HR, vs, RC):
-    adjusted_value = base_value × (1 + percentage_change / 100)
-    
-    # Real Examples:
-    # Player A: Base K% = 20%, Adjustment = -15% (recent improvement)
-    # Adjusted K% = 20 × (1 + (-15)/100) = 20 × 0.85 = 17.0%
-    
-    # Player B: Base HR% = 3.5%, Adjustment = +25% (hot streak)  
-    # Adjusted HR% = 3.5 × (1 + 25/100) = 3.5 × 1.25 = 4.375%
-    ```
-    
-    #### **Clipping & Validation:**
-    ```python
-    # Percentage metrics clipped to realistic ranges
-    K_rate = clip(adjusted_K, min=0, max=100)
-    BB_rate = clip(adjusted_BB, min=0, max=100)
-    Hit_rates = clip(adjusted_hits, min=0, max=100)
-    
-    # Other metrics clipped to non-negative
-    vs_pitcher = clip(adjusted_vs, min=0)
-    run_creation = clip(adjusted_RC, min=0)
-    ```
-    
-    ### **League Context Calculations**
-    
-    #### **Performance vs League Averages:**
-    ```python
-    # 2024 MLB League Averages
-    LEAGUE_K_AVG = 22.6%    # Strikeout rate
-    LEAGUE_BB_AVG = 8.5%    # Walk rate
-    
-    # Player Performance Calculation
-    K_performance = LEAGUE_K_AVG - player_K_rate
-    BB_performance = LEAGUE_BB_AVG - player_BB_rate
-    
-    # Interpretation:
-    # K_performance = +5.0 → Player strikes out 5% less than league (GOOD)
-    # K_performance = -3.0 → Player strikes out 3% more than league (BAD)
-    # BB_performance = +2.0 → Player walks 2% less than league (MORE AGGRESSIVE)
-    # BB_performance = -4.0 → Player walks 4% more than league (LESS AGGRESSIVE)
-    ```
-    
-    ### **Hit Probability Calculations**
-    
-    #### **Total Hit Probability:**
-    ```python
-    # Sum of all ways to get a hit
-    total_hit_prob = adj_1B + adj_XB + adj_HR
-    
-    # Cap at 100% (theoretical maximum)
-    total_hit_prob = min(total_hit_prob, 100.0)
-    
-    # Example calculation:
-    # Player: 1B=25%, XB=8%, HR=4%
-    # Total = 25 + 8 + 4 = 37% hit probability
-    ```
-    
-    #### **Power Probability (Power Profiles Only):**
-    ```python
-    # Excludes singles - focuses on extra bases
-    power_prob = adj_XB + adj_HR
-    
-    # Realistic cap for power production
-    power_prob = min(power_prob, 50.0)
-    
-    # Example:
-    # Power Player: XB=12%, HR=5%
-    # Power Prob = 12 + 5 = 17% extra base probability
-    ```
-    
-    ### **Scoring Algorithm Details**
-    
-    #### **Contact Profile Scoring:**
-    ```python
-    def calculate_contact_score(player_metrics):
-        # Base weighted calculation
-        score = (
-            player_metrics['adj_1B'] * 2.0 +      # Singles emphasis
-            player_metrics['adj_XB'] * 1.8 +      # Extra bases
-            player_metrics['adj_vs'] * 1.2 +      # Matchup
-            player_metrics['adj_RC'] * 0.8 +      # Run creation
-            player_metrics['adj_HR'] * 0.6 +      # Home runs
-            player_metrics['adj_K'] * (-2.0) +    # K penalty
-            player_metrics['adj_BB'] * (-0.8)     # BB penalty
-        )
-        
-        # Conditional bonuses
-        if player_metrics['total_hit_prob'] > 40 and player_metrics['adj_K'] < 18:
-            score += 8  # Elite contact bonus
-        
-        if player_metrics['adj_1B'] > 20 and player_metrics['adj_XB'] > 8:
-            score += 5  # Consistency bonus
-        
-        if player_metrics['adj_vs'] > 5:
-            score += 3  # Matchup bonus
-            
-        return score
-    ```
-    
-    #### **Power Profile Scoring:**
-    ```python
-    def calculate_power_score(player_metrics):
-        # Power-focused weighting
-        score = (
-            player_metrics['adj_XB'] * 3.0 +      # Extra bases primary
-            player_metrics['adj_HR'] * 2.5 +      # HR emphasis
-            player_metrics['adj_vs'] * 1.5 +      # Enhanced matchup
-            player_metrics['adj_RC'] * 1.0 +      # Run creation
-            player_metrics['adj_1B'] * 0.5 +      # Reduced singles
-            player_metrics['adj_K'] * (-1.0) +    # Reduced K penalty
-            player_metrics['adj_BB'] * (-0.3)     # Minimal BB penalty
-        )
-        
-        # Power-specific bonuses
-        if player_metrics['adj_XB'] > 10 and player_metrics['adj_HR'] > 4:
-            score += 12  # Elite power combo
-        
-        if player_metrics['adj_XB'] > 8 and player_metrics['adj_vs'] > 5:
-            score += 8   # Clutch power
-        
-        if player_metrics['adj_HR'] > 3 and player_metrics['adj_K'] < 25:
-            score += 5   # Consistent power
-            
-        return score
-    ```
-    
-    #### **Score Normalization:**
-    ```python
-    # Convert raw scores to 0-100 scale
-    def normalize_scores(scores):
-        min_score = min(scores)
-        max_score = max(scores)
-        
-        if max_score == min_score:  # All identical
-            return [50.0] * len(scores)
-        
-        normalized = []
-        for score in scores:
-            norm_score = (score - min_score) / (max_score - min_score) * 100
-            normalized.append(round(norm_score, 1))
-        
-        return normalized
-    ```
-    
-    ### **Advanced Calculations**
-    
-    #### **Multi-Profile Ranking:**
-    ```python
-    # Each player gets multiple scores based on applicable profiles
-    for profile in applicable_profiles:
-        if profile_type == 'contact':
-            score = calculate_contact_score(player)
-        elif profile_type == 'power':
-            score = calculate_power_score(player)
-        
-        player.scores[profile] = score
-    
-    # Rank within each profile
-    for profile in profiles:
-        ranked_players = sort_by_score(players_in_profile, profile)
-    ```
-    
-    #### **Exclusion Impact Calculations:**
-    ```python
-    # Real-time filter preview
-    def preview_filter_results(players, filters, exclusions):
-        # Apply exclusions first
-        active_players = players.exclude(exclusions)
-        
-        # Apply profile filters
-        filtered_players = active_players.filter_by_profile(filters)
-        
-        # Calculate impact metrics
-        exclusion_impact = len(players) - len(active_players)
-        filter_impact = len(active_players) - len(filtered_players)
-        
-        return {
-            'matching': len(filtered_players),
-            'excluded': exclusion_impact,
-            'filtered_out': filter_impact
-        }
-    ```
-    """)
-
-with st.expander("🎯 Profile System - Complete Breakdown"):
-    st.markdown("""
-    ## 🔍 **Profile Functions & Logic**
-    
-    ### **Contact Profile Category (4 Profiles)**
-    
-    #### **🏆 Contact-Aggressive Hitters**
-    ```python
-    # Filter Criteria
-    max_K_rate = 19.0%          # Above-average contact
-    max_BB_rate = 7.0%          # Aggressive approach
-    min_hit_prob = 32.0%        # Solid hit probability
-    
-    # Key Stats Considered
-    - K% (primary): Strikeout avoidance for contact
-    - BB% (primary): Aggression level
-    - 1B% (weighted 2.0): Singles production
-    - Total Hit Prob: Combined hit likelihood
-    
-    # Player Archetype
-    - Contact-first approach with aggressive swinging
-    - Avoids walks, attacks hittable pitches
-    - Consistent base hit production
-    - Lower strikeout rates than league average
-    
-    # Ideal Use Cases
-    - DFS cash games (safety-focused)
-    - Pitcher-heavy slates (tough matchups)
-    - Weather conditions favoring contact
-    - Small slates needing reliable production
-    
-    # Example Players
-    - Luis Arraez, José Altuve, Gleyber Torres (good years)
-    ```
-    
-    #### **⭐ Elite Contact Specialists**
-    ```python
-    # Filter Criteria  
-    max_K_rate = 14.0%          # Elite contact skills
-    max_BB_rate = 9.5%          # Disciplined but not passive
-    min_hit_prob = 28.0%        # High-floor players
-    
-    # Key Stats Considered
-    - K% (elite threshold): Top 10% contact skills
-    - Consistency metrics: Low volatility
-    - Matchup resistance: Hits all pitcher types
-    
-    # Player Archetype
-    - Elite bat-to-ball skills
-    - Rarely strikes out (top 10% of MLB)
-    - Can hit elite pitching
-    - Premium plays with highest floors
-    
-    # Ideal Use Cases
-    - High-stakes contests requiring confidence
-    - Tournament finals (small fields)
-    - Ace pitcher matchups (Cy Young candidates)
-    - Maximum safety needed
-    
-    # Example Players
-    - Steven Kwan, Luis Arraez, Juan Soto (contact years)
-    ```
-    
-    #### **⚡ Swing-Happy Hitters**
-    ```python
-    # Filter Criteria
-    max_K_rate = 24.0%          # Accept league-average contact
-    max_BB_rate = 5.0%          # Ultra-aggressive approach
-    min_hit_prob = 30.0%        # Decent hit rates
-    
-    # Key Stats Considered
-    - BB% (primary): Extreme aggression
-    - Swing patterns: First-pitch swinging tendencies
-    - At-bat efficiency: Quick plate appearances
-    
-    # Player Archetype
-    - Attack-first mentality
-    - Rarely walks (bottom 10% of MLB)
-    - More swings = more hit opportunities
-    - Higher variance but unique approach
-    
-    # Ideal Use Cases
-    - GPP tournaments (contrarian plays)
-    - High-scoring environments
-    - Fast-paced games (more at-bats)
-    - Stacking strategies (team offense)
-    
-    # Example Players
-    - Vladimir Guerrero Sr., Tim Anderson, Bo Bichette
-    ```
-    
-    #### **🔷 Above-Average Contact**
-    ```python
-    # Filter Criteria
-    max_K_rate = 20.0%          # Better than league average
-    max_BB_rate = 12.0%         # Reasonable discipline
-    min_hit_prob = 25.0%        # Accessible threshold
-    
-    # Key Stats Considered
-    - Balanced approach to K% and BB%
-    - Consistent production metrics
-    - Versatility across matchups
-    
-    # Player Archetype
-    - Well-rounded hitters
-    - Better than 60% of MLB in contact
-    - Reliable without being elite
-    - Good sample size of options
-    
-    # Ideal Use Cases
-    - Learning the system
-    - Mixed contest types
-    - Uncertain conditions
-    - Building multiple lineups
-    
-    # Example Players
-    - Most everyday MLB players with decent contact
-    ```
-    
-    ### **Power Profile Category (3 Profiles)**
-    
-    #### **💥 Contact Power Hitters**
-    ```python
-    # Filter Criteria
-    max_K_rate = 20.0%          # Reasonable contact
-    max_BB_rate = 12.0%         # Balanced approach
-    min_XB_rate = 7.0%          # Solid extra base production
-    min_HR_rate = 2.5%          # Legitimate HR threat
-    min_vs_pitcher = -5         # Decent matchups
-    
-    # Key Stats Considered
-    - XB% (weighted 3.0): Extra base emphasis
-    - HR% (weighted 2.5): Home run production
-    - K% (reduced penalty): Contact still matters
-    - Power + Contact balance
-    
-    # Player Archetype
-    - Best of both worlds: contact + power
-    - Can hit for average AND power
-    - Lower strikeout risk than pure sluggers
-    - Multiple ways to return value
-    
-    # Ideal Use Cases
-    - Tournament play needing ceiling
-    - Hitter-friendly parks (Coors, Yankees)
-    - Good weather conditions
-    - Balance of safety and upside
-    
-    # Example Players
-    - Mookie Betts, Freddie Freeman, Vladimir Guerrero Jr.
-    ```
-    
-    #### **🚀 Pure Power Sluggers**
-    ```python
-    # Filter Criteria
-    max_K_rate = 100%           # Accept high strikeouts
-    max_BB_rate = 100%          # Accept high walks
-    min_XB_rate = 9.0%          # Elite extra base rate
-    min_HR_rate = 3.5%          # Elite HR production
-    min_vs_pitcher = -10        # Any matchup if power elite
-    
-    # Key Stats Considered
-    - XB% + HR% combination (primary)
-    - Raw power metrics over contact
-    - Ceiling potential over floor
-    - Matchup can be overcome by elite power
-    
-    # Player Archetype
-    - Maximum power potential
-    - Boom-or-bust profile
-    - Can overcome poor matchups with raw power
-    - Game-changing upside
-    
-    # Ideal Use Cases
-    - GPP tournaments (large fields)
-    - Power-friendly environments
-    - Contrarian plays when others avoid power
-    - Leverage/differentiation needs
-    
-    # Example Players
-    - Aaron Judge, Pete Alonso, Kyle Schwarber, Mike Trout
-    ```
-    
-    #### **⚾ All Power Players (Research Mode)**
-    ```python
-    # Filter Criteria
-    max_K_rate = 100%           # No restrictions
-    max_BB_rate = 100%          # No restrictions
-    min_XB_rate = 0%            # No restrictions
-    min_HR_rate = 0%            # No restrictions
-    
-    # Scoring Algorithm
-    - Uses power scoring weights on entire pool
-    - Reveals complete power hierarchy
-    - Shows moderate power players ranked highly
-    
-    # Player Archetype
-    - Complete spectrum from elite to moderate power
-    - Hidden gems with decent power overlooked
-    - Value plays not meeting strict thresholds
-    - Research-focused comprehensive view
-    
-    # Ideal Use Cases
-    - Initial power research
-    - Finding contrarian power plays
-    - Salary cap optimization
-    - Large field differentiation
-    
-    # Output
-    - All players ranked by power algorithm
-    - May include players with 5-6% XB rates
-    - Good for discovering overlooked options
-    ```
-    
-    ### **Research Profile Category (1 Profile)**
-    
-    #### **🌐 All Players**
-    ```python
-    # Filter Criteria
-    max_K_rate = 100%           # No restrictions
-    max_BB_rate = 100%          # No restrictions
-    min_hit_prob = 20%          # Minimal threshold
-    
-    # Scoring Algorithm
-    - Uses contact scoring on entire pool
-    - Shows complete player hierarchy
-    - Useful for backup options
-    
-    # Use Cases
-    - When profiles are too restrictive
-    - Complete slate overview
-    - Learning tool to understand metrics
-    - Backup option discovery
-    ```
-    
-    ### **Profile Selection Logic**
-    
-    #### **Contest Type Mapping:**
-    ```python
-    profile_recommendations = {
-        'cash_games': {
-            'primary': ['Contact-Aggressive', 'Elite Contact'],
-            'secondary': ['Above-Average Contact'],
-            'avoid': ['Pure Power', 'Swing-Happy']
-        },
-        'gpp_small_field': {
-            'primary': ['Contact-Aggressive', 'Contact Power'],
-            'secondary': ['Elite Contact', 'Pure Power'],
-            'research': ['All Power']
-        },
-        'gpp_large_field': {
-            'primary': ['Contact Power', 'Pure Power'],
-            'secondary': ['Contact-Aggressive'],
-            'research': ['All Power', 'Swing-Happy']
-        }
-    }
-    ```
-    
-    #### **Environmental Adjustments:**
-    ```python
-    def adjust_profiles_for_conditions(base_profiles, conditions):
-        if conditions['temperature'] < 60:
-            reduce_power_weight(base_profiles, factor=0.7)
-        
-        if conditions['park_factor'] > 1.1:  # Hitter-friendly
-            increase_power_weight(base_profiles, factor=1.3)
-        
-        if conditions['wind_speed'] > 15 and conditions['wind_direction'] == 'out':
-            increase_power_weight(base_profiles, factor=1.2)
-    ```
-    """)
-
-with st.expander("💡 Best Practices & Advanced Strategies"):
-    st.markdown("""
-    ## 🎯 **Optimal System Usage**
-    
-    ### **Profile Selection Strategy**
-    
-    #### **Contest Type Framework:**
-    ```python
-    # Decision Tree for Profile Selection
-    
-    if contest_type == 'cash_game':
-        primary_profiles = ['Contact-Aggressive', 'Elite Contact']
-        allocation = {'Contact-Aggressive': 70%, 'Elite Contact': 30%}
-        avoid = ['Pure Power', 'Swing-Happy']  # Too volatile
-    
-    elif contest_type == 'gpp_small_field':  # <100 entries
-        primary_profiles = ['Contact-Aggressive', 'Contact Power']
-        allocation = {'Contact-Aggressive': 40%, 'Contact Power': 35%, 'Elite Contact': 25%}
-    
-    elif contest_type == 'gpp_large_field':  # 100+ entries
-        primary_profiles = ['Contact Power', 'Pure Power', 'All Power']
-        allocation = {'Contact Power': 35%, 'Pure Power': 30%, 'All Power': 20%, 'Other': 15%}
-    ```
-    
-    #### **Data-Integrated Adjustments:**
-    ```python
-    # Note: Weather factors already incorporated in CSV data
-    # No manual weather adjustments needed - focus on other factors
-    
-    def adjust_for_slate_conditions(base_allocation, conditions):
-        pitcher_quality = conditions.average_pitcher_era
-        park_factors = conditions.ballpark_effects  # Also in data
-        slate_size = conditions.number_of_games
-        
-        if pitcher_quality < 3.50:  # Strong pitching slate
-            increase_contact_profiles(base_allocation, increase=20%)
-            reduce_power_profiles(base_allocation, reduction=15%)
-        
-        if slate_size < 6:  # Small slate
-            increase_safety_profiles(base_allocation, increase=25%)
-        
-        if slate_size > 12:  # Large slate  
-            increase_research_profiles(base_allocation, increase=20%)
-    ```
-    
-    ### **Research Workflow Optimization**
-    
-    #### **Systematic Analysis Process:**
-    ```
-    1. START: All Power Players Profile
-       - Get complete power landscape
-       - Identify power tier breaks
-       - Note elite power players (15%+ combined XB+HR)
-    
-    2. REFINE: Pure Power Sluggers
-       - Focus on elite power stats
-       - Check matchup quality for power players
-       - Identify boom/bust candidates
-    
-    3. BALANCE: Contact Power Hitters  
-       - Find power+safety combinations
-       - Look for players with 10%+ power + <20% K rate
-       - Tournament ceiling with decent floor
-    
-    4. SAFETY: Contact-Aggressive Hitters
-       - Establish baseline reliable options
-       - Focus on +3% or better vs league in both K% and BB%
-       - Cash game anchors and GPP safety plays
-    
-    5. PREMIUM: Elite Contact Specialists
-       - Identify truly elite contact (sub-14% K rate)
-       - Premium plays for tough matchups
-       - High-stakes contest options
-    
-    6. CONTRARIAN: Swing-Happy Hitters
-       - Find ultra-aggressive approach players
-       - Contrarian tournament plays
-       - Stack-building components
-    
-    7. VALIDATE: All Players + Above-Average
-       - Ensure no hidden gems missed
-       - Check for value plays not meeting strict criteria
-       - Backup options if main profiles limited
-    ```
-    
-    #### **Advanced Filtering Techniques:**
-    ```python
-    # Custom Filter Combinations
-    
-    # Tournament Ceiling Hunt
-    high_ceiling_filter = {
-        'min_combined_power': 12,  # XB% + HR% ≥ 12%
-        'max_K_rate': 25,          # Accept some swing-and-miss
-        'min_vs_pitcher': 0,       # Decent matchup required
-        'profile_diversity': True   # Multiple profile options
-    }
-    
-    # Cash Game Safety Net
-    safety_filter = {
-        'max_K_rate': 18,          # Strong contact
-        'min_hit_prob': 35,        # High hit probability
-        'max_ownership': 25,       # Not overly popular
-        'consistent_production': True  # Low volatility
-    }
-    
-    # Value Hunting
-    value_filter = {
-        'salary_percentile': '<60', # Lower cost
-        'recent_form': 'improving',  # Positive trend (in data)
-        'matchup_grade': '>= B-',   # Decent spot
-        'projected_ownership': '<15' # Contrarian
-    }
-    
-    # Note: Weather and park factors already integrated in CSV data
-    # Focus on strategic differentiation instead
-    ```
-    
-    ### **Lineup Construction Integration**
-    
-    #### **Portfolio Approach:**
-    ```python
-    # Multi-Entry Tournament Strategy
-    
-    def build_lineup_portfolio(num_entries):
-        base_allocations = {
-            'anchor_contact': 0.4,      # 40% reliable contact
-            'ceiling_power': 0.3,       # 30% power upside
-            'contrarian': 0.2,          # 20% differentiation
-            'value_hunting': 0.1        # 10% salary optimization
-        }
-        
-        lineups = []
-        for entry in range(num_entries):
-            lineup = {}
-            
-            # Anchor positions (high-confidence plays)
-            anchor_players = select_from_profile('Contact-Aggressive')
-            lineup['anchors'] = anchor_players[:2]
-            
-            # Ceiling positions (tournament upside)
-            ceiling_players = select_from_profile(['Contact Power', 'Pure Power'])
-            lineup['ceiling'] = ceiling_players[:2]
-            
-            # Contrarian positions (differentiation)
-            contrarian_players = select_from_profile(['Swing-Happy', 'All Power'])
-            lineup['contrarian'] = contrarian_players[:1]
-            
-            lineups.append(lineup)
-    ```
-    
-    ### **Advanced Metrics Interpretation**
-    
-    #### **League Context Deep Analysis:**
-    ```python
-    # Advanced Performance Metrics
-    
-    def analyze_league_context(player_stats):
-        k_performance = 22.6 - player_stats.K_rate
-        bb_performance = 8.5 - player_stats.BB_rate
-        
-        # Tier Classification
-        if k_performance >= 8:
-            contact_tier = "Elite"  # Top 5%
-        elif k_performance >= 4:
-            contact_tier = "Excellent"  # Top 20%
-        elif k_performance >= 0:
-            contact_tier = "Above Average"
-        else:
-            contact_tier = "Below Average"
-        
-        # Aggression Analysis
-        if bb_performance >= 4:
-            aggression = "Hyper-Aggressive"
-        elif bb_performance >= 1:
-            aggression = "Aggressive"
-        elif bb_performance >= -1:
-            aggression = "Balanced"
-        else:
-            aggression = "Patient"
-        
-        return {
-            'contact_tier': contact_tier,
-            'aggression_level': aggression,
-            'k_advantage': k_performance,
-            'bb_advantage': bb_performance
-        }
-    ```
-    
-    ### **Risk Management**
-    
-    #### **Exposure Guidelines:**
-    ```python
-    # Risk-Based Exposure Limits
-    
-    exposure_limits = {
-        'Elite Contact': {'max': 40%, 'optimal': 25%},      # High floor
-        'Contact-Aggressive': {'max': 50%, 'optimal': 35%}, # Balanced
-        'Contact Power': {'max': 35%, 'optimal': 25%},      # Medium risk
-        'Pure Power': {'max': 25%, 'optimal': 15%},         # High risk
-        'Swing-Happy': {'max': 20%, 'optimal': 10%},        # Volatile
-        'All Power Research': {'max': 30%, 'optimal': 20%}  # Discovery
-    }
-    ```
-    
-    #### **Bankroll Considerations:**
-    ```python
-    # Contest Selection Based on Profile Usage
-    
-    def recommend_contests(profile_usage):
-        if profile_usage['safe_profiles'] > 70:  # Contact-heavy
-            return ['cash_games', 'small_gpp', 'satellite_qualifiers']
-        
-        elif profile_usage['power_profiles'] > 50:  # Power-heavy
-            return ['large_gpp', 'high_variance_tournaments']
-        
-        else:  # Balanced
-            return ['medium_gpp', 'mixed_contests']
-    ```
-    """)
-
-with st.expander("🔬 Results Interpretation & Advanced Insights"):
-    st.markdown("""
-    ## 📊 **Understanding Your Results**
-    
-    ### **Score Interpretation Framework**
-    
-    #### **Score Ranges & Meanings:**
-    ```python
-    score_tiers = {
-        90-100: "Elite Opportunity",
-        80-89:  "Excellent Play", 
-        70-79:  "Very Good Option",
-        60-69:  "Good Consideration",
-        50-59:  "Average/Decent",
-        40-49:  "Below Average",
-        0-39:   "Avoid Unless Contrarian"
-    }
-    
-    # Score Components Analysis
-    def interpret_score(player_score, breakdown):
-        base_performance = breakdown['weighted_stats']
-        bonus_contribution = breakdown['bonuses']
-        
-        if bonus_contribution > 15:
-            interpretation = "Bonus-driven (elite metrics combination)"
-        elif base_performance > 70:
-            interpretation = "Fundamentally strong (solid base stats)"
-        else:
-            interpretation = "Moderate opportunity (average performance)"
-    ```
-    
-    #### **League Context Analysis:**
-    ```python
-    # Advanced League Comparison
-    def analyze_vs_league_performance(player):
-        k_advantage = 22.6 - player.K_rate
-        bb_advantage = 8.5 - player.BB_rate
-        
-        # Combined Performance Score
-        combined_advantage = k_advantage + bb_advantage
-        
-        if combined_advantage >= 10:
-            return "Elite vs League (Top 5%)"
-        elif combined_advantage >= 6:
-            return "Excellent vs League (Top 15%)"
-        elif combined_advantage >= 2:
-            return "Above Average vs League"
-        elif combined_advantage >= -2:
-            return "Near League Average"
-        else:
-            return "Below League Average"
-    ```
-    
-    ### **Color Coding Deep Dive**
-    
-    #### **Gradient Interpretation:**
-    ```python
-    # Green Intensity Meanings
-    dark_green = "Significantly better than league average (top 10%)"
-    medium_green = "Notably better than league average (top 25%)" 
-    light_green = "Somewhat better than league average"
-    
-    # Red Intensity Meanings
-    light_red = "Somewhat worse than league average"
-    medium_red = "Notably worse than league average (bottom 25%)"
-    dark_red = "Significantly worse than league average (bottom 10%)"
-    
-    # Score Color Mapping
-    score_colors = {
-        'Dark Green (85+)': "Must-play in most contests",
-        'Green (70-84)': "Strong consideration",
-        'Yellow-Green (55-69)': "Solid option",
-        'Yellow (45-54)': "Average/filler play", 
-        'Red (0-44)': "Avoid unless specific reason"
-    }
-    ```
-    
-    ### **Multi-Profile Analysis Interpretation**
-    
-    #### **Profile Diversity Signals:**
-    ```python
-    # Strategic Implications
-    
-    def interpret_profile_diversity(available_profiles):
-        if len(available_profiles) >= 6:
-            strategy = "Diverse slate - multiple approaches viable"
-            recommendation = "Use balanced portfolio approach"
-        
-        elif 'Pure Power' in available_profiles and 'Elite Contact' in available_profiles:
-            strategy = "Polar slate - choose your approach"
-            recommendation = "Pick power OR contact, avoid middle"
-        
-        elif only_contact_profiles(available_profiles):
-            strategy = "Contact-heavy slate - power limited"
-            recommendation = "Focus on contact differentiation"
-        
-        elif only_power_profiles(available_profiles):
-            strategy = "Power slate - contact limited"  
-            recommendation = "Embrace power plays, accept volatility"
-    ```
-    
-    ### **Common Interpretation Mistakes**
-    
-    #### **Pitfalls to Avoid:**
-    ```python
-    # Mistake 1: Raw Score Obsession
-    wrong_approach = "Always pick highest score regardless of context"
-    right_approach = "Consider score within contest type and ownership context"
-    
-    # Mistake 2: Ignoring League Context
-    wrong_approach = "17% K rate looks average"
-    right_approach = "17% K rate is +5.6% better than league = excellent contact"
-    
-    # Mistake 3: Profile Misuse
-    wrong_approach = "Use Pure Power in cash games"
-    right_approach = "Match profile risk to contest type"
-    
-    # Mistake 4: Single-Profile Analysis
-    wrong_approach = "Only look at one profile"
-    right_approach = "Compare across multiple profiles for complete picture"
-    
-    # Mistake 5: Ignoring Lineup Status
-    wrong_approach = "Build lineup then check if players are playing"
-    right_approach = "Exclude non-playing players before analysis"
-    ```
-    
-    ### **Advanced Scenarios & Edge Cases**
-    
-    #### **When Profiles Disagree:**
-    ```python
-    # Resolution Framework
-    
-    if contact_score > power_score + 20:
-        recommendation = "Clear contact play - avoid in power-heavy contests"
-    
-    elif power_score > contact_score + 20:
-        recommendation = "Clear power play - avoid in contact-heavy contests"
-    
-    elif abs(contact_score - power_score) < 10:
-        recommendation = "Versatile player - good for balanced contests"
-    
-    # Data-Driven Decision Logic (weather already factored in CSV)
-    if pitcher_era < 3.00 and power_score > contact_score:
-        recommendation = "Tough pitching favors contact despite power score"
-    
-    if slate_size > 12 and contact_score > power_score:
-        recommendation = "Large slate allows contrarian power despite contact score"
-    ```
-    
-    #### **Limited Profile Availability:**
-    ```python
-    # Adaptation Strategies
-    
-    def handle_limited_profiles(available_profiles):
-        if len(available_profiles) < 3:
-            strategy = "Restrictive slate - expand criteria slightly"
-            action = "Use custom overrides to expand player pool"
-        
-        elif no_elite_profiles_available:
-            strategy = "Average slate - no standout plays"
-            action = "Focus on value and differentiation"
-        
-        elif only_research_profiles_available:
-            strategy = "Deep dive needed - hidden value slate"
-            action = "Use All Players and All Power for manual curation"
-    ```
-    
-    ### **Performance Validation**
-    
-    #### **Tracking System Effectiveness:**
-    ```python
-    # Success Metrics to Track
-    
-    tracking_metrics = {
-        'hit_rate_by_profile': {
-            'Elite Contact': 'Should achieve 60%+ hit rate',
-            'Contact-Aggressive': 'Should achieve 55%+ hit rate', 
-            'Pure Power': 'Volatile - track extra base rate',
-            'Contact Power': 'Balance of hits and power production'
-        },
-        
-        'roi_by_contest_type': {
-            'cash_games': 'Consistent small profits',
-            'small_gpp': 'Steady cashes with occasional wins',
-            'large_gpp': 'Lower cash rate but higher win rate'
-        },
-        
-        'profile_correlation': {
-            'weather_impact': 'Power profiles in cold vs warm',
-            'park_factors': 'Power boost in hitter parks',
-            'pitcher_quality': 'Contact profiles vs aces'
-        }
-    }
-    ```
-    
-    ### **Troubleshooting Guide**
-    
-    #### **Common Issues & Solutions:**
-    ```python
-    # Problem: No players showing up
-    solutions = [
-        "Check if excluded players list is too extensive",
-        "Try less restrictive profiles (Above-Average, All Players)",
-        "Use custom overrides to expand criteria",
-        "Verify data loaded correctly"
-    ]
-    
-    # Problem: All scores seem low
-    solutions = [
-        "Scores are relative - focus on ranking not absolute values",
-        "Low-scoring slate may indicate tough pitching",
-        "Consider expanding to research profiles",
-        "Check if filters too restrictive"
-    ]
-    
-    # Problem: Profile recommendations seem off
-    solutions = [
-        "Verify contest type selection matches strategy",
-        "Check slate-specific conditions (pitcher quality, game count)",
-        "Consider ownership and contrarian opportunities", 
-        "Use multi-profile analysis for broader perspective",
-        "Remember: Weather/park factors already in data - focus on strategy"
-    ]
-    ```
-    
-    ## 🎯 **System Mastery Checklist**
-    
-    ### **Beginner Level:**
-    - [ ] Understand league context calculations
-    - [ ] Can interpret positive/negative vs league metrics
-    - [ ] Know difference between contact and power profiles  
-    - [ ] Can select appropriate profile for contest type
-    
-    ### **Intermediate Level:**
-    - [ ] Use multi-profile analysis effectively
-    - [ ] Understand score components and bonuses
-    - [ ] Can adapt profiles based on weather/parks
-    - [ ] Manage lineup exclusions systematically
-    
-    ### **Advanced Level:**
-    - [ ] Build portfolio approaches across profiles
-    - [ ] Identify hidden gems using research profiles
-    - [ ] Integrate system with external factors
-    - [ ] Track and validate system performance
-    
-    ### **Expert Level:**
-    - [ ] Create custom filtering strategies
-    - [ ] Combine profiles for unique approaches
-    - [ ] Predict optimal profile allocation by slate
-    - [ ] Mentor others on system usage
-    """)
-
 st.markdown("---")
 st.markdown("""
 ## 📖 **Reference Manual Summary**
@@ -2510,21 +1478,23 @@ The MLB Hit Predictor represents a comprehensive evolution in baseball analytics
 ✅ **Multi-Profile Analysis** - See best options across all approaches  
 ✅ **Real-Time Optimization** - Live filtering with lineup management  
 ✅ **Advanced Research Tools** - Complete power and contact spectrum analysis  
+✅ **Team Management** - Individual player and full team exclusions
 ✅ **Strategic Framework** - Contest-specific recommendations and best practices  
 ✅ **Comprehensive Documentation** - Complete understanding of all calculations and logic  
 
-### **System Mastery Path:**
-1. **Foundation** - Learn profile basics and league context
-2. **Application** - Match profiles to contest types  
-3. **Optimization** - Use multi-profile analysis and research tools
-4. **Mastery** - Develop custom strategies and portfolio approaches
+### **System Features:**
+🎯 **8 Player Profiles**: From Elite Contact to All Power research mode  
+🚫 **Dual Exclusion System**: Player-level and team-level filtering  
+📊 **Pre-Integrated Data**: Weather, parks, and matchups already factored in  
+🔄 **Real-Time Updates**: Live filtering with immediate feedback  
+📈 **Advanced Analytics**: League context, multi-profile comparison, strategic insights  
 
 This system transforms baseball analysis from guesswork into **data-driven decision making**, providing the tools and knowledge needed to consistently identify optimal hitting opportunities across all contest types and market conditions.
 
 ---
 
-*Complete Baseball Analytics Reference Manual | A1FADED V2.4 Comprehensive Edition*  
-*Master every aspect of league-aware baseball analysis*
+*Complete Baseball Analytics Reference Manual | A1FADED V2.4 Complete Edition*  
+*Master every aspect of league-aware baseball analysis with team management*
 """)
 ```
 
@@ -2556,7 +1526,7 @@ else:
 
 # Footer
 st.sidebar.markdown("---")
-st.sidebar.markdown("**V2.4** | Complete + Hidden Gems")
+st.sidebar.markdown("**V2.4** | Complete + Team Management")
 ```
 
 if **name** == “**main**”:
