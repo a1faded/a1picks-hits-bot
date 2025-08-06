@@ -832,14 +832,14 @@ def display_league_aware_results(filtered_df, filters):
         vmax=50
     ).background_gradient(
         subset=['K% Better'],
-        cmap='RdYlGn',  # Green = positive (better), Red = negative (worse)
-        vmin=-5,
-        vmax=10
+        cmap='RdYlGn',  # Red = worse contact, Green = better contact
+        vmin=-8,   # Very bad contact (much worse than league)
+        vmax=15    # Elite contact (much better than league)  
     ).background_gradient(
         subset=['BB% More Aggressive'],
-        cmap='RdYlGn',  # Green = positive (more aggressive), Red = negative (less aggressive)
-        vmin=-3,
-        vmax=6
+        cmap='RdYlGn',  # Red = less aggressive, Green = more aggressive
+        vmin=-4,   # Much less aggressive than league
+        vmax=8     # Much more aggressive than league
     )
     
     st.dataframe(styled_df, use_container_width=True)
