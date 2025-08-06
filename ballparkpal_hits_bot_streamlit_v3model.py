@@ -342,38 +342,38 @@ def create_league_aware_filters(df=None):
     player_type_options = {
         "🏆 Contact-Aggressive Hitters": {
             'description': "Low K% + Low BB% (Elite for base hits)",
-            'max_k': 17.0,   # Above average contact
-            'max_bb': 6.0,   # Above average aggressive
-            'min_hit_prob': 35,
+            'max_k': 19.0,   # Updated: More inclusive
+            'max_bb': 7.0,   # Updated: More inclusive
+            'min_hit_prob': 32,  # Updated: Slightly lower
             'profile_type': 'contact'
         },
         "⭐ Elite Contact Specialists": {
             'description': "Ultra-low K% (Pure contact)",
-            'max_k': 12.0,   # Elite contact
-            'max_bb': 8.5,   # League average walks
-            'min_hit_prob': 30,
+            'max_k': 14.0,   # Updated: More inclusive
+            'max_bb': 9.5,   # Updated: More inclusive
+            'min_hit_prob': 28,  # Updated: Slightly lower
             'profile_type': 'contact'
         },
         "⚡ Swing-Happy Hitters": {
             'description': "Ultra-low BB% (Aggressive approach)",
-            'max_k': 22.6,   # League average strikeouts
-            'max_bb': 4.0,   # Hyper-aggressive
-            'min_hit_prob': 32,
+            'max_k': 24.0,   # Updated: More inclusive
+            'max_bb': 5.0,   # Updated: More inclusive
+            'min_hit_prob': 30,  # Updated: Slightly lower
             'profile_type': 'contact'
         },
         "🔷 Above-Average Contact": {
             'description': "Better than league average K%",
-            'max_k': 17.0,   # Above average contact
-            'max_bb': 10.0,  # Reasonable walks
-            'min_hit_prob': 28,
+            'max_k': 20.0,   # Updated: More inclusive
+            'max_bb': 12.0,  # Updated: More inclusive
+            'min_hit_prob': 25,  # Updated: More accessible
             'profile_type': 'contact'
         },
         "💥 Contact Power Hitters": {
             'description': "Low K% + High XB% & HR% (Power with contact)",
-            'max_k': 17.0,   # Good contact
-            'max_bb': 10.0,  # Reasonable walks
-            'min_xb': 8.0,   # Strong extra base rate
-            'min_hr': 3.0,   # Solid HR rate
+            'max_k': 20.0,   # Updated: More inclusive
+            'max_bb': 12.0,  # Updated: More inclusive
+            'min_xb': 7.0,   # Updated: More accessible
+            'min_hr': 2.5,   # Updated: More accessible
             'min_vs': -5,    # Reasonable matchup
             'profile_type': 'power'
         },
@@ -381,9 +381,18 @@ def create_league_aware_filters(df=None):
             'description': "High XB% & HR% (Power over contact)",
             'max_k': 100,    # Accept high strikeouts
             'max_bb': 100,   # Accept high walks
-            'min_xb': 10.0,  # Elite extra base rate
-            'min_hr': 4.0,   # Elite HR rate
+            'min_xb': 9.0,   # Updated: More accessible
+            'min_hr': 3.5,   # Updated: More accessible
             'min_vs': -10,   # Any matchup if power is elite
+            'profile_type': 'power'
+        },
+        "⚾ All Power Players": {
+            'description': "All players ranked by power potential (Research mode)",
+            'max_k': 100,    # No K% restrictions
+            'max_bb': 100,   # No BB% restrictions
+            'min_xb': 0,     # No XB% restrictions
+            'min_hr': 0,     # No HR% restrictions
+            'min_vs': -10,   # Any matchup
             'profile_type': 'power'
         },
         "🌐 All Players": {
@@ -1092,7 +1101,7 @@ def display_league_aware_results(filtered_df, filters):
             
             # Show profile diversity
             total_profiles_available = len(profile_analysis)
-            insights.append(f"📊 **Profile Diversity**: {total_profiles_available}/4 profiles have viable options")
+            insights.append(f"📊 **Profile Diversity**: {total_profiles_available}/7 profiles have viable options")
             
             for insight in insights:
                 st.success(insight)
@@ -1109,6 +1118,8 @@ def display_league_aware_results(filtered_df, filters):
                 st.info("🎯 **Premium Power Strategy**: Contact power player available - ideal for tournaments needing ceiling")
             elif "🚀 Pure Power" in profile_analysis:
                 st.info("💥 **High-Risk/High-Reward**: Pure power available - perfect for GPP leverage plays")
+            elif "⚾ All Power" in profile_analysis:
+                st.info("🔬 **Power Research Available**: Complete power landscape analysis - find hidden gems")
             elif "🏆 Contact-Aggressive" in profile_analysis:
                 st.info("🛡️ **Safety Strategy**: Focus on Contact-Aggressive for consistent base hits")
             elif "⚡ Swing-Happy" in profile_analysis:
@@ -1318,17 +1329,17 @@ def main_page():
     # Bottom tips with CORRECTED explanations
     st.markdown("---")
     st.markdown("""
-    ### 💡 **V2.3 CORRECTED Strategy Tips**
+    ### 💡 **V2.4 COMPLETE Strategy Tips**
     - **Positive K% vs League**: Player strikes out less than league average (BETTER CONTACT = GREEN!)
     - **Positive BB% vs League**: Player walks less than league average (MORE AGGRESSIVE = GREEN!)
     - **Scores 70+**: Elite opportunities with league-superior metrics
-    - **🔥 NEW: Relaxed Thresholds**: Profiles now catch more "hidden gems" automatically
-    - **💎 Less Manual Searching**: Reduced need to dig through All Players for overlooked options
+    - **🔥 NEW: Complete Power System**: 3 power profiles including All Power research mode
+    - **💎 Hidden Gems Profiles**: Updated thresholds catch more viable players automatically
     - **XB% + HR% = Power Combo**: Target 10%+ combined for solid power threats
-    - **⚾ All Power Players**: Use for research to find remaining hidden power gems
+    - **⚾ All Power Players**: Complete power research - find overlooked gems
     - **Always verify lineups and weather before finalizing picks**
     
-    **✅ Corrected Logic: Positive vs League Numbers = Better Performance = Green Colors!**
+    **✅ Complete System: 8 Profiles | Power + Contact | Hidden Gems Edition**
     """)
 
 def info_page():
@@ -1348,236 +1359,157 @@ def info_page():
         | **BB%** | ≤4.0% | 4.0-6.0% | ~8.5% | ≥10.0% |
         | **BABIP** | ≥.320 | .300-.320 | ~.290 | ≤.280 |
         
-        ### **✅ FIXED Display Logic**
-        **Now the numbers make intuitive sense:**
-        - **K% Better: +5.2%** = Player strikes out 5.2% less than league average (GOOD!)
-        - **BB% More Aggressive: +3.1%** = Player walks 3.1% less than league average (more swings!)
-        - **Positive values = Better performance** (no more confusing negative numbers)
+        ### **✅ V2.4 Complete Power System**
+        **Now includes 3 distinct power profiles:**
+        - **💥 Contact Power**: Power with good contact (K% ≤20%, XB% ≥7%, HR% ≥2.5%)
+        - **🚀 Pure Power**: Elite power stats (XB% ≥9%, HR% ≥3.5%, flexible K%/BB%)
+        - **⚾ All Power**: Complete power research mode (no restrictions, power scoring)
         
-        ### **✅ V2.3 Profile Updates: Real-World Performance Based**
-        **Why we updated the criteria:**
-        - **Hidden Gems Discovery**: Players just outside old thresholds were performing well in real games
-        - **Reduced Manual Searching**: Less need to manually scan "All Players" for overlooked options
-        - **Broader Safety Nets**: Slightly wider criteria catch more viable players without sacrificing quality
-        - **Real-World Validation**: Thresholds adjusted based on actual player performance data
-        
-        **Key Changes:**
+        ### **✅ Hidden Gems Edition Updates**
+        **Profiles now catch more viable players:**
         - **Contact profiles**: 1-2% more flexible on K% and BB% thresholds
         - **Power profiles**: 0.5-1% more accessible power requirements
         - **Hit probability minimums**: Slightly lowered to be more inclusive
-        - **Matchup requirements**: Slightly more lenient to catch good players with tough matchups
+        - **Real-world validated**: Based on actual player performance data
         
-        ### **💡 Key Insight: Contact vs Aggression**
-        - **Low K% = Better Contact** (fewer strikeouts = more balls in play)
-        - **Low BB% = More Aggressive** (fewer walks = more swinging, quicker at-bats)
-        - **Sweet Spot**: Low K% + Low BB% = Contact hitters who attack the zone
-        - **Low K% = Better Contact** (fewer strikeouts = more balls in play)
-        - **Low BB% = More Aggressive** (fewer walks = more swinging, quicker at-bats)
-        - **Sweet Spot**: Low K% + Low BB% = Contact hitters who attack the zone
+        ### **💡 Key Insight: Complete Spectrum Coverage**
+        - **Contact Spectrum**: Elite → Contact-Aggressive → Above-Average → Swing-Happy
+        - **Power Spectrum**: All Power → Contact Power → Pure Power
+        - **Research Tools**: All Power + All Players for comprehensive analysis
         """)
     
-    with st.expander("🎯 Complete Hitter Profile Guide", expanded=False):
+    with st.expander("🎯 Complete Profile Usage Guide", expanded=False):
         st.markdown("""
-        ## **When to Use Each Profile: Detailed Breakdown**
+        ## **8 Profiles - When to Use Each**
         
         ### **🏆 Contact-Aggressive Hitters** ⭐ RECOMMENDED DEFAULT
-        **Profile**: K% ≤19%, BB% ≤7% | **Historical Examples**: Luis Arraez, José Altuve (prime), Tony Gwynn (all-time)
+        **Updated Criteria**: K% ≤19%, BB% ≤7%
+        - **Daily Fantasy**: Maximum safety and consistency
+        - **Cash Games**: Need reliable base hits
+        - **Tough Pitching Slates**: Elite contact skills required
         
-        #### **✅ UPDATED: More Inclusive Criteria**
-        - **Expanded K% threshold** from 17% to 19% - captures more aggressive contact hitters
-        - **Expanded BB% threshold** from 6% to 7% - includes players who are still aggressive but not ultra-selective
-        - **Real-world benefit**: Catches players who perform well but were just outside old thresholds
+        ### **⭐ Elite Contact Specialists** 🎯 PREMIUM
+        **Criteria**: K% ≤14%, BB% ≤9.5%
+        - **High-Stakes Contests**: Maximum confidence needed
+        - **Tournament Finals**: Absolute best contact skills
+        - **Ace Pitcher Matchups**: Only elite can succeed
         
-        #### **✅ Use This Profile When:**
-        - **Daily Fantasy Sports** - Maximum safety and consistency
-        - **Cash Games** - You need reliable base hits
-        - **Pitcher-Heavy Slates** - Tough pitching matchups across the board
-        - **Bad Weather** - Wind/rain favors contact over power
-        - **Small Slates** - Limited player pool, need reliable options
-        - **New to the Tool** - Best balance of safety and opportunity
+        ### **⚡ Swing-Happy Hitters** 🔥 CONTRARIAN
+        **Updated Criteria**: K% ≤24%, BB% ≤5%
+        - **GPP Tournaments**: Contrarian leverage plays
+        - **Offensive Environments**: High-scoring games expected
+        - **Fast-Paced Games**: More at-bat opportunities
         
-        #### **📈 Why It Works:**
-        - Above-average contact skills (better than 70% of MLB)
-        - Aggressive approach leads to more swings = more hit opportunities  
-        - Avoids the "walk trap" (walks don't count as hits)
-        - Typically 10-15 players per slate (good sample size)
-        
-        #### **⚠️ Avoid When:**
-        - Offensive explosion expected (too conservative)
-        - Tournament play where you need ceiling (limits upside)
-        
-        ---
-        
-        ### **⚾ All Power Players** 📊 POWER RESEARCH MODE
-        **Profile**: No restrictions on K%, BB%, XB%, or HR% | **Use**: Complete power landscape analysis
-        
-        #### **✅ Use This Profile When:**
-        - **Initial Power Research** - See the full power spectrum
-        - **Looking for Hidden Power** - Find overlooked players with decent power metrics
-        - **Contrarian GPP Strategy** - Players others might miss due to high K% or low traditional power
-        - **Large Field Tournaments** - Need maximum differentiation in power plays
-        - **Salary Cap Constraints** - Find cheaper power options that don't meet elite thresholds
-        
-        #### **📈 Why It's Valuable:**
-        - Uses power scoring algorithm on entire player pool
-        - Reveals players with moderate power who score well due to good matchups
-        - Shows complete power hierarchy for the slate
-        - Can find value plays overlooked by restrictive power filters
-        
-        #### **⚠️ Remember:**
-        - Still uses power scoring (emphasizes XB%, HR%, reduces singles weight)
-        - May include players with very low power numbers
-        - Requires more manual filtering of results
-        - Best used for research, not final selections
-        
-        ---
+        ### **🔷 Above-Average Contact** 🛡️ BALANCED
+        **Updated Criteria**: K% ≤20%, BB% ≤12%
+        - **Mixed Contests**: Balance safety and upside
+        - **Learning the System**: Good starting point
+        - **Uncertain Conditions**: Weather/pitching unclear
         
         ### **💥 Contact Power Hitters** ⚡ TOURNAMENT CEILING
-        **Profile**: K% ≤20%, XB% ≥7%, HR% ≥2.5% | **Historical Examples**: Mookie Betts, Freddie Freeman, Vladimir Guerrero Jr.
-        
-        #### **✅ UPDATED: More Inclusive Power Criteria**
-        - **Expanded K% threshold** from 17% to 20% - more contact power options
-        - **Lowered XB% requirement** from 8% to 7% - catches emerging power players
-        - **Lowered HR% requirement** from 3% to 2.5% - includes developing power hitters
-        - **Real-world benefit**: Finds players with legitimate power potential just below old elite thresholds
-        
-        #### **✅ Use This Profile When:**
-        - **Tournament Play** - Need ceiling without sacrificing too much floor
-        - **Hitter-Friendly Parks** - Coors, Yankee Stadium, etc.
-        - **Weak Pitching** - Taking advantage of poor opposing pitching
-        - **Medium-Stakes Contests** - Balance of safety and upside
-        - **Good Weather Conditions** - Wind helping, warm temperatures
-        
-        #### **📈 Why It Works:**
-        - Combines contact skills with legitimate power
-        - Lower strikeout risk than pure sluggers
-        - Can provide 2+ total bases consistently
-        - Multiple ways to return value (singles, doubles, HRs)
-        
-        #### **⚠️ Considerations:**
-        - Higher salary cost than contact-only players
-        - Weather-dependent (cold/wind affects power more)
-        
-        ---
+        **Updated Criteria**: K% ≤20%, XB% ≥7%, HR% ≥2.5%
+        - **Tournament Play**: Ceiling without sacrificing floor
+        - **Hitter-Friendly Parks**: Power environments
+        - **Medium Stakes**: Balance safety and upside
         
         ### **🚀 Pure Power Sluggers** 💥 GPP LEVERAGE
-        **Profile**: XB% ≥9%, HR% ≥3.5% (K% and BB% flexible) | **Historical Examples**: Aaron Judge, Mike Trout, Pete Alonso
+        **Updated Criteria**: XB% ≥9%, HR% ≥3.5% (flexible K%/BB%)
+        - **GPP Tournaments**: Maximum ceiling plays
+        - **Offensive Environments**: Power-friendly conditions
+        - **Contrarian Strategy**: When others avoid power
         
-        #### **✅ UPDATED: More Accessible Power Thresholds**
-        - **Lowered XB% requirement** from 10% to 9% - catches more power players
-        - **Lowered HR% requirement** from 4% to 3.5% - includes near-elite power hitters
-        - **Real-world benefit**: Players just below old elite thresholds often still provide excellent power production
+        ### **⚾ All Power Players** 🔬 NEW: RESEARCH MODE
+        **Criteria**: No restrictions, power scoring algorithm
+        - **Initial Research**: Complete power landscape
+        - **Hidden Gems**: Find overlooked power potential
+        - **Value Hunting**: Cheaper options with decent power
+        - **Contrarian Edge**: Players others miss
         
-        #### **✅ Use This Profile When:**
-        - **GPP Tournaments** - Maximum ceiling plays for large field events
-        - **Offensive Environments** - Coors Field, Camden Yards, favorable weather
-        - **Contrarian Strategy** - When others focus on contact in tough conditions  
-        - **Late Slate Pivots** - Quick recognition of power spots
-        - **Stacking Strategy** - Building around explosive offensive potential
+        ### **🌐 All Players** 📊 COMPLETE ANALYSIS
+        **Criteria**: No restrictions, contact scoring
+        - **Research Mode**: See complete player pool
+        - **Backup Options**: When profiles are too restrictive
+        - **Learning Tool**: Understand full spectrum
+        """)
+    
+    with st.expander("🔬 Power System Deep Dive", expanded=False):
+        st.markdown("""
+        ## **Complete Power Analysis System**
         
-        #### **📈 Why It's Valuable:**
-        - Highest ceiling potential (3+ total base upside)
-        - Lower ownership when conditions appear tough
-        - Game-changing potential in tournaments
-        - Can overcome poor matchups with raw power
+        ### **🎯 Power Scoring Algorithm**
+        **Different weights than contact scoring:**
+        - **XB% Weight**: 3.0 (vs 1.8 for contact)
+        - **HR% Weight**: 2.5 (vs 0.6 for contact)
+        - **Singles Weight**: 0.5 (vs 2.0 for contact)
+        - **K% Penalty**: -1.0 (vs -2.0 for contact)
         
-        #### **⚠️ High Risk:**
-        - High strikeout rates acceptable but risky
-        - Weather/park dependent
-        - Boom or bust nature unsuitable for cash games
+        ### **💥 Power Profile Strategy**
         
-        ---
+        #### **Contact Power (💥)**
+        - **Best For**: Tournament ceiling with safety
+        - **Risk Level**: Medium
+        - **Ownership**: Moderate (balanced approach)
+        - **Weather Dependency**: High (cold kills power)
         
-        ### **⭐ Elite Contact Specialists** 🎯 PREMIUM PLAYS
-        **Profile**: K% ≤12%, BB% ≤8.5% | **Historical Examples**: Luis Arraez, Steven Kwan, Juan Soto (contact years)
+        #### **Pure Power (🚀)**
+        - **Best For**: GPP leverage, contrarian plays
+        - **Risk Level**: High (boom/bust)
+        - **Ownership**: Lower in tough conditions
+        - **Weather Dependency**: Very high
         
-        #### **✅ Use This Profile When:**
-        - **Tournament Finals** - You need the absolute best
-        - **High-Stakes Contests** - Maximum confidence required
-        - **Ace Pitcher Slates** - Only elite contact can succeed
-        - **You Have Specific Intel** - Inside info on a particular matchup
-        - **Playoff Baseball** - Pressure situations favor elite skills
-        - **Small Field Tournaments** - Need every edge possible
+        #### **All Power (⚾) - NEW**
+        - **Best For**: Research, finding hidden gems
+        - **Risk Level**: Variable (depends on selection)
+        - **Ownership**: Can find unique plays
+        - **Weather Dependency**: Moderate (broader options)
         
-        #### **📈 Why It's Elite:**
-        - Top 10% contact skills in all of baseball
-        - Proven ability to hit elite pitching
-        - Rarely have 0-hit games
-        - Multiple bonus scoring opportunities
+        ### **🏟️ Park Factor Integration**
+        **Power-friendly parks for power profiles:**
+        - **Coors Field**: Altitude + dimensions favor power
+        - **Yankee Stadium**: Short right field porch
+        - **Fenway Park**: Green Monster doubles
+        - **Camden Yards**: Hitter-friendly dimensions
         
-        #### **⚠️ Limitations:**
-        - Very limited player pool (3-8 players typically)
-        - May miss out on power upside
-        - Expensive in salary cap formats
+        **Avoid power in:**
+        - **Marlins Park**: Spacious, suppresses power
+        - **Tropicana Field**: Difficult hitting conditions
+        - **Citi Field**: Pitcher-friendly dimensions
         
-        ---
-        
-        ### **⚡ Swing-Happy Hitters** 🔥 CONTRARIAN PLAYS  
-        **Profile**: K% ≤22.6%, BB% ≤4% | **Historical Examples**: Bo Bichette, Tim Anderson, Vladimir Guerrero Sr.
-        
-        #### **✅ Use This Profile When:**
-        - **GPP Tournaments** - Looking for contrarian leverage
-        - **Offensive Slates** - Lots of runs expected
-        - **Fast Pace Games** - More at-bats available
-        - **Specific Matchups** - You know pitcher struggles with aggressive hitters
-        - **Late Swap Strategy** - Quick decisions needed
-        - **Stacking Strategy** - Building around team offense
-        
-        #### **📈 Why It's Valuable:**
-        - Ultra-aggressive = more swings per at-bat
-        - Lower ownership in tournaments (contrarian edge)
-        - Quick at-bats = more plate appearances possible
-        - Can catch fire in offensive environments
-        
-        #### **⚠️ High Risk:**
-        - Strikeout risk near league average
-        - Boom/bust potential higher
-        - Less reliable for cash games
-        
-        ---
-        
-        ### **🔷 Above-Average Contact** 🛡️ BALANCED APPROACH
-        **Profile**: K% ≤17%, BB% ≤10% | **Examples**: Most solid everyday players
-        
-        #### **✅ Use This Profile When:**
-        - **Mixed Contests** - Balance of safety and upside
-        - **Learning the Tool** - Good middle ground
-        - **Uncertain Weather** - When conditions are unclear
-        - **Pitcher Mix Slates** - Some good, some bad pitching
-        - **Building Multiple Lineups** - Need variety in approach
-        
-        #### **📈 Benefits:**
-        - Larger player pool (15-25+ options)
-        - Good balance of contact and patience
-        - Suitable for most game types
-        - Less volatile than extreme profiles
+        ### **🌡️ Weather Considerations**
+        **Power profiles sensitive to:**
+        - **Temperature**: <60°F significantly reduces power
+        - **Wind**: Headwinds kill fly balls, tailwinds help
+        - **Humidity**: High humidity can reduce ball carry
+        - **Altitude**: Higher altitude = more power
         """)
     
     st.markdown("---")
     st.markdown("""
-    **🔥 Complete Strategy System Features:**
-    - ✅ **FIXED intuitive metrics** - Positive numbers = better performance
-    - ✅ **NEW: Complete Power System** - 3 power profiles for every power need
-    - 8 distinct player profiles including complete power spectrum
-    - Profile-specific scoring (contact vs power algorithms)
-    - Environmental and matchup-based selection guides
-    - Real-time league context comparisons
-    - Multi-profile analysis system with all power players
-    - Lineup management with session persistence
+    **🚀 V2.4 Complete System Features:**
+    - ✅ **8 Distinct Profiles**: Complete spectrum coverage
+    - ✅ **Power System**: 3 power profiles for all strategies  
+    - ✅ **Hidden Gems Edition**: Updated thresholds catch more players
+    - ✅ **Research Tools**: All Power + All Players for comprehensive analysis
+    - ✅ **League Context**: Real 2024 MLB data integration
+    - ✅ **Smart Scoring**: Profile-adaptive algorithms
+    - ✅ **Multi-Profile Analysis**: See best from all categories
+    - ✅ **Lineup Management**: Session-persistent exclusions
     
-    ### **🎯 Profile Selection Quick Guide:**
-    **Cash Games:** 80% Contact-Aggressive, 15% Elite Contact, 5% Contact Power
-    **GPP Tournaments:** 40% Contact-Aggressive, 20% Contact Power, 20% Pure Power, 20% Other
-    **Hitter-Friendly Parks:** Increase Power profiles by 15-20%
-    **Pitcher's Parks:** Stick to Elite Contact and Contact-Aggressive
-    **Power Research:** Use "All Power Players" to see complete power landscape
+    ### **🎯 Quick Selection Guide:**
     
-    ### **⚾ Power Profile Usage:**
-    - **Contact Power**: Tournament ceiling with safety net
-    - **Pure Power**: GPP leverage and contrarian plays  
-    - **All Power**: Research mode to find hidden power gems
+    **Cash Games**: 70% Contact-Aggressive, 20% Elite Contact, 10% Contact Power
+    **GPP Small Field**: 40% Contact-Aggressive, 30% Contact Power, 20% Pure Power, 10% Research
+    **GPP Large Field**: 30% Contact-Aggressive, 25% Contact Power, 25% Pure Power, 20% All Power
+    **Power Weather**: Increase all power profiles by 15-20%
+    **Pitcher's Parks**: Stick to Contact-Aggressive + Elite Contact
     
-    *Master the Art of Baseball Analytics | A1FADED V2.3 Corrected & Complete Edition*
+    ### **🔬 Research Workflow:**
+    1. **Start with All Power** - See complete power landscape
+    2. **Check Contact Power** - Find balanced ceiling plays  
+    3. **Analyze Pure Power** - Identify leverage opportunities
+    4. **Cross-reference All Players** - Ensure no hidden gems missed
+    
+    *Complete Baseball Analytics Mastery | A1FADED V2.4 Hidden Gems + Complete Power Edition*
     """)
 
 def main():
@@ -1607,7 +1539,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.3** | Corrected & Complete")
+    st.sidebar.markdown("**V2.4** | Complete + Hidden Gems")
 
 if __name__ == "__main__":
     main()
