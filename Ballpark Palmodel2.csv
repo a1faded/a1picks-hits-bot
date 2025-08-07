@@ -1,73 +1,97 @@
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
+,,,,,,,,,
 Tm,Batter,vs,Pitcher,RC,HR,XB,1B,BB,K
-ATH,Colby Thomas,-10,Parker,47,8,25,20,-36,-8
-ATH,Darell Hernaiz,9,Parker,35,17,39,32,-36,-36
-ATH,Gio Urshela,9,Parker,34,24,31,21,-21,-28
-ATH,Max Schuemann,9,Parker,34,21,50,16,-22,-34
-ATH,Shea Langeliers,10,Parker,30,18,32,27,-38,-35
-ATH,Brent Rooker,10,Parker,28,0,37,25,-24,-30
-MIA,Jakob Marsee,6,Carrasco,28,20,16,13,-2,-19
-MIA,Graham Pauley,5,Carrasco,23,7,15,10,-6,-22
-MIA,Kyle Stowers,8,Carrasco,23,-1,15,13,-2,-17
-ATH,Tyler Soderstrom,10,Parker,23,15,18,21,-30,-26
-MIA,Liam Hicks,10,Carrasco,22,0,29,13,-10,-25
-MIA,Troy Johnston,-8,Carrasco,21,9,2,6,-17,-12
-PIT,Henry Davis,-2,Singer,20,-38,16,-2,18,7
-ATH,Luis Urias,9,Parker,20,15,35,12,-30,-26
-ATH,Nick Kurtz,8,Parker,20,13,21,23,-37,-19
-PIT,Tommy Pham,3,Singer,19,-32,37,-10,14,7
-MIA,Agustin Ramirez,9,Carrasco,18,-8,30,10,-16,-22
-PIT,Bryan Reynolds,3,Singer,18,-16,0,-5,32,5
-MIA,Dane Myers,3,Carrasco,18,0,9,9,-10,-19
-SEA,Cal Raleigh,8,Smith,15,-2,-17,-13,72,-6
-SEA,Eugenio Suarez,10,Smith,15,4,0,-7,50,-5
-PIT,Jared Triolo,4,Singer,15,-34,16,-6,21,1
-PIT,Oneil Cruz,-1,Singer,14,-24,-5,-6,23,10
-WAS,Daylen Lile,3,Lopez,12,-5,9,-9,28,18
-PIT,Isiah Kiner-Falefa,1,Singer,12,-42,6,-4,30,7
-SEA,Jorge Polanco,10,Smith,12,-10,-15,-4,59,-8
-PIT,Nick Gonzales,5,Singer,12,-40,14,-9,46,10
-PIT,Spencer Horwitz,6,Singer,12,-25,8,-6,17,3
-ATL,Matt Olson,6,Perez,11,30,10,-30,8,5
-SEA,Randy Arozarena,7,Smith,11,-2,1,-7,38,7
-SEA,Cole Young,6,Smith,10,0,-10,-10,64,7
-SEA,Julio Rodriguez,7,Smith,10,-21,-15,6,64,-10
-MIA,Otto Lopez,9,Carrasco,10,-12,14,9,-17,-20
-PIT,Andrew McCutchen,-1,Singer,9,-35,12,-2,-2,18
-WAS,Riley Adams,-6,Lopez,8,-14,33,-28,8,11
-MIA,Xavier Edwards,9,Carrasco,7,-3,17,-2,-14,-13
-WAS,Jacob Young,1,Lopez,6,-11,30,-23,19,26
-SEA,Dominic Canzone,7,Smith,5,0,-1,-14,54,4
-ATL,Drake Baldwin,4,Perez,5,21,-1,-31,18,6
-WAS,James Wood,2,Lopez,5,-12,-16,-12,12,12
-SEA,Josh Naylor,9,Smith,5,-8,-15,7,46,1
-WAS,C.J. Abrams,-1,Lopez,4,-9,7,-16,12,26
-SEA,J.P. Crawford,7,Smith,3,-13,-14,-4,36,4
-ATL,Jurickson Profar,4,Perez,3,3,-9,-27,24,22
-CIN,Gavin Lux,-5,Skenes,1,-44,6,-9,-8,35
-WAS,Nathaniel Lowe,-4,Lopez,1,-14,-22,-27,28,26
-ATL,Sean Murphy,-4,Perez,1,20,-22,-38,17,14
-WAS,Luis Garcia,-1,Lopez,-1,-11,-3,-17,25,24
-CIN,TJ Friedl,-3,Skenes,-1,-42,11,-13,-5,39
-WAS,Brady House,-8,Lopez,-2,-6,-4,-18,11,23
-WAS,Josh Bell,-1,Lopez,-3,-5,-21,-19,6,32
-CIN,Ke'Bryan Hayes,-8,Skenes,-3,-54,-10,-8,-8,41
-CIN,Elly De La Cruz,-7,Skenes,-4,-32,-9,-18,-4,38
-CIN,Jake Fraley,-6,Skenes,-5,-44,-1,-14,-7,34
-CIN,Tyler Stephenson,-9,Skenes,-5,-49,-8,-17,-9,27
-ATL,Ozzie Albies,-3,Perez,-6,-2,-9,-28,3,2
-CIN,Matt McLain,-7,Skenes,-8,-57,-14,-12,-4,33
-CIN,Spencer Steer,-5,Skenes,-8,-47,-6,-13,-9,32
-ATL,Michael Harris II,-3,Perez,-9,22,-17,-27,6,22
-ATL,Nick Allen,-6,Perez,-9,-21,4,-30,-4,7
-ATL,Eli White,-7,Perez,-12,-8,-10,-38,13,18
-ATL,Nacho Alvarez Jr.,-10,Perez,-15,-24,-27,-28,17,18
-CIN,Austin Hays,-10,Skenes,-20,-60,-19,-19,-18,46
-CHW,Edgar Quero,-6,Gilbert,-22,-3,-10,-15,-30,60
-CHW,Chase Meidroth,-4,Gilbert,-23,-9,-14,-10,-35,66
-CHW,Lenyn Sosa,-6,Gilbert,-27,-16,-15,-19,-26,67
-CHW,Luis Robert,-8,Gilbert,-27,-10,-21,-15,-34,51
-CHW,Josh Rojas,-8,Gilbert,-30,-22,-29,-16,-26,51
-CHW,Mike Tauchman,-8,Gilbert,-32,-16,-32,-23,-22,51
-CHW,Andrew Benintendi,-7,Gilbert,-33,-24,-26,-17,-30,81
-CHW,Kyle Teel,-9,Gilbert,-33,-10,-29,-12,-41,61
-CHW,Colson Montgomery,-10,Gilbert,-35,-9,-29,-24,-37,52
+ATH,Colby Thomas,-10,Parker,47,11,24,20,-36,-8
+ATH,Willie MacIver,3,Parker,43,20,43,28,-41,-29
+ATH,Darell Hernaiz,9,Parker,35,21,39,32,-36,-36
+ATH,Max Schuemann,9,Parker,34,24,51,16,-22,-34
+PIT,Jack Suwinski,-1,Singer,31,-11,5,11,14,-2
+MIA,Jakob Marsee,6,Carrasco,31,22,23,14,-2,-19
+ATH,Shea Langeliers,10,Parker,31,21,32,27,-38,-35
+ATH,Brent Rooker,10,Parker,28,2,37,25,-24,-30
+MIA,Graham Pauley,5,Carrasco,27,9,23,12,-6,-22
+MIA,Kyle Stowers,8,Carrasco,26,0,23,14,-2,-17
+MIA,Liam Hicks,10,Carrasco,26,2,39,14,-10,-25
+MIA,Troy Johnston,-8,Carrasco,24,10,8,8,-17,-12
+ATH,Tyler Soderstrom,10,Parker,23,18,17,21,-30,-26
+MIA,Agustin Ramirez,9,Carrasco,20,-7,36,11,-16,-22
+MIA,Eric Wagaman,7,Carrasco,20,12,14,8,-6,-24
+PIT,Henry Davis,-2,Singer,20,-37,16,-3,18,7
+ATH,Luis Urias,9,Parker,20,17,34,12,-30,-26
+ATH,Nick Kurtz,8,Parker,20,16,20,23,-37,-19
+PIT,Bryan Reynolds,3,Singer,18,-15,-1,-5,32,5
+SEA,Cal Raleigh,8,Smith,15,-1,-19,-12,72,-6
+SEA,Eugenio Suarez,10,Smith,15,5,-3,-7,50,-5
+PIT,Jared Triolo,4,Singer,14,-33,14,-7,21,1
+PIT,Oneil Cruz,-1,Singer,14,-24,-6,-7,23,10
+MIA,Otto Lopez,9,Carrasco,14,-7,21,11,-17,-20
+ATL,Matt Olson,6,Perez,13,32,16,-29,8,5
+WAS,Daylen Lile,3,Lopez,12,-2,9,-10,28,18
+PIT,Isiah Kiner-Falefa,1,Singer,12,-40,6,-5,30,7
+SEA,Jorge Polanco,10,Smith,12,-8,-17,-4,59,-8
+PIT,Nick Gonzales,5,Singer,12,-38,13,-9,46,10
+PIT,Spencer Horwitz,6,Singer,12,-24,8,-7,17,3
+SEA,Mitch Garver,2,Smith,11,-18,-13,-2,50,4
+SEA,Randy Arozarena,7,Smith,11,-1,-2,-6,38,7
+SEA,Julio Rodriguez,7,Smith,10,-20,-17,7,64,-10
+ATL,Marcell Ozuna,6,Perez,10,12,9,-34,19,8
+MIA,Xavier Edwards,9,Carrasco,10,1,25,0,-14,-13
+PIT,Andrew McCutchen,-1,Singer,9,-34,11,-2,-2,18
+WAS,Riley Adams,-6,Lopez,9,-12,32,-28,8,11
+ATL,Drake Baldwin,4,Perez,8,21,7,-30,18,6
+WAS,Robert Hassell III,-5,Lopez,8,4,-8,-16,34,21
+WAS,Jacob Young,1,Lopez,6,-8,31,-23,19,26
+ATL,Jurickson Profar,4,Perez,6,5,-4,-25,24,22
+SEA,Dominic Canzone,7,Smith,5,1,-4,-13,54,4
+WAS,James Wood,2,Lopez,5,-11,-17,-12,12,12
+SEA,Josh Naylor,9,Smith,5,-6,-18,8,46,1
+WAS,C.J. Abrams,-1,Lopez,4,-6,7,-17,12,26
+SEA,J.P. Crawford,7,Smith,3,-11,-16,-3,36,4
+WAS,Nathaniel Lowe,-4,Lopez,2,-12,-22,-27,28,26
+CIN,Gavin Lux,-5,Skenes,1,-43,5,-9,-8,35
+WAS,Paul DeJong,-8,Lopez,0,-22,9,-24,21,17
+WAS,Luis Garcia,-1,Lopez,-1,-8,-3,-18,25,24
+CIN,TJ Friedl,-3,Skenes,-1,-41,10,-13,-5,39
+ATL,Ozzie Albies,-3,Perez,-3,0,-3,-27,3,2
+CIN,Elly De La Cruz,-7,Skenes,-4,-31,-10,-18,-4,38
+CIN,Ke'Bryan Hayes,-8,Skenes,-4,-53,-10,-8,-8,41
+CIN,Jose Trevino,-4,Skenes,-6,-63,-9,-6,5,43
+ATL,Michael Harris II,-3,Perez,-6,25,-12,-26,6,22
+ATL,Nick Allen,-6,Perez,-6,-17,11,-29,-4,7
+CIN,Matt McLain,-7,Skenes,-8,-56,-15,-12,-4,33
+CIN,Spencer Steer,-5,Skenes,-8,-46,-7,-13,-9,32
+ATL,Eli White,-7,Perez,-9,-4,-5,-37,13,18
+CIN,Noelvi Marte,-9,Skenes,-11,-53,-17,-12,-19,39
+ATL,Jonathan Ornelas,-10,Perez,-12,-28,-10,-28,11,17
+CIN,Austin Hays,-10,Skenes,-20,-59,-19,-19,-18,46
+CHW,Edgar Quero,-6,Gilbert,-22,-1,-13,-14,-30,60
+CHW,Brooks Baldwin,-9,Gilbert,-24,8,-24,-15,-36,50
+CHW,Lenyn Sosa,-6,Gilbert,-27,-14,-18,-19,-26,67
+CHW,Luis Robert,-8,Gilbert,-27,-9,-23,-14,-34,51
+CHW,Michael A. Taylor,-9,Gilbert,-30,-12,-23,-16,-35,42
+CHW,Mike Tauchman,-8,Gilbert,-32,-15,-34,-23,-22,51
+CHW,Andrew Benintendi,-7,Gilbert,-33,-22,-28,-17,-30,81
+CHW,Curtis Mead,-9,Gilbert,-33,-22,-25,-17,-32,51
+CHW,Colson Montgomery,-10,Gilbert,-35,-8,-31,-24,-37,52
