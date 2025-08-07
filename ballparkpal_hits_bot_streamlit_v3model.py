@@ -509,16 +509,9 @@ def create_league_aware_filters(df=None):
             team_options = sorted(df['Tm'].unique().tolist())
         
         filters['selected_teams'] = st.multiselect(
-            "Filter by Teams (Include Only)",
+            "Filter by Teams",
             options=team_options,
             help="Leave empty to include all teams"
-        )
-        
-        # Team Exclusion  
-        filters['excluded_teams'] = st.multiselect(
-            "Exclude Teams",
-            options=team_options,
-            help="Select teams to completely exclude from analysis (weather delays, poor matchups, etc.)"
         )
         
         # Result count
@@ -585,16 +578,6 @@ def create_league_aware_filters(df=None):
             if excluded_players:
                 preview_df = preview_df[~preview_df['Batter'].isin(excluded_players)]
             
-            # Apply team exclusions
-            excluded_teams = filters.get('excluded_teams', [])
-            if excluded_teams:
-                preview_df = preview_df[~preview_df['Tm'].isin(excluded_teams)]
-            
-            # Apply team selections (include only)
-            selected_teams = filters.get('selected_teams', [])
-            if selected_teams:
-                preview_df = preview_df[preview_df['Tm'].isin(selected_teams)]
-            
             # Build query based on profile type
             if filters.get('profile_type') == 'power':
                 preview_query = f"adj_K <= {filters['max_k']:.1f} and adj_BB <= {filters['max_bb']:.1f} and adj_XB >= {filters['min_xb']:.1f} and adj_HR >= {filters['min_hr']:.1f} and adj_vs >= {filters['min_vs']}"
@@ -609,22 +592,17 @@ def create_league_aware_filters(df=None):
             
             matching_count = len(preview_df)
             excluded_count = len(excluded_players)
-            excluded_teams_count = len(excluded_teams) if excluded_teams else 0
             
-            # Context-aware feedback with lineup and team information
+            # Context-aware feedback with lineup information
             if matching_count == 0:
                 st.sidebar.error("❌ No players match current profile")
                 if excluded_count > 0:
                     st.sidebar.markdown(f"**💡 Note:** {excluded_count} players excluded due to lineup status")
-                if excluded_teams_count > 0:
-                    st.sidebar.markdown(f"**🚫 Teams:** {excluded_teams_count} teams excluded")
                 st.sidebar.markdown("**💡 Try:** Different player type or use custom overrides")
             elif matching_count < 5:
                 st.sidebar.warning(f"⚠️ Only {matching_count} players match")
                 if excluded_count > 0:
                     st.sidebar.markdown(f"**📊 Pool:** {matching_count} playing + {excluded_count} excluded")
-                if excluded_teams_count > 0:
-                    st.sidebar.markdown(f"**🚫 Teams:** {excluded_teams_count} teams excluded")
                 if filters.get('best_per_team_only', False):
                     st.sidebar.markdown(f"**🏟️ Teams:** {len(preview_df['Tm'].unique())} teams represented")
                 st.sidebar.markdown("**💡 Consider:** Less restrictive profile or custom settings")
@@ -632,9 +610,6 @@ def create_league_aware_filters(df=None):
                 st.sidebar.success(f"✅ {matching_count} players match profile")
                 if excluded_count > 0:
                     st.sidebar.markdown(f"**📊 Lineup Status:** {matching_count} confirmed playing, {excluded_count} excluded")
-                if excluded_teams_count > 0:
-                    excluded_team_names = ", ".join(excluded_teams)
-                    st.sidebar.markdown(f"**🚫 Excluded Teams:** {excluded_team_names}")
                 
                 if filters.get('best_per_team_only', False):
                     unique_teams = len(preview_df['Tm'].unique())
@@ -680,15 +655,6 @@ def apply_league_aware_filters(df, filters):
         if excluded_count > 0:
             st.info(f"🏟️ Excluded {excluded_count} players not in today's lineups")
     
-    # Apply team exclusions first (before other filters)
-    excluded_teams = filters.get('excluded_teams', [])
-    if excluded_teams:
-        excluded_team_players = len(df[df['Tm'].isin(excluded_teams)])
-        df = df[~df['Tm'].isin(excluded_teams)]
-        if excluded_team_players > 0:
-            excluded_team_names = ", ".join(excluded_teams)
-            st.info(f"🚫 Excluded {excluded_team_players} players from teams: {excluded_team_names}")
-    
     query_parts = []
     
     # Primary filters based on player type
@@ -718,15 +684,10 @@ def apply_league_aware_filters(df, filters):
     if 'min_vs_pitcher' in filters and filters['min_vs_pitcher'] != 0:
         query_parts.append(f"adj_vs >= {filters['min_vs_pitcher']}")
     
-    # Team filters
+    # Team filter
     if filters.get('selected_teams'):
         team_filter = "Tm in " + str(filters['selected_teams'])
         query_parts.append(team_filter)
-    
-    # Team exclusions
-    if filters.get('excluded_teams'):
-        team_exclude_filter = "Tm not in " + str(filters['excluded_teams'])
-        query_parts.append(team_exclude_filter)
     
     # Apply filters with error handling
     try:
@@ -1376,11 +1337,10 @@ def main_page():
     - **💎 Hidden Gems Profiles**: Updated thresholds catch more viable players automatically
     - **XB% + HR% = Power Combo**: Target 10%+ combined for solid power threats
     - **⚾ All Power Players**: Complete power research - find overlooked gems
-    - **🚫 NEW: Team Exclusion**: Exclude entire teams for weather delays, tough matchups, or strategic fades
     - **📊 Weather & Parks**: Already factored into data - focus on lineup verification and strategy
     - **Always verify lineups before finalizing picks**
     
-    **✅ Complete System: 8 Profiles | Team + Player Exclusions | Pre-Integrated Environmental Data**
+    **✅ Complete System: 8 Profiles | Power + Contact | Pre-Integrated Environmental Data**
     """)
 
 def info_page():
@@ -2081,63 +2041,7 @@ def info_page():
                 increase_research_profiles(base_allocation, increase=20%)
         ```
         
-        ### **Team Management Strategy**
-        
-        #### **Team Exclusion Best Practices:**
-        ```python
-        # Strategic Team Exclusions
-        
-        exclusion_scenarios = {
-            'weather_delays': {
-                'reason': 'Games postponed/delayed due to weather',
-                'action': 'Exclude affected teams completely',
-                'timing': 'Monitor weather 2-3 hours before games'
-            },
-            
-            'elite_pitching_fade': {
-                'reason': 'Teams facing Cy Young caliber pitchers',
-                'action': 'Exclude teams vs sub-2.50 ERA starters',
-                'strategy': 'Avoid entire offensive lineup'
-            },
-            
-            'lineup_uncertainty': {
-                'reason': 'Teams with late scratch potential',
-                'action': 'Exclude teams with injury/rest concerns',
-                'timing': 'Use 1-2 hours before first pitch'
-            },
-            
-            'contrarian_strategy': {
-                'reason': 'Fade popular offensive teams',
-                'action': 'Exclude high-owned team stacks',
-                'contest_type': 'Large field GPP tournaments'
-            },
-            
-            'late_game_optimization': {
-                'reason': 'Focus on specific game slate',
-                'action': 'Exclude early games if focusing on night slate',
-                'strategy': 'Concentrate player pool for better analysis'
-            }
-        }
-        ```
-        
-        #### **Team Exclusion vs Player Exclusion:**
-        ```python
-        # Decision Framework
-        
-        use_team_exclusion_when = [
-            "Entire team affected (weather, travel, rest)",
-            "Facing elite pitching that affects whole lineup", 
-            "Strategic fade of popular team stack",
-            "Late slate focus (exclude early games)"
-        ]
-        
-        use_player_exclusion_when = [
-            "Individual lineup status (injury, rest)",
-            "Specific player matchup concerns",
-            "Selective roster construction within teams",
-            "Maintaining team exposure while avoiding specific players"
-        ]
-        ```
+        ### **Research Workflow Optimization**
         
         #### **Systematic Analysis Process:**
         ```
@@ -2202,16 +2106,7 @@ def info_page():
             'salary_percentile': '<60', # Lower cost
             'recent_form': 'improving',  # Positive trend (in data)
             'matchup_grade': '>= B-',   # Decent spot
-            'projected_ownership': '<15', # Contrarian
-            'excluded_teams': ['weather_delay_teams', 'poor_matchup_teams']
-        }
-        
-        # Team Management Strategies
-        team_exclusion_scenarios = {
-            'weather_delays': "Exclude teams with rain/storm delays",
-            'tough_pitching': "Exclude teams facing elite pitchers",
-            'late_lineup_news': "Exclude teams with uncertain lineups",
-            'strategic_fade': "Fade popular teams for differentiation"
+            'projected_ownership': '<15' # Contrarian
         }
         
         # Note: Weather and park factors already integrated in CSV data
@@ -2523,18 +2418,9 @@ def info_page():
         # Problem: No players showing up
         solutions = [
             "Check if excluded players list is too extensive",
-            "Verify excluded teams list isn't too restrictive",
             "Try less restrictive profiles (Above-Average, All Players)",
             "Use custom overrides to expand criteria",
             "Verify data loaded correctly"
-        ]
-        
-        # Problem: Unwanted teams showing up
-        solutions = [
-            "Use 'Exclude Teams' feature for weather delays",
-            "Exclude teams facing elite pitching",
-            "Strategic team fades for differentiation", 
-            "Late slate focus - exclude early game teams"
         ]
         
         # Problem: All scores seem low
