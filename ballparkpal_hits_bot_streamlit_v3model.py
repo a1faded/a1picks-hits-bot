@@ -1026,7 +1026,8 @@ def apply_league_aware_filters(df, filters):
             
             # Show how many players have the same HR%
             hr_value_counts = filtered_df['adj_HR'].value_counts()
-            st.write(f"Players with identical HR% values: {len(hr_value_counts[hr_value_counts > 1])} different HR% values have ties")
+            ties_count = len(hr_value_counts[hr_value_counts > 1])
+            st.write(f"Players with identical HR% values: {ties_count} different HR% values have ties")
             
             # Show specific example of ties
             most_common_hr = filtered_df['adj_HR'].mode()[0]
@@ -1034,13 +1035,16 @@ def apply_league_aware_filters(df, filters):
             if len(tied_players) > 1:
                 st.write(f"Example tie: {len(tied_players)} players with {most_common_hr:.1f}% HR")
                 st.write("Their K% values (should be sorted low to high):")
-                st.write(tied_players[['Batter', 'adj_HR', 'adj_K']].sort_values('adj_K'))
+                tie_display = tied_players[['Batter', 'adj_HR', 'adj_K']].sort_values('adj_K')
+                st.dataframe(tie_display)
         
-        # Show sample data BEFORE sorting
+        # Show sample data BEFORE sorting with proper dataframe display
         if len(filtered_df) > 0:
             st.write("📊 BEFORE Sorting (First 8 rows):")
             debug_cols = ['Batter'] + [col for col in sort_columns if col in filtered_df.columns]
-            st.write(filtered_df[debug_cols].head(8))
+            before_sample = filtered_df[debug_cols].head(8).copy()
+            before_sample = before_sample.round(2)  # Round for readability
+            st.dataframe(before_sample)
         
         # Apply multi-column sorting with extra validation
         if len(sort_columns) > 0:
@@ -1049,7 +1053,6 @@ def apply_league_aware_filters(df, filters):
                 for col in sort_columns:
                     if col in ['adj_HR', 'adj_K', 'adj_XB', 'adj_1B', 'adj_BB', 'Score', 'total_hit_prob', 'power_combo']:
                         filtered_df[col] = pd.to_numeric(filtered_df[col], errors='coerce')
-                        st.write(f"✓ Column '{col}' converted to numeric: {filtered_df[col].dtype}")
                         
                         # Check for NaN values after conversion
                         nan_count = filtered_df[col].isna().sum()
@@ -1062,8 +1065,10 @@ def apply_league_aware_filters(df, filters):
                     
                     # Manual sort: First by HR% desc, then by K% asc
                     manual_sorted = filtered_df.sort_values(['adj_HR', 'adj_K'], ascending=[False, True])
+                    manual_sample = manual_sorted[['Batter', 'adj_HR', 'adj_K']].head(8).copy()
+                    manual_sample = manual_sample.round(2)
                     st.write("Manual sort result (first 8):")
-                    st.write(manual_sorted[['Batter', 'adj_HR', 'adj_K']].head(8))
+                    st.dataframe(manual_sample)
                 
                 # Apply the actual sort
                 sorted_df = filtered_df.sort_values(
@@ -1075,22 +1080,38 @@ def apply_league_aware_filters(df, filters):
                 
                 # Show sample data AFTER sorting
                 st.write("📊 AFTER Sorting (First 8 rows):")
-                st.write(sorted_df[debug_cols].head(8))
+                after_sample = sorted_df[debug_cols].head(8).copy()
+                after_sample = after_sample.round(2)
+                st.dataframe(after_sample)
                 
-                # Check if order changed
-                before_order = filtered_df[debug_cols].head(8)
-                after_order = sorted_df[debug_cols].head(8)
-                
-                if not before_order.equals(after_order):
-                    st.success("✅ Sorting successfully changed the data order")
-                else:
-                    st.warning("⚠️ Sorting did not change the data order")
+                # DETAILED COMPARISON - Show side by side
+                if primary_col == 'adj_HR' and secondary_col == 'adj_K':
+                    st.write("🔍 DETAILED COMPARISON:")
                     
-                    # Additional check: are there actually different values to sort?
-                    if len(sort_columns) > 1:
-                        unique_primary = filtered_df[sort_columns[0]].nunique()
-                        unique_secondary = filtered_df[sort_columns[1]].nunique()
-                        st.write(f"Unique values - Primary ({sort_columns[0]}): {unique_primary}, Secondary ({sort_columns[1]}): {unique_secondary}")
+                    # Create side-by-side comparison
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**Expected (Manual Sort):**")
+                        st.dataframe(manual_sample)
+                    
+                    with col2:
+                        st.write("**Actual (System Sort):**")
+                        st.dataframe(after_sample)
+                    
+                    # Check if they match
+                    if manual_sample.equals(after_sample):
+                        st.success("✅ Perfect Match! Multi-column sorting is working correctly.")
+                    else:
+                        st.error("❌ Mismatch detected! System sort differs from manual sort.")
+                        
+                        # Show specific differences
+                        st.write("**Differences found:**")
+                        for i in range(min(len(manual_sample), len(after_sample))):
+                            manual_row = manual_sample.iloc[i]
+                            actual_row = after_sample.iloc[i]
+                            if not manual_row.equals(actual_row):
+                                st.write(f"Row {i}: Manual={manual_row['Batter']} vs Actual={actual_row['Batter']}")
                 
                 filtered_df = sorted_df
                     
