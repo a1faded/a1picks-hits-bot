@@ -987,7 +987,7 @@ def apply_league_aware_filters(df, filters):
         if 'power_combo' not in filtered_df.columns:
             filtered_df['power_combo'] = filtered_df['adj_XB'] + filtered_df['adj_HR']
         
-        # Apply advanced multi-column sorting with detailed debugging
+        # ENHANCED DEBUG - Show sorting configuration and test specific problematic combo
         sort_columns = []
         sort_ascending = []
         
@@ -1009,50 +1009,95 @@ def apply_league_aware_filters(df, filters):
             sort_columns.append(secondary_col)
             sort_ascending.append(secondary_asc)
         
-        # DETAILED DEBUG - Show sorting configuration
-        st.write("🔍 DEBUG - Sorting Configuration:")
-        st.write(f"Sort columns: {sort_columns}")
-        st.write(f"Sort ascending: {sort_ascending}")
-        st.write(f"Primary: {filters.get('primary_sort', 'None')}")
-        st.write(f"Secondary: {filters.get('secondary_sort', 'None')}")
+        # ENHANCED DEBUG - Specific focus on HR% + K% combination
+        st.write("🔍 ENHANCED DEBUG - Multi-Column Sorting:")
+        st.write(f"Primary: {filters.get('primary_sort', 'None')} → Column: {primary_col} → Ascending: {primary_asc}")
+        st.write(f"Secondary: {filters.get('secondary_sort', 'None')} → Column: {secondary_col} → Ascending: {secondary_asc}")
+        st.write(f"Sort columns list: {sort_columns}")
+        st.write(f"Sort ascending list: {sort_ascending}")
+        
+        # Check for the problematic combination specifically
+        if primary_col == 'adj_HR' and secondary_col == 'adj_K':
+            st.write("🎯 TESTING PROBLEMATIC COMBO: HR% (High to Low) → K% (Low to High)")
+            
+            # Show HR% and K% distributions
+            st.write(f"HR% (adj_HR) range: {filtered_df['adj_HR'].min():.2f}% to {filtered_df['adj_HR'].max():.2f}%")
+            st.write(f"K% (adj_K) range: {filtered_df['adj_K'].min():.2f}% to {filtered_df['adj_K'].max():.2f}%")
+            
+            # Show how many players have the same HR%
+            hr_value_counts = filtered_df['adj_HR'].value_counts()
+            st.write(f"Players with identical HR% values: {len(hr_value_counts[hr_value_counts > 1])} different HR% values have ties")
+            
+            # Show specific example of ties
+            most_common_hr = filtered_df['adj_HR'].mode()[0]
+            tied_players = filtered_df[filtered_df['adj_HR'] == most_common_hr]
+            if len(tied_players) > 1:
+                st.write(f"Example tie: {len(tied_players)} players with {most_common_hr:.1f}% HR")
+                st.write("Their K% values (should be sorted low to high):")
+                st.write(tied_players[['Batter', 'adj_HR', 'adj_K']].sort_values('adj_K'))
         
         # Show sample data BEFORE sorting
         if len(filtered_df) > 0:
-            st.write("📊 BEFORE Sorting (First 5 rows):")
+            st.write("📊 BEFORE Sorting (First 8 rows):")
             debug_cols = ['Batter'] + [col for col in sort_columns if col in filtered_df.columns]
-            st.write(filtered_df[debug_cols].head())
+            st.write(filtered_df[debug_cols].head(8))
         
-        # Apply multi-column sorting
+        # Apply multi-column sorting with extra validation
         if len(sort_columns) > 0:
             try:
-                # Check data types of sorting columns
+                # Ensure numeric columns are properly typed
                 for col in sort_columns:
-                    st.write(f"Column '{col}' data type: {filtered_df[col].dtype}")
-                    st.write(f"Sample values: {filtered_df[col].head(3).tolist()}")
+                    if col in ['adj_HR', 'adj_K', 'adj_XB', 'adj_1B', 'adj_BB', 'Score', 'total_hit_prob', 'power_combo']:
+                        filtered_df[col] = pd.to_numeric(filtered_df[col], errors='coerce')
+                        st.write(f"✓ Column '{col}' converted to numeric: {filtered_df[col].dtype}")
+                        
+                        # Check for NaN values after conversion
+                        nan_count = filtered_df[col].isna().sum()
+                        if nan_count > 0:
+                            st.warning(f"⚠️ {nan_count} NaN values in {col}")
                 
-                # Use stable sort to maintain relative order for ties
+                # Create a manual test for the problematic combo
+                if len(sort_columns) == 2 and primary_col == 'adj_HR' and secondary_col == 'adj_K':
+                    st.write("🧪 MANUAL TEST: Sorting manually to verify logic")
+                    
+                    # Manual sort: First by HR% desc, then by K% asc
+                    manual_sorted = filtered_df.sort_values(['adj_HR', 'adj_K'], ascending=[False, True])
+                    st.write("Manual sort result (first 8):")
+                    st.write(manual_sorted[['Batter', 'adj_HR', 'adj_K']].head(8))
+                
+                # Apply the actual sort
                 sorted_df = filtered_df.sort_values(
                     sort_columns, 
                     ascending=sort_ascending, 
                     kind='mergesort',
-                    na_position='last'  # Put NaN values at the end
+                    na_position='last'
                 )
                 
                 # Show sample data AFTER sorting
-                st.write("📊 AFTER Sorting (First 5 rows):")
-                st.write(sorted_df[debug_cols].head())
+                st.write("📊 AFTER Sorting (First 8 rows):")
+                st.write(sorted_df[debug_cols].head(8))
                 
-                # Test if sorting actually changed the order
-                if not sorted_df[debug_cols].equals(filtered_df[debug_cols]):
+                # Check if order changed
+                before_order = filtered_df[debug_cols].head(8)
+                after_order = sorted_df[debug_cols].head(8)
+                
+                if not before_order.equals(after_order):
                     st.success("✅ Sorting successfully changed the data order")
                 else:
-                    st.warning("⚠️ Sorting did not change the data order - all values might be identical")
+                    st.warning("⚠️ Sorting did not change the data order")
+                    
+                    # Additional check: are there actually different values to sort?
+                    if len(sort_columns) > 1:
+                        unique_primary = filtered_df[sort_columns[0]].nunique()
+                        unique_secondary = filtered_df[sort_columns[1]].nunique()
+                        st.write(f"Unique values - Primary ({sort_columns[0]}): {unique_primary}, Secondary ({sort_columns[1]}): {unique_secondary}")
                 
                 filtered_df = sorted_df
                     
             except Exception as sort_error:
                 st.error(f"❌ Sorting error: {sort_error}")
-                # Fallback to default Score sorting
+                import traceback
+                st.error(f"Full error: {traceback.format_exc()}")
                 filtered_df = filtered_df.sort_values('Score', ascending=False)
         else:
             st.info("ℹ️ No valid sort columns found, using default Score sorting")
