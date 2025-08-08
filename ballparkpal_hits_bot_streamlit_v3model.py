@@ -133,7 +133,7 @@ def load_csv_with_validation(url, description, expected_columns, key_columns=Non
                     st.error(f"❌ {description}: Null values in {problematic_cols}")
                     return None
             
-            st.success(f"✅ {description}: {len(df)} records loaded")
+            # st.success(f"✅ {description}: {len(df)} records loaded")  # Removed for clean UI
             return df
             
     except requests.exceptions.RequestException as e:
@@ -211,10 +211,9 @@ def load_and_process_data():
                 how='left'  # Keep all players even if pitcher data missing
             )
             
-            # Count successful matches
+            # Count successful matches (silent for clean UI)
             successful_matches = len(merged_df[merged_df['Walk_3Plus_Probability'].notna()])
-            total_players = len(merged_df)
-            st.success(f"✅ Pitcher matchup data integrated for {successful_matches}/{total_players} player matchups")
+            # st.success(f"✅ Pitcher matchup data integrated for {successful_matches}/{total_players} player matchups")  # Removed for clean UI
             
         except Exception as e:
             st.warning(f"⚠️ Pitcher data merge failed: {str(e)} - continuing without pitcher bonuses")
@@ -343,7 +342,7 @@ def load_pitcher_matchup_data():
             'Park': 'Opponent_Team'
         })
         
-        st.success(f"✅ Pitcher matchup data loaded: {len(pitcher_data)} pitcher-opponent combinations")
+        # st.success(f"✅ Pitcher matchup data loaded: {len(pitcher_data)} pitcher-opponent combinations")  # Removed for clean UI
         return pitcher_data
         
     except Exception as e:
