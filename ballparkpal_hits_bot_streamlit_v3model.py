@@ -1329,7 +1329,20 @@ def display_league_aware_results(filtered_df, filters):
             else:
                 cols = st.columns(4)
             
-            for i, (profile_name, analysis) in enumerate(profile_analysis.items()):
+            # Track which players we've shown to avoid spam
+            shown_players = set()
+            profiles_to_display = {}
+            
+            # First, find unique players for each profile to reduce redundancy
+            for profile_name, analysis in profile_analysis.items():
+                player_name = analysis['player']['Batter']
+                if player_name not in shown_players or len(shown_players) < 3:  # Allow some overlap but limit it
+                    profiles_to_display[profile_name] = analysis
+                    shown_players.add(player_name)
+                elif len(profiles_to_display) < 6:  # Ensure we show at least 6 profiles
+                    profiles_to_display[profile_name] = analysis
+            
+            for i, (profile_name, analysis) in enumerate(profiles_to_display.items()):
                 player = analysis['player']
                 overall_rank = analysis['rank_overall']
                 profile_count = analysis['count_in_profile']
@@ -1337,7 +1350,8 @@ def display_league_aware_results(filtered_df, filters):
                 with cols[i % len(cols)]:
                     # Profile header with icon
                     icon = profile_criteria[profile_name]['icon']
-                    st.markdown(f"**{icon} {profile_name.split(' ', 1)[1]}**")  # Remove icon from name since we show it
+                    profile_short_name = profile_name.split(' ', 1)[1] if ' ' in profile_name else profile_name
+                    st.markdown(f"**{icon} {profile_short_name}**")
                     
                     # Player name with rank indication
                     if overall_rank == 1:
@@ -1347,7 +1361,8 @@ def display_league_aware_results(filtered_df, filters):
                     else:
                         st.info(f"**{player['Batter']}** (#{overall_rank})")
                     
-                    # Key metrics with CORRECTED vs league calculations
+                    # FIXED: Show appropriate metrics based on profile type
+                    criteria = profile_criteria[profile_name]
                     if criteria["type"] == "power":
                         # Power-focused metrics
                         st.markdown(f"""
@@ -1370,39 +1385,45 @@ def display_league_aware_results(filtered_df, filters):
                     # Profile pool size
                     st.caption(f"📊 {profile_count} players in profile")
             
-            # Summary insights across profiles
+            # Summary insights across profiles - CLEANED UP
             st.markdown("---")
             st.markdown("**📋 Profile Summary:**")
             
             insights = []
             
-            # Find the highest scoring player across all profiles
-            best_overall_player = max(profile_analysis.values(), key=lambda x: x['player']['Score'])
+            # Find the highest scoring player across displayed profiles
+            best_overall_player = max(profiles_to_display.values(), key=lambda x: x['player']['Score'])
             best_player_name = best_overall_player['player']['Batter']
-            best_profile = [k for k, v in profile_analysis.items() if v['player']['Batter'] == best_player_name][0]
+            best_profile = [k for k, v in profiles_to_display.items() if v['player']['Batter'] == best_player_name][0]
             
-            insights.append(f"🏆 **Overall Best**: {best_player_name} ({best_profile})")
+            insights.append(f"🏆 **Overall Best**: {best_player_name} ({best_profile.split(' ')[0]})")
             
-            # Check for elite power across profiles
-            elite_power_players = [analysis['player']['Batter'] for analysis in profile_analysis.values() 
-                                 if analysis['player']['adj_XB'] + analysis['player']['adj_HR'] > 12]
+            # FIXED: Get unique players for each category to avoid spam
+            all_unique_players = {analysis['player']['Batter']: analysis['player'] for analysis in profiles_to_display.values()}
+            
+            # Check for elite power across profiles (unique players only)
+            elite_power_players = [name for name, player in all_unique_players.items() 
+                                 if player['adj_XB'] + player['adj_HR'] > 12]
             if elite_power_players:
-                insights.append(f"💥 **Elite Power Available**: {', '.join(elite_power_players)}")
+                unique_elite_power = list(set(elite_power_players))[:3]  # Max 3 names
+                insights.append(f"💥 **Elite Power Available**: {', '.join(unique_elite_power)}")
             
-            # Check for high hit probability players (contact profiles)
-            high_hit_prob_players = [analysis['player']['Batter'] for analysis in profile_analysis.values() 
-                                   if analysis['player']['total_hit_prob'] > 40]
+            # Check for high hit probability players (unique only)
+            high_hit_prob_players = [name for name, player in all_unique_players.items() 
+                                   if player['total_hit_prob'] > 40]
             if high_hit_prob_players:
-                insights.append(f"🎯 **40%+ Hit Probability**: {', '.join(high_hit_prob_players)}")
+                unique_high_hit = list(set(high_hit_prob_players))[:3]  # Max 3 names
+                insights.append(f"🎯 **40%+ Hit Probability**: {', '.join(unique_high_hit)}")
             
-            # Check for power+contact combo players
-            power_contact_players = [analysis['player']['Batter'] for analysis in profile_analysis.values() 
-                                   if analysis['player']['adj_XB'] + analysis['player']['adj_HR'] > 10 and analysis['player']['adj_K'] <= 17]
+            # Check for power+contact combo players (unique only)
+            power_contact_players = [name for name, player in all_unique_players.items() 
+                                   if player['adj_XB'] + player['adj_HR'] > 10 and player['adj_K'] <= 17]
             if power_contact_players:
-                insights.append(f"⚡ **Power + Contact Combo**: {', '.join(power_contact_players)}")
+                unique_power_contact = list(set(power_contact_players))[:3]  # Max 3 names
+                insights.append(f"⚡ **Power + Contact Combo**: {', '.join(unique_power_contact)}")
             
             # Show profile diversity
-            total_profiles_available = len(profile_analysis)
+            total_profiles_available = len(profiles_to_display)
             insights.append(f"📊 **Profile Diversity**: {total_profiles_available}/7 profiles have viable options")
             
             for insight in insights:
