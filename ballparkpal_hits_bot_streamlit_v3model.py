@@ -1283,34 +1283,97 @@ def display_league_aware_results(filtered_df, filters):
         
         excluded_players = st.session_state.get('excluded_players', [])
         
-        # Find best player for each profile
+        # Find best player for each profile with smart diversity logic
         profile_analysis = {}
         
+        # First pass: Find the overall #1 player and track usage
+        overall_best_player = None
+        overall_best_score = -1
         for profile_name, criteria in profile_criteria.items():
             # Filter players that meet this profile's criteria
             if criteria["type"] == "power":
-                # Power profile filtering
                 profile_players = filtered_df[
                     (filtered_df['adj_K'] <= criteria['max_k']) & 
                     (filtered_df['adj_BB'] <= criteria['max_bb']) &
                     (filtered_df['adj_XB'] >= criteria.get('min_xb', 0)) &
                     (filtered_df['adj_HR'] >= criteria.get('min_hr', 0)) &
-                    (~filtered_df['Batter'].isin(excluded_players))  # Exclude non-playing players
+                    (~filtered_df['Batter'].isin(excluded_players))
                 ].copy()
             else:
-                # Contact profile filtering
                 profile_players = filtered_df[
                     (filtered_df['adj_K'] <= criteria['max_k']) & 
                     (filtered_df['adj_BB'] <= criteria['max_bb']) &
-                    (~filtered_df['Batter'].isin(excluded_players))  # Exclude non-playing players
+                    (~filtered_df['Batter'].isin(excluded_players))
                 ].copy()
             
             if not profile_players.empty:
-                # Get the top player for this profile
-                best_player = profile_players.iloc[0]
+                best_in_profile = profile_players.iloc[0]
+                if best_in_profile['Score'] > overall_best_score:
+                    overall_best_score = best_in_profile['Score']
+                    overall_best_player = best_in_profile['Batter']
+        
+        # Track player usage to ensure diversity
+        player_usage = {'overall_best': overall_best_player, 'shown_in_contact': False, 'shown_in_power': False}
+        
+        # Second pass: Build profile analysis with diversity rules
+        for profile_name, criteria in profile_criteria.items():
+            # Filter players that meet this profile's criteria
+            if criteria["type"] == "power":
+                profile_players = filtered_df[
+                    (filtered_df['adj_K'] <= criteria['max_k']) & 
+                    (filtered_df['adj_BB'] <= criteria['max_bb']) &
+                    (filtered_df['adj_XB'] >= criteria.get('min_xb', 0)) &
+                    (filtered_df['adj_HR'] >= criteria.get('min_hr', 0)) &
+                    (~filtered_df['Batter'].isin(excluded_players))
+                ].copy()
+            else:
+                profile_players = filtered_df[
+                    (filtered_df['adj_K'] <= criteria['max_k']) & 
+                    (filtered_df['adj_BB'] <= criteria['max_bb']) &
+                    (~filtered_df['Batter'].isin(excluded_players))
+                ].copy()
+            
+            if not profile_players.empty:
+                # Apply diversity logic
+                selected_player = None
+                selected_rank = 1
+                
+                # Get top candidates
+                top_candidates = profile_players.head(3)  # Top 3 options
+                
+                for idx, candidate in top_candidates.iterrows():
+                    candidate_name = candidate['Batter']
+                    is_overall_best = candidate_name == player_usage['overall_best']
+                    
+                    if criteria["type"] == "power":
+                        # Power profiles: Allow overall best, but prefer diversity if already shown in power
+                        if not player_usage['shown_in_power'] or not is_overall_best:
+                            selected_player = candidate
+                            selected_rank = list(top_candidates.index).index(idx) + 1
+                            if is_overall_best:
+                                player_usage['shown_in_power'] = True
+                            break
+                    else:
+                        # Contact profiles: If overall best already shown in contact, use next best
+                        if not (is_overall_best and player_usage['shown_in_contact']):
+                            selected_player = candidate
+                            selected_rank = list(top_candidates.index).index(idx) + 1
+                            if is_overall_best:
+                                player_usage['shown_in_contact'] = True
+                            break
+                
+                # Fallback to #1 if no diversity option found
+                if selected_player is None:
+                    selected_player = profile_players.iloc[0]
+                    selected_rank = 1
+                
+                # Calculate overall rank
+                overall_rank = filtered_df[filtered_df['Batter'] == selected_player['Batter']].index[0] + 1
+                
                 profile_analysis[profile_name] = {
-                    'player': best_player,
-                    'rank_overall': filtered_df[filtered_df['Batter'] == best_player['Batter']].index[0] + 1,
+                    'player': selected_player,
+                    'rank_overall': overall_rank,
+                    'rank_in_profile': selected_rank,
                     'count_in_profile': len(profile_players)
                 }
         
@@ -1345,6 +1408,7 @@ def display_league_aware_results(filtered_df, filters):
             for i, (profile_name, analysis) in enumerate(profiles_to_display.items()):
                 player = analysis['player']
                 overall_rank = analysis['rank_overall']
+                profile_rank = analysis.get('rank_in_profile', 1)
                 profile_count = analysis['count_in_profile']
                 
                 with cols[i % len(cols)]:
@@ -1353,13 +1417,26 @@ def display_league_aware_results(filtered_df, filters):
                     profile_short_name = profile_name.split(' ', 1)[1] if ' ' in profile_name else profile_name
                     st.markdown(f"**{icon} {profile_short_name}**")
                     
-                    # Player name with rank indication
+                    # Player name with rank indication - show both overall and profile rank
                     if overall_rank == 1:
-                        st.success(f"🥇 **{player['Batter']}** (#{overall_rank})")
+                        if profile_rank == 1:
+                            st.success(f"🥇 **{player['Batter']}** (#{overall_rank} overall)")
+                        else:
+                            st.success(f"🥇 **{player['Batter']}** (#{overall_rank} overall, #{profile_rank} in profile)")
                     elif overall_rank <= 3:
-                        st.info(f"🥈 **{player['Batter']}** (#{overall_rank})")
+                        if profile_rank == 1:
+                            st.info(f"🥈 **{player['Batter']}** (#{overall_rank} overall)")
+                        else:
+                            st.info(f"🥈 **{player['Batter']}** (#{overall_rank} overall, #{profile_rank} in profile)")
                     else:
-                        st.info(f"**{player['Batter']}** (#{overall_rank})")
+                        if profile_rank == 1:
+                            st.info(f"**{player['Batter']}** (#{overall_rank} overall)")
+                        else:
+                            st.info(f"**{player['Batter']}** (#{overall_rank} overall, #{profile_rank} in profile)")
+                    
+                    # Show note if this is not the #1 in profile (diversity selection)
+                    if profile_rank > 1:
+                        st.caption(f"💡 Showing #{profile_rank} for diversity (#{overall_rank} overall)")
                     
                     # FIXED: Show appropriate metrics based on profile type
                     criteria = profile_criteria[profile_name]
@@ -1652,7 +1729,7 @@ def main_page():
     # Bottom tips with CORRECTED explanations
     st.markdown("---")
     st.markdown("""
-    ### 💡 **V2.7 COMPLETE Strategy Tips**
+    ### 💡 **V2.8 SMART DIVERSITY Strategy Tips**
     - **Positive K% vs League**: Player strikes out less than league average (BETTER CONTACT = GREEN!)
     - **Positive BB% vs League**: Player walks less than league average (MORE AGGRESSIVE = GREEN!)
     - **Scores 70+**: Elite opportunities with league-superior metrics
@@ -1662,10 +1739,11 @@ def main_page():
     - **⚾ All Power Players**: Complete power research - find overlooked gems
     - **🚫 Team Exclusion**: Exclude entire teams for weather delays, tough matchups, or strategic fades
     - **🎯 WORKING: Pitcher Matchup Grades**: A+ = Elite spots, D = Avoid (walks hurt all profiles, HRs boost power, hits boost contact)
+    - **🧠 NEW: Smart Profile Diversity**: Shows different top players across profiles for better discovery
     - **📊 Weather & Parks**: Already factored into data - focus on lineup verification and strategy
     - **Always verify lineups before finalizing picks**
     
-    **✅ V2.7 WORKING SYSTEM: 8 Profiles | Fixed Pitcher Name Matching | Complete Matchup Analysis | Team + Player Exclusions**
+    **✅ V2.8 SMART SYSTEM: 8 Profiles | Intelligent Player Diversity | Working Pitcher Matchups | Complete Analysis**
     """)
 
 def info_page():
@@ -1703,7 +1781,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.7** | Fixed Pitcher Name Matching Edition")
+    st.sidebar.markdown("**V2.8** | Smart Diversity Profile Display")
 
 if __name__ == "__main__":
     main()
