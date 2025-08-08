@@ -987,7 +987,7 @@ def apply_league_aware_filters(df, filters):
         if 'power_combo' not in filtered_df.columns:
             filtered_df['power_combo'] = filtered_df['adj_XB'] + filtered_df['adj_HR']
         
-        # Apply advanced multi-column sorting with robust logic
+        # Apply advanced multi-column sorting with detailed debugging
         sort_columns = []
         sort_ascending = []
         
@@ -998,9 +998,6 @@ def apply_league_aware_filters(df, filters):
         if primary_col in filtered_df.columns:
             sort_columns.append(primary_col)
             sort_ascending.append(primary_asc)
-            
-            # Debug: Show what we're sorting by
-            st.info(f"🔢 Primary Sort: {primary_col} ({'Ascending' if primary_asc else 'Descending'})")
         
         # Secondary sort (tie-breaker)
         secondary_col = filters.get('secondary_sort_col')
@@ -1011,32 +1008,54 @@ def apply_league_aware_filters(df, filters):
             secondary_col != primary_col):
             sort_columns.append(secondary_col)
             sort_ascending.append(secondary_asc)
-            
-            # Debug: Show secondary sort
-            st.info(f"🔢 Secondary Sort: {secondary_col} ({'Ascending' if secondary_asc else 'Descending'})")
+        
+        # DETAILED DEBUG - Show sorting configuration
+        st.write("🔍 DEBUG - Sorting Configuration:")
+        st.write(f"Sort columns: {sort_columns}")
+        st.write(f"Sort ascending: {sort_ascending}")
+        st.write(f"Primary: {filters.get('primary_sort', 'None')}")
+        st.write(f"Secondary: {filters.get('secondary_sort', 'None')}")
+        
+        # Show sample data BEFORE sorting
+        if len(filtered_df) > 0:
+            st.write("📊 BEFORE Sorting (First 5 rows):")
+            debug_cols = ['Batter'] + [col for col in sort_columns if col in filtered_df.columns]
+            st.write(filtered_df[debug_cols].head())
         
         # Apply multi-column sorting
         if len(sort_columns) > 0:
             try:
+                # Check data types of sorting columns
+                for col in sort_columns:
+                    st.write(f"Column '{col}' data type: {filtered_df[col].dtype}")
+                    st.write(f"Sample values: {filtered_df[col].head(3).tolist()}")
+                
                 # Use stable sort to maintain relative order for ties
-                filtered_df = filtered_df.sort_values(
+                sorted_df = filtered_df.sort_values(
                     sort_columns, 
                     ascending=sort_ascending, 
-                    kind='mergesort'  # Stable sort algorithm
+                    kind='mergesort',
+                    na_position='last'  # Put NaN values at the end
                 )
                 
-                # Debug: Show sorting was applied
-                if len(sort_columns) > 1:
-                    st.success(f"✅ Multi-column sort applied: {sort_columns[0]} → {sort_columns[1]}")
+                # Show sample data AFTER sorting
+                st.write("📊 AFTER Sorting (First 5 rows):")
+                st.write(sorted_df[debug_cols].head())
+                
+                # Test if sorting actually changed the order
+                if not sorted_df[debug_cols].equals(filtered_df[debug_cols]):
+                    st.success("✅ Sorting successfully changed the data order")
                 else:
-                    st.success(f"✅ Single-column sort applied: {sort_columns[0]}")
+                    st.warning("⚠️ Sorting did not change the data order - all values might be identical")
+                
+                filtered_df = sorted_df
                     
             except Exception as sort_error:
                 st.error(f"❌ Sorting error: {sort_error}")
                 # Fallback to default Score sorting
                 filtered_df = filtered_df.sort_values('Score', ascending=False)
         else:
-            # Fallback to default Score sorting
+            st.info("ℹ️ No valid sort columns found, using default Score sorting")
             filtered_df = filtered_df.sort_values('Score', ascending=False)
         
         # Limit results after sorting
