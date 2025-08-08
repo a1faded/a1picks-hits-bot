@@ -204,17 +204,6 @@ def load_and_process_data():
     # Merge pitcher data if available
     if pitcher_data is not None and not pitcher_data.empty:
         try:
-            # Debug info - show sample merge keys
-            if len(merged_df) > 0:
-                sample_main = merged_df[['Tm', 'Pitcher']].head(3)
-                st.info("🔍 Sample player data for matching:")
-                st.write(sample_main)
-                
-            if len(pitcher_data) > 0:
-                sample_pitcher = pitcher_data[['Opponent_Team', 'Pitcher_Name']].head(3)
-                st.info("🔍 Sample pitcher data for matching:")
-                st.write(sample_pitcher)
-            
             merged_df = pd.merge(
                 merged_df, pitcher_data,
                 left_on=['Tm', 'Pitcher'], 
@@ -227,14 +216,6 @@ def load_and_process_data():
             total_players = len(merged_df)
             st.success(f"✅ Pitcher matchup data integrated for {successful_matches}/{total_players} player matchups")
             
-            if successful_matches == 0:
-                st.warning("⚠️ No pitcher matchups found - check if pitcher names and team abbreviations match between datasets")
-                # Show unique values for debugging
-                unique_teams = merged_df['Tm'].unique()[:5]  # First 5 teams
-                unique_pitchers = merged_df['Pitcher'].unique()[:5]  # First 5 pitchers
-                st.info(f"Sample teams in main data: {unique_teams}")
-                st.info(f"Sample pitchers in main data: {unique_pitchers}")
-                
         except Exception as e:
             st.warning(f"⚠️ Pitcher data merge failed: {str(e)} - continuing without pitcher bonuses")
     else:
@@ -361,11 +342,6 @@ def load_pitcher_matchup_data():
             'Pitcher_LastName': 'Pitcher_Name',  # This will now be last name only
             'Park': 'Opponent_Team'
         })
-        
-        # Debug: Show sample of cleaned pitcher names
-        if len(pitcher_data) > 0:
-            sample_pitchers = pitcher_data['Pitcher_Name'].unique()[:5]
-            st.info(f"Sample cleaned pitcher names (last names only): {sample_pitchers}")
         
         st.success(f"✅ Pitcher matchup data loaded: {len(pitcher_data)} pitcher-opponent combinations")
         return pitcher_data
@@ -1729,7 +1705,7 @@ def main_page():
     # Bottom tips with ACTUAL STRATEGY
     st.markdown("---")
     st.markdown("""
-    ### 🎯 **V2.8 STRATEGIC PLAYBOOK**
+    ### 🎯 **V2.9 STRATEGIC PLAYBOOK**
     
     #### **📊 Core Strategy Framework**
     - **Cash Games**: 70% Contact-Aggressive + Elite Contact | Target 35%+ hit probability + positive K% vs league
@@ -1795,7 +1771,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.8** | Smart Diversity Profile Display")
+    st.sidebar.markdown("**V2.9** | Production Ready")
 
 if __name__ == "__main__":
     main()
