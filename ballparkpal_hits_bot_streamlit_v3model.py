@@ -314,6 +314,9 @@ def load_and_process_data():
     merged_df['total_hit_prob'] = merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']
     merged_df['total_hit_prob'] = merged_df['total_hit_prob'].clip(upper=100)  # Cap at 100%
     
+    # Create power combo column early for sorting
+    merged_df['power_combo'] = merged_df['adj_XB'] + merged_df['adj_HR']
+    
     return merged_df
 
 def load_pitcher_matchup_data():
@@ -977,56 +980,85 @@ def apply_league_aware_filters(df, filters):
             unique_teams = len(filtered_df['Tm'].unique())
             st.info(f"🏟️ Showing best player from each of {unique_teams} teams")
         
-        # Create power combo column for sorting if it doesn't exist
+        # Reset index to ensure clean sorting
+        filtered_df = filtered_df.reset_index(drop=True)
+        
+        # Ensure all required columns exist for sorting
         if 'power_combo' not in filtered_df.columns:
             filtered_df['power_combo'] = filtered_df['adj_XB'] + filtered_df['adj_HR']
         
-        # Apply advanced multi-column sorting
+        # Apply advanced multi-column sorting with robust logic
         sort_columns = []
         sort_ascending = []
         
         # Primary sort
         primary_col = filters.get('primary_sort_col', 'Score')
         primary_asc = filters.get('primary_sort_asc', False)
+        
         if primary_col in filtered_df.columns:
             sort_columns.append(primary_col)
             sort_ascending.append(primary_asc)
+            
+            # Debug: Show what we're sorting by
+            st.info(f"🔢 Primary Sort: {primary_col} ({'Ascending' if primary_asc else 'Descending'})")
         
-        # Secondary sort
+        # Secondary sort (tie-breaker)
         secondary_col = filters.get('secondary_sort_col')
         secondary_asc = filters.get('secondary_sort_asc')
-        if secondary_col and secondary_col in filtered_df.columns and secondary_col != primary_col:
+        
+        if (secondary_col and 
+            secondary_col in filtered_df.columns and 
+            secondary_col != primary_col):
             sort_columns.append(secondary_col)
             sort_ascending.append(secondary_asc)
+            
+            # Debug: Show secondary sort
+            st.info(f"🔢 Secondary Sort: {secondary_col} ({'Ascending' if secondary_asc else 'Descending'})")
         
-        # Apply sorting
-        if sort_columns:
-            filtered_df = filtered_df.sort_values(sort_columns, ascending=sort_ascending)
+        # Apply multi-column sorting
+        if len(sort_columns) > 0:
+            try:
+                # Use stable sort to maintain relative order for ties
+                filtered_df = filtered_df.sort_values(
+                    sort_columns, 
+                    ascending=sort_ascending, 
+                    kind='mergesort'  # Stable sort algorithm
+                )
+                
+                # Debug: Show sorting was applied
+                if len(sort_columns) > 1:
+                    st.success(f"✅ Multi-column sort applied: {sort_columns[0]} → {sort_columns[1]}")
+                else:
+                    st.success(f"✅ Single-column sort applied: {sort_columns[0]}")
+                    
+            except Exception as sort_error:
+                st.error(f"❌ Sorting error: {sort_error}")
+                # Fallback to default Score sorting
+                filtered_df = filtered_df.sort_values('Score', ascending=False)
         else:
             # Fallback to default Score sorting
             filtered_df = filtered_df.sort_values('Score', ascending=False)
         
-        # Limit results
+        # Limit results after sorting
         result_count = filters.get('result_count', 15)
         
         if result_count == "All":
-            # Show all results when "All" is selected
             result_df = filtered_df
         else:
-            # Limit to specified number
             result_df = filtered_df.head(result_count)
         
         return result_df
         
     except Exception as e:
         st.error(f"❌ Filter error: {str(e)}")
-        # Return top players by score with advanced sorting if filtering fails
+        # Return top players with advanced sorting even if filtering fails
         
-        # Create power combo column if it doesn't exist
+        # Reset index and ensure required columns exist
+        df = df.reset_index(drop=True)
         if 'power_combo' not in df.columns:
             df['power_combo'] = df['adj_XB'] + df['adj_HR']
         
-        # Apply sorting even in error case
+        # Apply sorting logic
         sort_columns = []
         sort_ascending = []
         
@@ -1038,13 +1070,23 @@ def apply_league_aware_filters(df, filters):
         
         secondary_col = filters.get('secondary_sort_col')
         secondary_asc = filters.get('secondary_sort_asc')
-        if secondary_col and secondary_col in df.columns and secondary_col != primary_col:
+        if (secondary_col and 
+            secondary_col in df.columns and 
+            secondary_col != primary_col):
             sort_columns.append(secondary_col)
             sort_ascending.append(secondary_asc)
         
-        if sort_columns:
-            sorted_df = df.sort_values(sort_columns, ascending=sort_ascending)
-        else:
+        try:
+            if sort_columns:
+                sorted_df = df.sort_values(
+                    sort_columns, 
+                    ascending=sort_ascending, 
+                    kind='mergesort'
+                )
+            else:
+                sorted_df = df.sort_values('Score', ascending=False)
+        except Exception as sort_error:
+            st.warning(f"⚠️ Sorting failed: {sort_error}, using default Score sort")
             sorted_df = df.sort_values('Score', ascending=False)
         
         result_count = filters.get('result_count', 15)
@@ -1257,8 +1299,9 @@ def display_league_aware_results(filtered_df, filters):
     display_df['K_vs_League'] = LEAGUE_K_AVG - display_df['adj_K']    # 22.6 - 15.0 = +7.6 (better contact)
     display_df['BB_vs_League'] = LEAGUE_BB_AVG - display_df['adj_BB']  # 8.5 - 5.0 = +3.5 (more aggressive)
     
-    # Add power combo column for display
-    display_df['power_combo'] = display_df['adj_XB'] + display_df['adj_HR']
+    # Add power combo column for display (ensure it exists)
+    if 'power_combo' not in display_df.columns:
+        display_df['power_combo'] = display_df['adj_XB'] + display_df['adj_HR']
     
     # Add lineup status indicators
     excluded_players = st.session_state.get('excluded_players', [])
