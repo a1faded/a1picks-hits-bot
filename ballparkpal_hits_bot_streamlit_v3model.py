@@ -322,25 +322,29 @@ def load_pitcher_matchup_data():
             df['Prob_Clean'] = df['Prob'].astype(str).str.replace('%', '').str.strip()
             df['Prob_Clean'] = pd.to_numeric(df['Prob_Clean'], errors='coerce')
             df = df.rename(columns={'Prob_Clean': new_col_name})
-            return df[['Team', 'Name', 'Park', new_col_name]]
+            
+            # EXTRACT LAST NAME ONLY from pitcher names for matching
+            df['Pitcher_LastName'] = df['Name'].str.split().str[-1]
+            
+            return df[['Team', 'Name', 'Pitcher_LastName', 'Park', new_col_name]]
         
         # Clean each dataset
         walks_clean = clean_prob_column(walks_df, 'Walk_3Plus_Probability')
         hrs_clean = clean_prob_column(hrs_df, 'HR_2Plus_Probability')
         hits_clean = clean_prob_column(hits_df, 'Hit_8Plus_Probability')
         
-        # Merge all pitcher datasets on Team (pitcher team), Name (pitcher name), Park (opponent team)
+        # Merge all pitcher datasets on Team (pitcher team), Pitcher_LastName (pitcher last name), Park (opponent team)
         pitcher_data = walks_clean
         
         pitcher_data = pd.merge(
             pitcher_data, hrs_clean,
-            on=['Team', 'Name', 'Park'],
+            on=['Team', 'Pitcher_LastName', 'Park'],
             how='outer'
         )
         
         pitcher_data = pd.merge(
             pitcher_data, hits_clean,
-            on=['Team', 'Name', 'Park'], 
+            on=['Team', 'Pitcher_LastName', 'Park'], 
             how='outer'
         )
         
@@ -351,11 +355,17 @@ def load_pitcher_matchup_data():
         
         # Rename columns for merging with main data
         # Team = Pitcher's team, Park = Opponent team (where the game is played)
+        # Pitcher_LastName = Last name only to match main data format
         pitcher_data = pitcher_data.rename(columns={
             'Team': 'Pitcher_Team',
-            'Name': 'Pitcher_Name', 
+            'Pitcher_LastName': 'Pitcher_Name',  # This will now be last name only
             'Park': 'Opponent_Team'
         })
+        
+        # Debug: Show sample of cleaned pitcher names
+        if len(pitcher_data) > 0:
+            sample_pitchers = pitcher_data['Pitcher_Name'].unique()[:5]
+            st.info(f"Sample cleaned pitcher names (last names only): {sample_pitchers}")
         
         st.success(f"✅ Pitcher matchup data loaded: {len(pitcher_data)} pitcher-opponent combinations")
         return pitcher_data
@@ -1621,7 +1631,7 @@ def main_page():
     # Bottom tips with CORRECTED explanations
     st.markdown("---")
     st.markdown("""
-    ### 💡 **V2.6 COMPLETE Strategy Tips**
+    ### 💡 **V2.7 COMPLETE Strategy Tips**
     - **Positive K% vs League**: Player strikes out less than league average (BETTER CONTACT = GREEN!)
     - **Positive BB% vs League**: Player walks less than league average (MORE AGGRESSIVE = GREEN!)
     - **Scores 70+**: Elite opportunities with league-superior metrics
@@ -1630,11 +1640,11 @@ def main_page():
     - **XB% + HR% = Power Combo**: Target 10%+ combined for solid power threats
     - **⚾ All Power Players**: Complete power research - find overlooked gems
     - **🚫 Team Exclusion**: Exclude entire teams for weather delays, tough matchups, or strategic fades
-    - **🎯 FIXED: Pitcher Matchup Grades**: A+ = Elite spots, D = Avoid (walks hurt all profiles, HRs boost power, hits boost contact)
+    - **🎯 WORKING: Pitcher Matchup Grades**: A+ = Elite spots, D = Avoid (walks hurt all profiles, HRs boost power, hits boost contact)
     - **📊 Weather & Parks**: Already factored into data - focus on lineup verification and strategy
     - **Always verify lineups before finalizing picks**
     
-    **✅ V2.6 FIXED SYSTEM: 8 Profiles | Working Pitcher Matchup Analysis | Team + Player Exclusions | No More Errors**
+    **✅ V2.7 WORKING SYSTEM: 8 Profiles | Fixed Pitcher Name Matching | Complete Matchup Analysis | Team + Player Exclusions**
     """)
 
 def info_page():
@@ -1672,7 +1682,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.6** | Fixed Pitcher Matchup Edition")
+    st.sidebar.markdown("**V2.7** | Fixed Pitcher Name Matching Edition")
 
 if __name__ == "__main__":
     main()
