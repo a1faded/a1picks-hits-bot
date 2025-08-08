@@ -224,31 +224,17 @@ def load_and_process_data():
         merged_df['Hit_8Plus_Probability'] = 18.0   # Default neutral values
         st.info("ℹ️ Using base analysis - pitcher matchup data not available")
     
-    # Calculate adjusted metrics with DEBUGGING to find correct column names
+    # Calculate adjusted metrics with CORRECT column mapping for K and BB
     metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
     
-    # DEBUG: Show actual column names after merge
-    st.info(f"🔍 DEBUG - Columns after merge: {list(merged_df.columns)}")
-    
-    # DEBUG: Show sample of K and BB related columns
-    k_bb_columns = [col for col in merged_df.columns if 'K' in col.upper() or 'BB' in col.upper()]
-    st.info(f"🔍 DEBUG - K/BB related columns: {k_bb_columns}")
-    
-    # DEBUG: Show sample values for first player
-    if len(merged_df) > 0:
-        first_player = merged_df.iloc[0]
-        st.info(f"🔍 DEBUG - First player sample: {first_player['Batter']}")
-        for col in k_bb_columns:
-            st.info(f"   {col}: {first_player[col]}")
-    
     for metric in metrics:
-        # FIXED: All metrics use the same _prob suffix after merge
-        base_col = f'{metric}_prob'  # Will be 'K_prob', 'BB_prob', etc.
+        # FIXED: K and BB use .1 columns (actual base rates), others use _prob
+        if metric in ['K', 'BB']:
+            base_col = f'{metric}.1'  # Use 'K.1', 'BB.1' (actual K% and BB% rates)
+        else:
+            base_col = f'{metric}_prob'  # Use normal _prob columns for other metrics
+            
         pct_col = f'{metric}_pct'
-        
-        st.info(f"🔍 DEBUG - Looking for {base_col} and {pct_col}")
-        st.info(f"   {base_col} exists: {base_col in merged_df.columns}")
-        st.info(f"   {pct_col} exists: {pct_col in merged_df.columns}")
         
         if base_col in merged_df.columns and pct_col in merged_df.columns:
             # Apply adjustment formula: base * (1 + percentage_change/100)
@@ -259,7 +245,7 @@ def load_and_process_data():
                 sample_base = merged_df[base_col].iloc[0]
                 sample_pct = merged_df[pct_col].iloc[0]
                 sample_result = merged_df[f'adj_{metric}'].iloc[0]
-                st.info(f"🔍 DEBUG - {metric} calculation: {sample_base} * (1 + {sample_pct}/100) = {sample_result}")
+                st.success(f"✅ FIXED {metric} calculation: {sample_base} * (1 + {sample_pct}/100) = {sample_result}")
             
             # Smart clipping based on metric type
             if metric in ['K', 'BB']:
