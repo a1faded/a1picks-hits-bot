@@ -98,7 +98,7 @@ st.markdown("""
 
 # Enhanced Data Loading with Error Handling and Validation
 @st.cache_data(ttl=CONFIG['cache_ttl'])
-def load_csv_with_validation(url, description, expected_columns):
+def load_csv_with_validation(url, description, expected_columns, key_columns=None):
     """Load and validate CSV data with comprehensive error handling."""
     try:
         with st.spinner(f'Loading {description}...'):
@@ -118,13 +118,20 @@ def load_csv_with_validation(url, description, expected_columns):
                 st.error(f"❌ {description}: Missing columns {missing_cols}")
                 return None
             
-            # Validate key columns have no nulls
-            key_cols = ['Tm', 'Batter', 'Pitcher']
-            null_counts = df[key_cols].isnull().sum()
-            if null_counts.any():
-                problematic_cols = null_counts[null_counts > 0].index.tolist()
-                st.error(f"❌ {description}: Null values in {problematic_cols}")
-                return None
+            # Validate key columns have no nulls (use provided key_columns or default to main data columns)
+            if key_columns is None:
+                key_cols = ['Tm', 'Batter', 'Pitcher']  # Default for main data
+            else:
+                key_cols = key_columns
+            
+            # Only validate columns that actually exist in the dataframe
+            existing_key_cols = [col for col in key_cols if col in df.columns]
+            if existing_key_cols:
+                null_counts = df[existing_key_cols].isnull().sum()
+                if null_counts.any():
+                    problematic_cols = null_counts[null_counts > 0].index.tolist()
+                    st.error(f"❌ {description}: Null values in {problematic_cols}")
+                    return None
             
             st.success(f"✅ {description}: {len(df)} records loaded")
             return df
@@ -161,13 +168,15 @@ def load_and_process_data():
     prob_df = load_csv_with_validation(
         CONFIG['csv_urls']['probabilities'], 
         "Base Probabilities", 
-        CONFIG['expected_columns']
+        CONFIG['expected_columns'],
+        key_columns=['Tm', 'Batter', 'Pitcher']  # Specify key columns for main data
     )
     
     pct_df = load_csv_with_validation(
         CONFIG['csv_urls']['percent_change'], 
         "Adjustment Factors", 
-        CONFIG['expected_columns']
+        CONFIG['expected_columns'],
+        key_columns=['Tm', 'Batter', 'Pitcher']  # Specify key columns for main data
     )
     
     if prob_df is None or pct_df is None:
@@ -282,21 +291,24 @@ def load_pitcher_matchup_data():
         walks_df = load_csv_with_validation(
             CONFIG['csv_urls']['pitcher_walks'],
             "Pitcher Walks Data",
-            CONFIG['pitcher_columns']['walks']
+            CONFIG['pitcher_columns']['walks'],
+            key_columns=['Team', 'Name']  # Key columns for pitcher data
         )
         
         # Load pitcher HR data  
         hrs_df = load_csv_with_validation(
             CONFIG['csv_urls']['pitcher_hrs'],
             "Pitcher HR Data", 
-            CONFIG['pitcher_columns']['hrs']
+            CONFIG['pitcher_columns']['hrs'],
+            key_columns=['Team', 'Name']  # Key columns for pitcher data
         )
         
         # Load pitcher hits data
         hits_df = load_csv_with_validation(
             CONFIG['csv_urls']['pitcher_hits'],
             "Pitcher Hits Data",
-            CONFIG['pitcher_columns']['hits'] 
+            CONFIG['pitcher_columns']['hits'],
+            key_columns=['Team', 'Name']  # Key columns for pitcher data
         )
         
         # If any datasets failed to load, continue without pitcher data
