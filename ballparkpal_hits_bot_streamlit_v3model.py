@@ -706,8 +706,8 @@ def create_league_aware_filters(df=None):
             help="Select teams to completely exclude from analysis (weather delays, poor matchups, etc.)"
         )
         
-        # Multi-Column Sorting
-        st.markdown("**🔢 Advanced Sorting**")
+        # Single-Column Sorting (Simplified)
+        st.markdown("**🔢 Sort Results**")
         
         # Define sorting options
         sort_options = {
@@ -731,29 +731,16 @@ def create_league_aware_filters(df=None):
             "Power Combo (Low to High)": ("power_combo", True)
         }
         
-        # Primary sort
+        # Primary sort only
         filters['primary_sort'] = st.selectbox(
-            "Primary Sort",
+            "Sort By",
             options=list(sort_options.keys()),
             index=0,  # Default to Score (High to Low)
-            help="Main sorting criteria"
+            help="Choose how to sort the results"
         )
         
-        # Secondary sort
-        filters['secondary_sort'] = st.selectbox(
-            "Secondary Sort (Tie-breaker)",
-            options=["None"] + list(sort_options.keys()),
-            index=0,  # Default to None
-            help="Secondary sorting criteria for ties"
-        )
-        
-        # Store the actual column names and directions
-        filters['primary_sort_col'], filters['primary_sort_asc'] = sort_options[filters['primary_sort']]
-        
-        if filters['secondary_sort'] != "None":
-            filters['secondary_sort_col'], filters['secondary_sort_asc'] = sort_options[filters['secondary_sort']]
-        else:
-            filters['secondary_sort_col'], filters['secondary_sort_asc'] = None, None
+        # Store the actual column name and direction
+        filters['sort_col'], filters['sort_asc'] = sort_options[filters['primary_sort']]
         
         # Result count
         filters['result_count'] = st.selectbox(
@@ -980,148 +967,24 @@ def apply_league_aware_filters(df, filters):
             unique_teams = len(filtered_df['Tm'].unique())
             st.info(f"🏟️ Showing best player from each of {unique_teams} teams")
         
-        # Reset index to ensure clean sorting
-        filtered_df = filtered_df.reset_index(drop=True)
-        
-        # Ensure all required columns exist for sorting
+        # Ensure power combo column exists for sorting
         if 'power_combo' not in filtered_df.columns:
             filtered_df['power_combo'] = filtered_df['adj_XB'] + filtered_df['adj_HR']
         
-        # ENHANCED DEBUG - Show sorting configuration and test specific problematic combo
-        sort_columns = []
-        sort_ascending = []
+        # Apply single-column sorting
+        sort_col = filters.get('sort_col', 'Score')
+        sort_asc = filters.get('sort_asc', False)
         
-        # Primary sort
-        primary_col = filters.get('primary_sort_col', 'Score')
-        primary_asc = filters.get('primary_sort_asc', False)
-        
-        if primary_col in filtered_df.columns:
-            sort_columns.append(primary_col)
-            sort_ascending.append(primary_asc)
-        
-        # Secondary sort (tie-breaker)
-        secondary_col = filters.get('secondary_sort_col')
-        secondary_asc = filters.get('secondary_sort_asc')
-        
-        if (secondary_col and 
-            secondary_col in filtered_df.columns and 
-            secondary_col != primary_col):
-            sort_columns.append(secondary_col)
-            sort_ascending.append(secondary_asc)
-        
-        # ENHANCED DEBUG - Specific focus on HR% + K% combination
-        st.write("🔍 ENHANCED DEBUG - Multi-Column Sorting:")
-        st.write(f"Primary: {filters.get('primary_sort', 'None')} → Column: {primary_col} → Ascending: {primary_asc}")
-        st.write(f"Secondary: {filters.get('secondary_sort', 'None')} → Column: {secondary_col} → Ascending: {secondary_asc}")
-        st.write(f"Sort columns list: {sort_columns}")
-        st.write(f"Sort ascending list: {sort_ascending}")
-        
-        # Check for the problematic combination specifically
-        if primary_col == 'adj_HR' and secondary_col == 'adj_K':
-            st.write("🎯 TESTING PROBLEMATIC COMBO: HR% (High to Low) → K% (Low to High)")
+        try:
+            # Ensure numeric columns are properly typed
+            if sort_col in ['adj_HR', 'adj_K', 'adj_XB', 'adj_1B', 'adj_BB', 'Score', 'total_hit_prob', 'power_combo']:
+                filtered_df[sort_col] = pd.to_numeric(filtered_df[sort_col], errors='coerce')
             
-            # Show HR% and K% distributions
-            st.write(f"HR% (adj_HR) range: {filtered_df['adj_HR'].min():.2f}% to {filtered_df['adj_HR'].max():.2f}%")
-            st.write(f"K% (adj_K) range: {filtered_df['adj_K'].min():.2f}% to {filtered_df['adj_K'].max():.2f}%")
+            # Apply sorting
+            filtered_df = filtered_df.sort_values(sort_col, ascending=sort_asc, na_position='last')
             
-            # Show how many players have the same HR%
-            hr_value_counts = filtered_df['adj_HR'].value_counts()
-            ties_count = len(hr_value_counts[hr_value_counts > 1])
-            st.write(f"Players with identical HR% values: {ties_count} different HR% values have ties")
-            
-            # Show specific example of ties
-            most_common_hr = filtered_df['adj_HR'].mode()[0]
-            tied_players = filtered_df[filtered_df['adj_HR'] == most_common_hr]
-            if len(tied_players) > 1:
-                st.write(f"Example tie: {len(tied_players)} players with {most_common_hr:.1f}% HR")
-                st.write("Their K% values (should be sorted low to high):")
-                tie_display = tied_players[['Batter', 'adj_HR', 'adj_K']].sort_values('adj_K')
-                st.dataframe(tie_display)
-        
-        # Show sample data BEFORE sorting with proper dataframe display
-        if len(filtered_df) > 0:
-            st.write("📊 BEFORE Sorting (First 8 rows):")
-            debug_cols = ['Batter'] + [col for col in sort_columns if col in filtered_df.columns]
-            before_sample = filtered_df[debug_cols].head(8).copy()
-            before_sample = before_sample.round(2)  # Round for readability
-            st.dataframe(before_sample)
-        
-        # Apply multi-column sorting with extra validation
-        if len(sort_columns) > 0:
-            try:
-                # Ensure numeric columns are properly typed
-                for col in sort_columns:
-                    if col in ['adj_HR', 'adj_K', 'adj_XB', 'adj_1B', 'adj_BB', 'Score', 'total_hit_prob', 'power_combo']:
-                        filtered_df[col] = pd.to_numeric(filtered_df[col], errors='coerce')
-                        
-                        # Check for NaN values after conversion
-                        nan_count = filtered_df[col].isna().sum()
-                        if nan_count > 0:
-                            st.warning(f"⚠️ {nan_count} NaN values in {col}")
-                
-                # Create a manual test for the problematic combo
-                if len(sort_columns) == 2 and primary_col == 'adj_HR' and secondary_col == 'adj_K':
-                    st.write("🧪 MANUAL TEST: Sorting manually to verify logic")
-                    
-                    # Manual sort: First by HR% desc, then by K% asc
-                    manual_sorted = filtered_df.sort_values(['adj_HR', 'adj_K'], ascending=[False, True])
-                    manual_sample = manual_sorted[['Batter', 'adj_HR', 'adj_K']].head(8).copy()
-                    manual_sample = manual_sample.round(2)
-                    st.write("Manual sort result (first 8):")
-                    st.dataframe(manual_sample)
-                
-                # Apply the actual sort
-                sorted_df = filtered_df.sort_values(
-                    sort_columns, 
-                    ascending=sort_ascending, 
-                    kind='mergesort',
-                    na_position='last'
-                )
-                
-                # Show sample data AFTER sorting
-                st.write("📊 AFTER Sorting (First 8 rows):")
-                after_sample = sorted_df[debug_cols].head(8).copy()
-                after_sample = after_sample.round(2)
-                st.dataframe(after_sample)
-                
-                # DETAILED COMPARISON - Show side by side
-                if primary_col == 'adj_HR' and secondary_col == 'adj_K':
-                    st.write("🔍 DETAILED COMPARISON:")
-                    
-                    # Create side-by-side comparison
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.write("**Expected (Manual Sort):**")
-                        st.dataframe(manual_sample)
-                    
-                    with col2:
-                        st.write("**Actual (System Sort):**")
-                        st.dataframe(after_sample)
-                    
-                    # Check if they match
-                    if manual_sample.equals(after_sample):
-                        st.success("✅ Perfect Match! Multi-column sorting is working correctly.")
-                    else:
-                        st.error("❌ Mismatch detected! System sort differs from manual sort.")
-                        
-                        # Show specific differences
-                        st.write("**Differences found:**")
-                        for i in range(min(len(manual_sample), len(after_sample))):
-                            manual_row = manual_sample.iloc[i]
-                            actual_row = after_sample.iloc[i]
-                            if not manual_row.equals(actual_row):
-                                st.write(f"Row {i}: Manual={manual_row['Batter']} vs Actual={actual_row['Batter']}")
-                
-                filtered_df = sorted_df
-                    
-            except Exception as sort_error:
-                st.error(f"❌ Sorting error: {sort_error}")
-                import traceback
-                st.error(f"Full error: {traceback.format_exc()}")
-                filtered_df = filtered_df.sort_values('Score', ascending=False)
-        else:
-            st.info("ℹ️ No valid sort columns found, using default Score sorting")
+        except Exception as sort_error:
+            st.warning(f"⚠️ Sorting failed, using default Score sort: {sort_error}")
             filtered_df = filtered_df.sort_values('Score', ascending=False)
         
         # Limit results after sorting
@@ -1136,42 +999,23 @@ def apply_league_aware_filters(df, filters):
         
     except Exception as e:
         st.error(f"❌ Filter error: {str(e)}")
-        # Return top players with advanced sorting even if filtering fails
+        # Return sorted results even if filtering fails
         
-        # Reset index and ensure required columns exist
-        df = df.reset_index(drop=True)
+        # Ensure power combo column exists
         if 'power_combo' not in df.columns:
             df['power_combo'] = df['adj_XB'] + df['adj_HR']
         
-        # Apply sorting logic
-        sort_columns = []
-        sort_ascending = []
-        
-        primary_col = filters.get('primary_sort_col', 'Score')
-        primary_asc = filters.get('primary_sort_asc', False)
-        if primary_col in df.columns:
-            sort_columns.append(primary_col)
-            sort_ascending.append(primary_asc)
-        
-        secondary_col = filters.get('secondary_sort_col')
-        secondary_asc = filters.get('secondary_sort_asc')
-        if (secondary_col and 
-            secondary_col in df.columns and 
-            secondary_col != primary_col):
-            sort_columns.append(secondary_col)
-            sort_ascending.append(secondary_asc)
+        # Apply sorting
+        sort_col = filters.get('sort_col', 'Score')
+        sort_asc = filters.get('sort_asc', False)
         
         try:
-            if sort_columns:
-                sorted_df = df.sort_values(
-                    sort_columns, 
-                    ascending=sort_ascending, 
-                    kind='mergesort'
-                )
-            else:
-                sorted_df = df.sort_values('Score', ascending=False)
+            if sort_col in ['adj_HR', 'adj_K', 'adj_XB', 'adj_1B', 'adj_BB', 'Score', 'total_hit_prob', 'power_combo']:
+                df[sort_col] = pd.to_numeric(df[sort_col], errors='coerce')
+            
+            sorted_df = df.sort_values(sort_col, ascending=sort_asc, na_position='last')
         except Exception as sort_error:
-            st.warning(f"⚠️ Sorting failed: {sort_error}, using default Score sort")
+            st.warning(f"⚠️ Sorting failed, using default Score sort: {sort_error}")
             sorted_df = df.sort_values('Score', ascending=False)
         
         result_count = filters.get('result_count', 15)
@@ -1344,13 +1188,7 @@ def display_league_aware_results(filtered_df, filters):
         filter_profile = "All Players"
     
     # Show sorting info
-    primary_sort = filters.get('primary_sort', 'Score (High to Low)')
-    secondary_sort = filters.get('secondary_sort', 'None')
-    
-    if secondary_sort != "None":
-        sort_info = f"{primary_sort} → {secondary_sort}"
-    else:
-        sort_info = primary_sort
+    sort_info = filters.get('primary_sort', 'Score (High to Low)')
     
     col_profile, col_sort = st.columns(2)
     with col_profile:
@@ -1483,7 +1321,7 @@ def display_league_aware_results(filtered_df, filters):
         <span style="color: #d7191c;">●</span> Negative = Worse Contact (strikes out more)<br>
         <strong>BB% vs League:</strong> <span style="color: #1a9641;">●</span> Positive = More Aggressive (walks less) | 
         <span style="color: #d7191c;">●</span> Negative = Less Aggressive (walks more)<br>
-        <strong>🔢 Multi-Sort:</strong> Use Advanced Sorting to rank by HR% first, then Score as tie-breaker{matchup_guide}
+        <strong>🔢 Sorting:</strong> Use Sort By dropdown to rank by any metric (HR%, K%, Hit Prob%, etc.){matchup_guide}
     </div>
     """, unsafe_allow_html=True)
     
