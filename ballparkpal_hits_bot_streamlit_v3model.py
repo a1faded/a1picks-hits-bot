@@ -1726,24 +1726,38 @@ def main_page():
             else:
                 st.success("✅ All players currently included in analysis")
     
-    # Bottom tips with CORRECTED explanations
+    # Bottom tips with ACTUAL STRATEGY
     st.markdown("---")
     st.markdown("""
-    ### 💡 **V2.8 SMART DIVERSITY Strategy Tips**
-    - **Positive K% vs League**: Player strikes out less than league average (BETTER CONTACT = GREEN!)
-    - **Positive BB% vs League**: Player walks less than league average (MORE AGGRESSIVE = GREEN!)
-    - **Scores 70+**: Elite opportunities with league-superior metrics
-    - **🔥 Complete Power System**: 3 power profiles including All Power research mode
-    - **💎 Hidden Gems Profiles**: Updated thresholds catch more viable players automatically
-    - **XB% + HR% = Power Combo**: Target 10%+ combined for solid power threats
-    - **⚾ All Power Players**: Complete power research - find overlooked gems
-    - **🚫 Team Exclusion**: Exclude entire teams for weather delays, tough matchups, or strategic fades
-    - **🎯 WORKING: Pitcher Matchup Grades**: A+ = Elite spots, D = Avoid (walks hurt all profiles, HRs boost power, hits boost contact)
-    - **🧠 NEW: Smart Profile Diversity**: Shows different top players across profiles for better discovery
-    - **📊 Weather & Parks**: Already factored into data - focus on lineup verification and strategy
-    - **Always verify lineups before finalizing picks**
+    ### 🎯 **V2.8 STRATEGIC PLAYBOOK**
     
-    **✅ V2.8 SMART SYSTEM: 8 Profiles | Intelligent Player Diversity | Working Pitcher Matchups | Complete Analysis**
+    #### **📊 Core Strategy Framework**
+    - **Cash Games**: 70% Contact-Aggressive + Elite Contact | Target 35%+ hit probability + positive K% vs league
+    - **Small GPP**: 50% Contact profiles, 30% Contact Power, 20% Pure Power | Balance safety with ceiling
+    - **Large GPP**: 40% Power profiles, 30% Contact Power, 30% Contrarian | Prioritize differentiation over safety
+    
+    #### **🧠 Profile Selection Strategy**  
+    - **Strong Pitching Slates**: Focus Contact-Aggressive + Elite Contact | Avoid Pure Power unless A+ matchups
+    - **Hitter-Friendly Slates**: Emphasize Contact Power + Pure Power | Look for 12%+ combined XB+HR rates
+    - **Mixed Slates**: Use All Power research to find overlooked moderate power (6-8% XB rates)
+    
+    #### **💰 Bankroll Management**
+    - **20% Rule**: Never put more than 20% of bankroll in Pure Power or Swing-Happy profiles
+    - **Diversification**: Build 60% Contact + 40% Power portfolio across multiple entries
+    - **Late Swap**: Always have Contact-Aggressive backup for uncertain power plays
+    
+    #### **🎯 Advanced Tactics**
+    - **Matchup Grades**: Target A+ grades in small slates, use B- grades for contrarian large-field plays
+    - **Team Stacking**: Stack Contact-Aggressive players vs A+ hit-friendly pitchers only
+    - **Weather Fades**: Exclude teams in sub-50°F games (already in data but use for strategy)
+    - **Ownership Leverage**: Use Pure Power against popular Contact stacks for differentiation
+    
+    #### **🔧 Lineup Construction**
+    - **Cash Game Core**: 2-3 Contact-Aggressive (35%+ hit prob) + 1 Contact Power (10%+ XB+HR)
+    - **GPP Core**: 1-2 Contact Power + 1-2 Pure Power + 1 Contrarian (Swing-Happy or All Power gem)
+    - **Correlation Play**: When stacking, use same profile type for 2-3 players from one team
+    
+    **⚾ Master the profiles → Dominate the slate**
     """)
 
 def info_page():
