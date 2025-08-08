@@ -228,18 +228,12 @@ def load_and_process_data():
     metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
     
     for metric in metrics:
-        # FIXED: Use correct columns based on actual CSV structure
-        if metric in ['K', 'BB']:
-            # For K and BB, use the .1 columns (actual probabilities)
-            base_col = f'{metric}.1'  # Will be 'K.1', 'BB.1'
-        else:
-            # For other metrics, use normal _prob suffix
-            base_col = f'{metric}_prob'
-            
+        # FIXED: All metrics use the same _prob suffix after merge
+        base_col = f'{metric}_prob'  # Will be 'K_prob', 'BB_prob', etc.
         pct_col = f'{metric}_pct'
         
         if base_col in merged_df.columns and pct_col in merged_df.columns:
-            # Apply adjustment formula
+            # Apply adjustment formula: base * (1 + percentage_change/100)
             merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
             
             # Smart clipping based on metric type
@@ -1704,7 +1698,7 @@ def main_page():
     # Bottom tips with ACTUAL STRATEGY
     st.markdown("---")
     st.markdown("""
-    ### 🎯 **V2.9 STRATEGIC PLAYBOOK**
+    ### 🎯 **V3.0 STRATEGIC PLAYBOOK - FIXED K% & BB% CALCULATIONS**
     
     #### **📊 Core Strategy Framework**
     - **Cash Games**: 70% Contact-Aggressive + Elite Contact | Target 35%+ hit probability + positive K% vs league
@@ -1770,7 +1764,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.9** | Production Ready")
+    st.sidebar.markdown("**V3.0** | Fixed K% & BB% Calculations")
 
 if __name__ == "__main__":
     main()
