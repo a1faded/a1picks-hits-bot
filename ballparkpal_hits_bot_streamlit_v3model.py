@@ -133,7 +133,6 @@ def load_csv_with_validation(url, description, expected_columns, key_columns=Non
                     st.error(f"❌ {description}: Null values in {problematic_cols}")
                     return None
             
-            # st.success(f"✅ {description}: {len(df)} records loaded")  # Removed for clean UI
             return df
             
     except requests.exceptions.RequestException as e:
@@ -159,6 +158,66 @@ def validate_merge_quality(prob_df, pct_df, merged_df):
         st.error(f"🔴 Found {duplicates} duplicate matchups after merge")
     
     return merged_df
+
+def calculate_pitcher_matchup_grades(df, profile_type):
+    """Calculate pitcher matchup modifiers and grades based on profile type."""
+    
+    # Initialize columns with default values
+    df['pitcher_matchup_modifier'] = 0.0
+    df['pitcher_matchup_grade'] = 'B'  # Default grade
+    
+    # Skip if no pitcher data available or all values are NaN
+    if not all(col in df.columns for col in ['Walk_3Plus_Probability', 'HR_2Plus_Probability', 'Hit_8Plus_Probability']):
+        return df
+    
+    # Fill NaN values with neutral defaults
+    df['Walk_3Plus_Probability'] = df['Walk_3Plus_Probability'].fillna(15.0)  # Average walk rate
+    df['HR_2Plus_Probability'] = df['HR_2Plus_Probability'].fillna(12.0)     # Average HR rate  
+    df['Hit_8Plus_Probability'] = df['Hit_8Plus_Probability'].fillna(18.0)   # Average hit rate
+    
+    # Calculate walk penalties (applies to ALL profiles - walks prevent hits/HRs)
+    walk_penalty = np.select([
+        df['Walk_3Plus_Probability'] >= 50,  # Elite walk rate (very bad)
+        df['Walk_3Plus_Probability'] >= 40,  # High walk rate
+        df['Walk_3Plus_Probability'] >= 30,  # Moderate walk rate
+        df['Walk_3Plus_Probability'] >= 20   # Some walks
+    ], [-8, -6, -4, -2], default=0)
+    
+    # Start with walk penalty for all profiles
+    df['pitcher_matchup_modifier'] = walk_penalty
+    
+    # Add profile-specific bonuses
+    if profile_type == 'power':
+        # HR bonuses for power profiles only
+        hr_bonus = np.select([
+            df['HR_2Plus_Probability'] >= 25,  # Elite HR-prone
+            df['HR_2Plus_Probability'] >= 20,  # Very HR-prone
+            df['HR_2Plus_Probability'] >= 15,  # Good HR matchup
+            df['HR_2Plus_Probability'] >= 10   # Decent HR matchup
+        ], [15, 12, 8, 4], default=0)
+        
+        df['pitcher_matchup_modifier'] += hr_bonus
+        
+    else:  # Contact profiles
+        # Hit bonuses for contact profiles only
+        hit_bonus = np.select([
+            df['Hit_8Plus_Probability'] >= 25,  # Elite hit-friendly
+            df['Hit_8Plus_Probability'] >= 20,  # Very hit-friendly
+            df['Hit_8Plus_Probability'] >= 15,  # Good hit matchup
+            df['Hit_8Plus_Probability'] >= 10   # Decent hit matchup
+        ], [12, 9, 6, 3], default=0)
+        
+        df['pitcher_matchup_modifier'] += hit_bonus
+    
+    # Calculate grades based on total modifier
+    df['pitcher_matchup_grade'] = np.select([
+        df['pitcher_matchup_modifier'] >= 10,   # Elite matchup
+        df['pitcher_matchup_modifier'] >= 5,    # Great matchup
+        df['pitcher_matchup_modifier'] >= 0,    # Good matchup
+        df['pitcher_matchup_modifier'] >= -5    # Average/poor matchup
+    ], ['A+', 'A', 'B', 'C'], default='D')    # Avoid matchup
+    
+    return df
 
 @st.cache_data(ttl=CONFIG['cache_ttl'])
 def load_and_process_data():
@@ -211,10 +270,6 @@ def load_and_process_data():
                 how='left'  # Keep all players even if pitcher data missing
             )
             
-            # Count successful matches (silent for clean UI)
-            successful_matches = len(merged_df[merged_df['Walk_3Plus_Probability'].notna()])
-            # st.success(f"✅ Pitcher matchup data integrated for {successful_matches}/{total_players} player matchups")  # Removed for clean UI
-            
         except Exception as e:
             st.warning(f"⚠️ Pitcher data merge failed: {str(e)} - continuing without pitcher bonuses")
     else:
@@ -224,13 +279,13 @@ def load_and_process_data():
         merged_df['Hit_8Plus_Probability'] = 18.0   # Default neutral values
         st.info("ℹ️ Using base analysis - pitcher matchup data not available")
     
-    # Calculate adjusted metrics with CORRECT column mapping for K and BB
+    # Calculate adjusted metrics with CORRECTED column mapping
     metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
     
     for metric in metrics:
-        # FIXED: K and BB use .1 columns (actual base rates), others use _prob
+        # CORRECTED: Use actual base rate columns from debug analysis
         if metric in ['K', 'BB']:
-            base_col = f'{metric}.1'  # Use 'K.1', 'BB.1' (actual K% and BB% rates)
+            base_col = f'{metric}.1'  # Use 'K.1', 'BB.1' (actual K% and BB% base rates from debug)
         else:
             base_col = f'{metric}_prob'  # Use normal _prob columns for other metrics
             
@@ -239,15 +294,6 @@ def load_and_process_data():
         if base_col in merged_df.columns and pct_col in merged_df.columns:
             # Apply adjustment formula: base * (1 + percentage_change/100)
             merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col]/100)
-            
-            # DEBUG: Show sample calculation for K and BB
-            if metric in ['K', 'BB'] and len(merged_df) > 0:
-                sample_base = merged_df[base_col].iloc[0]
-                sample_pct = merged_df[pct_col].iloc[0]
-                sample_result = merged_df[f'adj_{metric}'].iloc[0]
-                st.success(f"✅ FIXED {metric} calculation: {sample_base} * (1 + {sample_pct}/100) = {sample_result}")
-            
-            # Smart clipping based on metric type
             if metric in ['K', 'BB']:
                 # K and BB should be positive percentages
                 merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
@@ -348,72 +394,11 @@ def load_pitcher_matchup_data():
             'Park': 'Opponent_Team'
         })
         
-        # st.success(f"✅ Pitcher matchup data loaded: {len(pitcher_data)} pitcher-opponent combinations")  # Removed for clean UI
         return pitcher_data
         
     except Exception as e:
         st.warning(f"⚠️ Could not load pitcher data: {str(e)} - continuing with base analysis")
         return None
-
-def calculate_pitcher_matchup_grades(df, profile_type):
-    """Calculate pitcher matchup modifiers and grades based on profile type."""
-    
-    # Initialize columns with default values
-    df['pitcher_matchup_modifier'] = 0.0
-    df['pitcher_matchup_grade'] = 'B'  # Default grade
-    
-    # Skip if no pitcher data available or all values are NaN
-    if not all(col in df.columns for col in ['Walk_3Plus_Probability', 'HR_2Plus_Probability', 'Hit_8Plus_Probability']):
-        return df
-    
-    # Fill NaN values with neutral defaults
-    df['Walk_3Plus_Probability'] = df['Walk_3Plus_Probability'].fillna(15.0)  # Average walk rate
-    df['HR_2Plus_Probability'] = df['HR_2Plus_Probability'].fillna(12.0)     # Average HR rate  
-    df['Hit_8Plus_Probability'] = df['Hit_8Plus_Probability'].fillna(18.0)   # Average hit rate
-    
-    # Calculate walk penalties (applies to ALL profiles - walks prevent hits/HRs)
-    walk_penalty = np.select([
-        df['Walk_3Plus_Probability'] >= 50,  # Elite walk rate (very bad)
-        df['Walk_3Plus_Probability'] >= 40,  # High walk rate
-        df['Walk_3Plus_Probability'] >= 30,  # Moderate walk rate
-        df['Walk_3Plus_Probability'] >= 20   # Some walks
-    ], [-8, -6, -4, -2], default=0)
-    
-    # Start with walk penalty for all profiles
-    df['pitcher_matchup_modifier'] = walk_penalty
-    
-    # Add profile-specific bonuses
-    if profile_type == 'power':
-        # HR bonuses for power profiles only
-        hr_bonus = np.select([
-            df['HR_2Plus_Probability'] >= 25,  # Elite HR-prone
-            df['HR_2Plus_Probability'] >= 20,  # Very HR-prone
-            df['HR_2Plus_Probability'] >= 15,  # Good HR matchup
-            df['HR_2Plus_Probability'] >= 10   # Decent HR matchup
-        ], [15, 12, 8, 4], default=0)
-        
-        df['pitcher_matchup_modifier'] += hr_bonus
-        
-    else:  # Contact profiles
-        # Hit bonuses for contact profiles only
-        hit_bonus = np.select([
-            df['Hit_8Plus_Probability'] >= 25,  # Elite hit-friendly
-            df['Hit_8Plus_Probability'] >= 20,  # Very hit-friendly
-            df['Hit_8Plus_Probability'] >= 15,  # Good hit matchup
-            df['Hit_8Plus_Probability'] >= 10   # Decent hit matchup
-        ], [12, 9, 6, 3], default=0)
-        
-        df['pitcher_matchup_modifier'] += hit_bonus
-    
-    # Calculate grades based on total modifier
-    df['pitcher_matchup_grade'] = np.select([
-        df['pitcher_matchup_modifier'] >= 10,   # Elite matchup
-        df['pitcher_matchup_modifier'] >= 5,    # Great matchup
-        df['pitcher_matchup_modifier'] >= 0,    # Good matchup
-        df['pitcher_matchup_modifier'] >= -5    # Average/poor matchup
-    ], ['A+', 'A', 'B', 'C'], default='D')    # Avoid matchup
-    
-    return df
 
 def calculate_league_aware_scores(df, profile_type='contact'):
     """Enhanced scoring algorithm that adapts based on profile type and includes pitcher matchup analysis."""
@@ -718,6 +703,55 @@ def create_league_aware_filters(df=None):
             help="Select teams to completely exclude from analysis (weather delays, poor matchups, etc.)"
         )
         
+        # Multi-Column Sorting
+        st.markdown("**🔢 Advanced Sorting**")
+        
+        # Define sorting options
+        sort_options = {
+            "Score (High to Low)": ("Score", False),
+            "Score (Low to High)": ("Score", True),
+            "Hit Prob% (High to Low)": ("total_hit_prob", False),
+            "Hit Prob% (Low to High)": ("total_hit_prob", True),
+            "HR% (High to Low)": ("adj_HR", False),
+            "HR% (Low to High)": ("adj_HR", True),
+            "XB% (High to Low)": ("adj_XB", False),
+            "XB% (Low to High)": ("adj_XB", True),
+            "Contact% (High to Low)": ("adj_1B", False),
+            "Contact% (Low to High)": ("adj_1B", True),
+            "K% (Low to High)": ("adj_K", True),
+            "K% (High to Low)": ("adj_K", False),
+            "BB% (Low to High)": ("adj_BB", True),
+            "BB% (High to Low)": ("adj_BB", False),
+            "vs Pitcher (High to Low)": ("adj_vs", False),
+            "vs Pitcher (Low to High)": ("adj_vs", True),
+            "Power Combo (High to Low)": ("power_combo", False),
+            "Power Combo (Low to High)": ("power_combo", True)
+        }
+        
+        # Primary sort
+        filters['primary_sort'] = st.selectbox(
+            "Primary Sort",
+            options=list(sort_options.keys()),
+            index=0,  # Default to Score (High to Low)
+            help="Main sorting criteria"
+        )
+        
+        # Secondary sort
+        filters['secondary_sort'] = st.selectbox(
+            "Secondary Sort (Tie-breaker)",
+            options=["None"] + list(sort_options.keys()),
+            index=0,  # Default to None
+            help="Secondary sorting criteria for ties"
+        )
+        
+        # Store the actual column names and directions
+        filters['primary_sort_col'], filters['primary_sort_asc'] = sort_options[filters['primary_sort']]
+        
+        if filters['secondary_sort'] != "None":
+            filters['secondary_sort_col'], filters['secondary_sort_asc'] = sort_options[filters['secondary_sort']]
+        else:
+            filters['secondary_sort_col'], filters['secondary_sort_asc'] = None, None
+        
         # Result count
         filters['result_count'] = st.selectbox(
             "Number of Results",
@@ -943,27 +977,82 @@ def apply_league_aware_filters(df, filters):
             unique_teams = len(filtered_df['Tm'].unique())
             st.info(f"🏟️ Showing best player from each of {unique_teams} teams")
         
-        # Sort by score and limit results
+        # Create power combo column for sorting if it doesn't exist
+        if 'power_combo' not in filtered_df.columns:
+            filtered_df['power_combo'] = filtered_df['adj_XB'] + filtered_df['adj_HR']
+        
+        # Apply advanced multi-column sorting
+        sort_columns = []
+        sort_ascending = []
+        
+        # Primary sort
+        primary_col = filters.get('primary_sort_col', 'Score')
+        primary_asc = filters.get('primary_sort_asc', False)
+        if primary_col in filtered_df.columns:
+            sort_columns.append(primary_col)
+            sort_ascending.append(primary_asc)
+        
+        # Secondary sort
+        secondary_col = filters.get('secondary_sort_col')
+        secondary_asc = filters.get('secondary_sort_asc')
+        if secondary_col and secondary_col in filtered_df.columns and secondary_col != primary_col:
+            sort_columns.append(secondary_col)
+            sort_ascending.append(secondary_asc)
+        
+        # Apply sorting
+        if sort_columns:
+            filtered_df = filtered_df.sort_values(sort_columns, ascending=sort_ascending)
+        else:
+            # Fallback to default Score sorting
+            filtered_df = filtered_df.sort_values('Score', ascending=False)
+        
+        # Limit results
         result_count = filters.get('result_count', 15)
         
         if result_count == "All":
             # Show all results when "All" is selected
-            result_df = filtered_df.sort_values('Score', ascending=False)
+            result_df = filtered_df
         else:
             # Limit to specified number
-            result_df = filtered_df.sort_values('Score', ascending=False).head(result_count)
+            result_df = filtered_df.head(result_count)
         
         return result_df
         
     except Exception as e:
         st.error(f"❌ Filter error: {str(e)}")
-        # Return top players by score if filtering fails
+        # Return top players by score with advanced sorting if filtering fails
+        
+        # Create power combo column if it doesn't exist
+        if 'power_combo' not in df.columns:
+            df['power_combo'] = df['adj_XB'] + df['adj_HR']
+        
+        # Apply sorting even in error case
+        sort_columns = []
+        sort_ascending = []
+        
+        primary_col = filters.get('primary_sort_col', 'Score')
+        primary_asc = filters.get('primary_sort_asc', False)
+        if primary_col in df.columns:
+            sort_columns.append(primary_col)
+            sort_ascending.append(primary_asc)
+        
+        secondary_col = filters.get('secondary_sort_col')
+        secondary_asc = filters.get('secondary_sort_asc')
+        if secondary_col and secondary_col in df.columns and secondary_col != primary_col:
+            sort_columns.append(secondary_col)
+            sort_ascending.append(secondary_asc)
+        
+        if sort_columns:
+            sorted_df = df.sort_values(sort_columns, ascending=sort_ascending)
+        else:
+            sorted_df = df.sort_values('Score', ascending=False)
+        
         result_count = filters.get('result_count', 15)
         
         if result_count == "All":
-            return df.sort_values('Score', ascending=False)
+            return sorted_df
         else:
-            return df.sort_values('Score', ascending=False).head(result_count)
+            return sorted_df.head(result_count)
 
 def create_league_aware_header():
     """Create an enhanced header with league-aware focus."""
@@ -1114,7 +1203,7 @@ def display_league_aware_results(filtered_df, filters):
             </div>
             """, unsafe_allow_html=True)
     
-    # Show current filter settings
+    # Show current filter settings and sorting
     filter_profile = "Custom"
     if filters.get('max_k', 100) <= 17 and filters.get('max_bb', 100) <= 6:
         filter_profile = "Contact-Aggressive Hitters"
@@ -1127,7 +1216,20 @@ def display_league_aware_results(filtered_df, filters):
     elif filters.get('max_k', 100) >= 100:
         filter_profile = "All Players"
     
-    st.markdown(f"**🎯 Active Profile:** {filter_profile}")
+    # Show sorting info
+    primary_sort = filters.get('primary_sort', 'Score (High to Low)')
+    secondary_sort = filters.get('secondary_sort', 'None')
+    
+    if secondary_sort != "None":
+        sort_info = f"{primary_sort} → {secondary_sort}"
+    else:
+        sort_info = primary_sort
+    
+    col_profile, col_sort = st.columns(2)
+    with col_profile:
+        st.markdown(f"**🎯 Active Profile:** {filter_profile}")
+    with col_sort:
+        st.markdown(f"**🔢 Sorting:** {sort_info}")
     
     # Enhanced results table with pitcher matchup data
     display_columns = {
@@ -1138,6 +1240,7 @@ def display_league_aware_results(filtered_df, filters):
         'adj_1B': 'Contact %',
         'adj_XB': 'XB %',
         'adj_HR': 'HR %',
+        'power_combo': 'Power Combo %',
         'K_vs_League': 'K% vs League',
         'BB_vs_League': 'BB% vs League',
         'adj_vs': 'vs Pitcher',
@@ -1148,11 +1251,14 @@ def display_league_aware_results(filtered_df, filters):
     if 'pitcher_matchup_grade' in filtered_df.columns and filtered_df['pitcher_matchup_grade'].notna().any():
         display_columns['pitcher_matchup_grade'] = 'Matchup'
     
-    # Add CORRECTED league context columns
+    # Add CORRECTED league context columns and power combo
     display_df = filtered_df.copy()
     # CORRECTED: League - Player = Positive when player is better (lower K%, lower BB%)
     display_df['K_vs_League'] = LEAGUE_K_AVG - display_df['adj_K']    # 22.6 - 15.0 = +7.6 (better contact)
     display_df['BB_vs_League'] = LEAGUE_BB_AVG - display_df['adj_BB']  # 8.5 - 5.0 = +3.5 (more aggressive)
+    
+    # Add power combo column for display
+    display_df['power_combo'] = display_df['adj_XB'] + display_df['adj_HR']
     
     # Add lineup status indicators
     excluded_players = st.session_state.get('excluded_players', [])
@@ -1171,6 +1277,7 @@ def display_league_aware_results(filtered_df, filters):
         'Contact %': "{:.1f}%", 
         'XB %': "{:.1f}%",
         'HR %': "{:.1f}%",
+        'Power Combo %': "{:.1f}%",
         'K% vs League': "{:+.1f}%",     # +7.6% = better contact (green)
         'BB% vs League': "{:+.1f}%",    # +3.5% = more aggressive (green)
         'vs Pitcher': "{:.0f}",
@@ -1185,6 +1292,11 @@ def display_league_aware_results(filtered_df, filters):
         cmap='Greens',
         vmin=20,
         vmax=50
+    ).background_gradient(
+        subset=['Power Combo %'],
+        cmap='Oranges',
+        vmin=0,
+        vmax=20
     ).background_gradient(
         subset=['K% vs League'],
         cmap='RdYlGn',  # Positive = better contact = Green, Negative = worse contact = Red
@@ -1237,21 +1349,21 @@ def display_league_aware_results(filtered_df, filters):
         <strong>Score:</strong> <span style="color: #1a9641;">●</span> Elite (70+) | 
         <span style="color: #fdae61;">●</span> Good (50-69) | 
         <span style="color: #d7191c;">●</span> Risky (<50)<br>
+        <strong>Power Combo:</strong> <span style="color: #fd8d3c;">●</span> XB% + HR% combined rate | 
+        <span style="color: #fd8d3c;">12%+</span> = Elite power threat<br>
         <strong>K% vs League:</strong> <span style="color: #1a9641;">●</span> Positive = Better Contact (strikes out less) | 
         <span style="color: #d7191c;">●</span> Negative = Worse Contact (strikes out more)<br>
         <strong>BB% vs League:</strong> <span style="color: #1a9641;">●</span> Positive = More Aggressive (walks less) | 
-        <span style="color: #d7191c;">●</span> Negative = Less Aggressive (walks more){matchup_guide}
+        <span style="color: #d7191c;">●</span> Negative = Less Aggressive (walks more)<br>
+        <strong>🔢 Multi-Sort:</strong> Use Advanced Sorting to rank by HR% first, then Score as tie-breaker{matchup_guide}
     </div>
     """, unsafe_allow_html=True)
     
-    # Rest of the function remains the same...
-    # (Performance insights, multi-profile analysis, etc.)
-    
-    # Performance insights with FIXED league context - multi-profile analysis
+    # Performance insights with multi-profile analysis
     if len(filtered_df) >= 3:
-        st.markdown("### 🔍 **Advanced League Context Analysis**")
+        st.markdown("### 🔍 **Smart Profile Diversity Analysis**")
         
-        # Define profile criteria for analysis (UPDATED with All Power Players added back)
+        # Define profile criteria for analysis
         profile_criteria = {
             "🏆 Contact-Aggressive": {"max_k": 19.0, "max_bb": 7.0, "icon": "🏆", "type": "contact"},
             "⭐ Elite Contact": {"max_k": 14.0, "max_bb": 9.5, "icon": "⭐", "type": "contact"},
@@ -1267,7 +1379,7 @@ def display_league_aware_results(filtered_df, filters):
         # Find best player for each profile with smart diversity logic
         profile_analysis = {}
         
-        # First pass: Find the overall #1 player and track usage
+        # First pass: Find the overall #1 player
         overall_best_player = None
         overall_best_score = -1
         for profile_name, criteria in profile_criteria.items():
@@ -1419,7 +1531,7 @@ def display_league_aware_results(filtered_df, filters):
                     if profile_rank > 1:
                         st.caption(f"💡 Showing #{profile_rank} for diversity (#{overall_rank} overall)")
                     
-                    # FIXED: Show appropriate metrics based on profile type
+                    # Show appropriate metrics based on profile type
                     criteria = profile_criteria[profile_name]
                     if criteria["type"] == "power":
                         # Power-focused metrics
@@ -1443,7 +1555,7 @@ def display_league_aware_results(filtered_df, filters):
                     # Profile pool size
                     st.caption(f"📊 {profile_count} players in profile")
             
-            # Summary insights across profiles - CLEANED UP
+            # Summary insights across profiles
             st.markdown("---")
             st.markdown("**📋 Profile Summary:**")
             
@@ -1456,7 +1568,7 @@ def display_league_aware_results(filtered_df, filters):
             
             insights.append(f"🏆 **Overall Best**: {best_player_name} ({best_profile.split(' ')[0]})")
             
-            # FIXED: Get unique players for each category to avoid spam
+            # Get unique players for each category to avoid spam
             all_unique_players = {analysis['player']['Batter']: analysis['player'] for analysis in profiles_to_display.values()}
             
             # Check for elite power across profiles (unique players only)
@@ -1540,7 +1652,7 @@ def display_league_aware_results(filtered_df, filters):
                 - Use the "Players NOT Playing Today" filter to exclude confirmed outs
                 """)
     else:
-        st.info("💡 Need at least 3 players for League Context Analysis")
+        st.info("💡 Need at least 3 players for Smart Profile Diversity Analysis")
 
 def create_enhanced_visualizations(df, filtered_df):
     """Create enhanced visualizations focused on base hit analysis."""
@@ -1710,7 +1822,7 @@ def main_page():
     # Bottom tips with ACTUAL STRATEGY
     st.markdown("---")
     st.markdown("""
-    ### 🎯 **V3.0 STRATEGIC PLAYBOOK - FIXED K% & BB% CALCULATIONS**
+    ### 🎯 **V3.0 DFS STRATEGIC PLAYBOOK**
     
     #### **📊 Core Strategy Framework**
     - **Cash Games**: 70% Contact-Aggressive + Elite Contact | Target 35%+ hit probability + positive K% vs league
@@ -1739,15 +1851,72 @@ def main_page():
     - **Correlation Play**: When stacking, use same profile type for 2-3 players from one team
     
     **⚾ Master the profiles → Dominate the slate**
+    
+    **Version 3.0 - FIXED K% & BB% Calculations**
     """)
 
 def info_page():
     """Comprehensive reference manual for the MLB Hit Predictor system."""
     st.title("📚 MLB Hit Predictor - Complete Reference Manual")
     
-    # (Same info_page content from your original script...)
-    with st.expander("📖 Script Overview", expanded=True):
-        st.markdown("Complete reference manual content would go here...")
+    with st.expander("📖 System Overview", expanded=True):
+        st.markdown("""
+        # 🎯 MLB Hit Predictor Pro - Strategic Guide
+        
+        ## Purpose
+        Advanced DFS tool identifying players with highest base hit probability using:
+        - League-aware analysis (2024 MLB averages)
+        - 8 strategic player profiles (Contact vs Power)
+        - Pitcher matchup grades (A+ through D)
+        - Smart lineup exclusion system
+        
+        ## 📊 Core Metrics
+        - **Hit Probability**: Combined 1B% + XB% + HR% 
+        - **K% vs League**: 22.6% - Player K% (Positive = Better contact)
+        - **BB% vs League**: 8.5% - Player BB% (Positive = More aggressive)
+        - **Power Combo**: XB% + HR% combined rate
+        
+        ## 🏆 Strategic Framework
+        
+        ### Cash Games (70% Contact Focus)
+        - Target: 35%+ hit probability
+        - Core: Contact-Aggressive + Elite Contact
+        - Avoid: Pure Power unless A+ matchups
+        
+        ### Small GPP (Balanced Approach)
+        - 50% Contact profiles
+        - 30% Contact Power  
+        - 20% Pure Power leverage
+        
+        ### Large GPP (Differentiation Focus)
+        - 40% Power profiles
+        - 30% Contact Power
+        - 30% Contrarian plays
+        
+        ## 🎯 Profile Usage Guide
+        
+        ### Contact Profiles (Consistent Base Hits)
+        - **Contact-Aggressive**: Cash game foundation
+        - **Elite Contact**: Premium safety plays
+        - **Swing-Happy**: Leverage against patient hitters
+        - **Above-Average**: Volume plays in large fields
+        
+        ### Power Profiles (Ceiling Plays)
+        - **Contact Power**: Tournament core (best of both)
+        - **Pure Power**: GPP differentiation  
+        - **All Power**: Research hidden gems
+        
+        ## 💰 Bankroll Management
+        - **20% Rule**: Max 20% in high-variance profiles
+        - **Portfolio**: 60% Contact + 40% Power allocation
+        - **Late Swap**: Always have Contact backup ready
+        
+        ## 🔧 Advanced Strategy
+        - **Weather**: Fade sub-50°F games
+        - **Stacking**: Same profile players from one team
+        - **Ownership**: Use Pure Power vs popular Contact
+        - **Matchups**: A+ for small fields, B- for contrarian
+        """)
 
 def main():
     """Enhanced main function with league-aware navigation."""
@@ -1765,7 +1934,7 @@ def main():
 
     app_mode = st.sidebar.radio(
         "Choose Section",
-        ["🎯 League-Aware Predictor", "📚 Baseball Guide"],
+        ["🎯 League-Aware Predictor", "📚 Strategic Guide"],
         index=0
     )
 
