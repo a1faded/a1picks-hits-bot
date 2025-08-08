@@ -23,10 +23,7 @@ st.set_page_config(
 CONFIG = {
     'csv_urls': {
         'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv',
-        'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv',
-        'pitcher_walks': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_walks.csv',
-        'pitcher_hrs': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_hrs.csv',
-        'pitcher_hits': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_hits.csv'
+        'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv'
     },
     'base_hit_weights': {
         'adj_1B': 2.0,      # Singles (primary base hit)
@@ -38,11 +35,6 @@ CONFIG = {
         'adj_BB': -0.8      # Moderate penalty for walks (not hits)
     },
     'expected_columns': ['Tm', 'Batter', 'vs', 'Pitcher', 'RC', 'HR', 'XB', '1B', 'BB', 'K'],
-    'pitcher_columns': {
-        'walks': ['Team', 'Name', 'Park', 'Prob'],
-        'hrs': ['Team', 'Name', 'Park', 'Prob'], 
-        'hits': ['Team', 'Name', 'Park', 'Prob']
-    },
     'cache_ttl': 900  # 15 minutes
 }
 
@@ -155,9 +147,9 @@ def validate_merge_quality(prob_df, pct_df, merged_df):
 
 @st.cache_data(ttl=CONFIG['cache_ttl'])
 def load_and_process_data():
-    """Enhanced data loading with pitcher matchup data integration."""
+    """Enhanced data loading and processing with validation."""
     
-    # Load base CSV files with enhanced validation
+    # Load both CSV files with enhanced validation
     prob_df = load_csv_with_validation(
         CONFIG['csv_urls']['probabilities'], 
         "Base Probabilities", 
@@ -188,51 +180,6 @@ def load_and_process_data():
     except Exception as e:
         st.error(f"❌ Failed to merge datasets: {str(e)}")
         return None
-    
-    # Load pitcher matchup data (optional - system works without it)
-    pitcher_data = load_pitcher_matchup_data()
-    
-    # Merge pitcher data if available
-    if pitcher_data is not None and not pitcher_data.empty:
-        try:
-            # Debug info - show sample merge keys
-            if len(merged_df) > 0:
-                sample_main = merged_df[['Tm', 'Pitcher']].head(3)
-                st.info("🔍 Sample player data for matching:")
-                st.write(sample_main)
-                
-            if len(pitcher_data) > 0:
-                sample_pitcher = pitcher_data[['Opponent_Team', 'Pitcher_Name']].head(3)
-                st.info("🔍 Sample pitcher data for matching:")
-                st.write(sample_pitcher)
-            
-            merged_df = pd.merge(
-                merged_df, pitcher_data,
-                left_on=['Tm', 'Pitcher'], 
-                right_on=['Opponent_Team', 'Pitcher_Name'],
-                how='left'  # Keep all players even if pitcher data missing
-            )
-            
-            # Count successful matches
-            successful_matches = len(merged_df[merged_df['Walk_3Plus_Probability'].notna()])
-            total_players = len(merged_df)
-            st.success(f"✅ Pitcher matchup data integrated for {successful_matches}/{total_players} player matchups")
-            
-            if successful_matches == 0:
-                st.warning("⚠️ No pitcher matchups found - check if pitcher names and team abbreviations match between datasets")
-                # Show unique values for debugging
-                unique_teams = merged_df['Tm'].unique()[:5]  # First 5 teams
-                unique_pitchers = merged_df['Pitcher'].unique()[:5]  # First 5 pitchers
-                st.info(f"Sample teams in main data: {unique_teams}")
-                st.info(f"Sample pitchers in main data: {unique_pitchers}")
-                
-        except Exception as e:
-            st.warning(f"⚠️ Pitcher data merge failed: {str(e)} - continuing without pitcher bonuses")
-    else:
-        # Add empty columns so scoring functions don't fail
-        merged_df['Walk_3Plus_Probability'] = np.nan
-        merged_df['HR_2Plus_Probability'] = np.nan  
-        merged_df['Hit_8Plus_Probability'] = np.nan
     
     # Calculate adjusted metrics with CORRECTED column mapping
     metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
@@ -273,83 +220,6 @@ def load_and_process_data():
     merged_df['total_hit_prob'] = merged_df['total_hit_prob'].clip(upper=100)  # Cap at 100%
     
     return merged_df
-
-def load_pitcher_matchup_data():
-    """Load and combine all pitcher matchup datasets with correct column names."""
-    try:
-        # Load pitcher walks data
-        walks_df = load_csv_with_validation(
-            CONFIG['csv_urls']['pitcher_walks'],
-            "Pitcher Walks Data",
-            CONFIG['pitcher_columns']['walks']
-        )
-        
-        # Load pitcher HR data  
-        hrs_df = load_csv_with_validation(
-            CONFIG['csv_urls']['pitcher_hrs'],
-            "Pitcher HR Data", 
-            CONFIG['pitcher_columns']['hrs']
-        )
-        
-        # Load pitcher hits data
-        hits_df = load_csv_with_validation(
-            CONFIG['csv_urls']['pitcher_hits'],
-            "Pitcher Hits Data",
-            CONFIG['pitcher_columns']['hits'] 
-        )
-        
-        # If any datasets failed to load, continue without pitcher data
-        if walks_df is None or hrs_df is None or hits_df is None:
-            st.info("ℹ️ Some pitcher data unavailable - using base analysis only")
-            return None
-        
-        # Clean and convert probability columns (remove % and convert to float)
-        def clean_prob_column(df, new_col_name):
-            df = df.copy()
-            df['Prob_Clean'] = df['Prob'].astype(str).str.replace('%', '').str.strip()
-            df['Prob_Clean'] = pd.to_numeric(df['Prob_Clean'], errors='coerce')
-            df = df.rename(columns={'Prob_Clean': new_col_name})
-            return df[['Team', 'Name', 'Park', new_col_name]]
-        
-        # Clean each dataset
-        walks_clean = clean_prob_column(walks_df, 'Walk_3Plus_Probability')
-        hrs_clean = clean_prob_column(hrs_df, 'HR_2Plus_Probability')
-        hits_clean = clean_prob_column(hits_df, 'Hit_8Plus_Probability')
-        
-        # Merge all pitcher datasets on Team (pitcher team), Name (pitcher name), Park (opponent team)
-        pitcher_data = walks_clean
-        
-        pitcher_data = pd.merge(
-            pitcher_data, hrs_clean,
-            on=['Team', 'Name', 'Park'],
-            how='outer'
-        )
-        
-        pitcher_data = pd.merge(
-            pitcher_data, hits_clean,
-            on=['Team', 'Name', 'Park'], 
-            how='outer'
-        )
-        
-        # Fill missing values with neutral values
-        pitcher_data['Walk_3Plus_Probability'] = pitcher_data['Walk_3Plus_Probability'].fillna(15)  # Average walk rate
-        pitcher_data['HR_2Plus_Probability'] = pitcher_data['HR_2Plus_Probability'].fillna(12)     # Average HR rate
-        pitcher_data['Hit_8Plus_Probability'] = pitcher_data['Hit_8Plus_Probability'].fillna(18)   # Average hit rate
-        
-        # Rename columns for merging with main data
-        # Team = Pitcher's team, Park = Opponent team (where the game is played)
-        pitcher_data = pitcher_data.rename(columns={
-            'Team': 'Pitcher_Team',
-            'Name': 'Pitcher_Name', 
-            'Park': 'Opponent_Team'
-        })
-        
-        st.success(f"✅ Pitcher matchup data loaded: {len(pitcher_data)} pitcher-opponent combinations")
-        return pitcher_data
-        
-    except Exception as e:
-        st.warning(f"⚠️ Could not load pitcher data: {str(e)} - continuing with base analysis")
-        return None
 
 def calculate_league_aware_scores(df, profile_type='contact'):
     """Enhanced scoring algorithm that adapts based on profile type."""
@@ -1027,25 +897,14 @@ def display_league_aware_results(filtered_df, filters):
         """, unsafe_allow_html=True)
     
     with col4:
-        # Show pitcher matchup data if available
-        if 'pitcher_matchup_grade' in filtered_df.columns and filtered_df['pitcher_matchup_grade'].notna().any():
-            a_plus_matchups = (filtered_df['pitcher_matchup_grade'] == 'A+').sum()
-            st.markdown(f"""
-            <div class="success-card">
-                <h4>🎯 Elite Matchups</h4>
-                <h2>{a_plus_matchups}/{len(filtered_df)}</h2>
-                <small>A+ Pitcher Spots</small>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            elite_contact_count = (filtered_df['adj_K'] <= 12.0).sum()  # Elite contact threshold
-            st.markdown(f"""
-            <div class="success-card">
-                <h4>⭐ Elite Contact</h4>
-                <h2>{elite_contact_count}/{len(filtered_df)}</h2>
-                <small>K% ≤12.0%</small>
-            </div>
-            """, unsafe_allow_html=True)
+        elite_contact_count = (filtered_df['adj_K'] <= 12.0).sum()  # Elite contact threshold
+        st.markdown(f"""
+        <div class="success-card">
+            <h4>⭐ Elite Contact</h4>
+            <h2>{elite_contact_count}/{len(filtered_df)}</h2>
+            <small>K% ≤12.0%</small>
+        </div>
+        """, unsafe_allow_html=True)
     
     # Show current filter settings
     filter_profile = "Custom"
@@ -1062,7 +921,7 @@ def display_league_aware_results(filtered_df, filters):
     
     st.markdown(f"**🎯 Active Profile:** {filter_profile}")
     
-    # Enhanced results table with pitcher matchup data
+    # Enhanced results table with CORRECTED league context calculations
     display_columns = {
         'Batter': 'Batter',
         'Tm': 'Team',
@@ -1074,7 +933,6 @@ def display_league_aware_results(filtered_df, filters):
         'K_vs_League': 'K% vs League',
         'BB_vs_League': 'BB% vs League',
         'adj_vs': 'vs Pitcher',
-        'pitcher_matchup_grade': 'Matchup',
         'Score': 'Score'
     }
     
@@ -1095,7 +953,7 @@ def display_league_aware_results(filtered_df, filters):
     
     styled_df = display_df[display_columns_with_status.keys()].rename(columns=display_columns_with_status)
     
-    # Enhanced formatting with pitcher matchup grades
+    # CORRECTED formatting with proper vs league calculations
     styled_df = styled_df.style.format({
         'Hit Prob %': "{:.1f}%",
         'Contact %': "{:.1f}%", 
@@ -1127,29 +985,12 @@ def display_league_aware_results(filtered_df, filters):
         vmax=6          # Much more aggressive than league (green)
     )
     
-    # Color code matchup grades
-    if 'Matchup' in styled_df.columns:
-        def color_matchup_grade(val):
-            if val == 'A+':
-                return 'background-color: #1a9641; color: white; font-weight: bold'
-            elif val == 'A':
-                return 'background-color: #a6d96a; color: black; font-weight: bold'
-            elif val == 'B':
-                return 'background-color: #ffffbf; color: black'
-            elif val == 'C':
-                return 'background-color: #fdae61; color: black'
-            elif val == 'D':
-                return 'background-color: #d7191c; color: white; font-weight: bold'
-            return ''
-        
-        styled_df = styled_df.apply(lambda x: [color_matchup_grade(v) if x.name == 'Matchup' else '' for v in x], axis=0)
-    
     st.dataframe(styled_df, use_container_width=True)
     
-    # Enhanced interpretation guide with pitcher matchup data
+    # CORRECTED interpretation guide
     st.markdown("""
     <div class="color-legend">
-        <strong>📊 Enhanced Results Guide with Pitcher Matchups:</strong><br>
+        <strong>📊 CORRECTED League vs Player Guide:</strong><br>
         <strong>Status:</strong> 🏟️ = Confirmed Playing | ❌ = Excluded from Lineups<br>
         <strong>Score:</strong> <span style="color: #1a9641;">●</span> Elite (70+) | 
         <span style="color: #fdae61;">●</span> Good (50-69) | 
@@ -1158,13 +999,7 @@ def display_league_aware_results(filtered_df, filters):
         <span style="color: #d7191c;">●</span> Negative = Worse Contact (strikes out more)<br>
         <strong>BB% vs League:</strong> <span style="color: #1a9641;">●</span> Positive = More Aggressive (walks less) | 
         <span style="color: #d7191c;">●</span> Negative = Less Aggressive (walks more)<br>
-        <strong>Matchup Grades:</strong> 
-        <span style="background-color: #1a9641; color: white; padding: 2px 4px; border-radius: 3px;">A+</span> Elite Matchup | 
-        <span style="background-color: #a6d96a; color: black; padding: 2px 4px; border-radius: 3px;">A</span> Great | 
-        <span style="background-color: #ffffbf; color: black; padding: 2px 4px; border-radius: 3px;">B</span> Good | 
-        <span style="background-color: #fdae61; color: black; padding: 2px 4px; border-radius: 3px;">C</span> Average | 
-        <span style="background-color: #d7191c; color: white; padding: 2px 4px; border-radius: 3px;">D</span> Avoid<br>
-        <strong>✅ Enhanced System: Player Skills + Pitcher Matchups = Complete Analysis!</strong>
+        <strong>✅ Rule: Positive vs League = Better Performance = Green!</strong>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1533,20 +1368,19 @@ def main_page():
     # Bottom tips with CORRECTED explanations
     st.markdown("---")
     st.markdown("""
-    ### 💡 **V2.5 ENHANCED Strategy Tips**
+    ### 💡 **V2.4 COMPLETE Strategy Tips**
     - **Positive K% vs League**: Player strikes out less than league average (BETTER CONTACT = GREEN!)
     - **Positive BB% vs League**: Player walks less than league average (MORE AGGRESSIVE = GREEN!)
     - **Scores 70+**: Elite opportunities with league-superior metrics
-    - **🔥 Complete Power System**: 3 power profiles including All Power research mode
+    - **🔥 NEW: Complete Power System**: 3 power profiles including All Power research mode
     - **💎 Hidden Gems Profiles**: Updated thresholds catch more viable players automatically
     - **XB% + HR% = Power Combo**: Target 10%+ combined for solid power threats
     - **⚾ All Power Players**: Complete power research - find overlooked gems
-    - **🚫 Team Exclusion**: Exclude entire teams for weather delays, tough matchups, or strategic fades
-    - **🎯 NEW: Pitcher Matchup Grades**: A+ = Elite spots, D = Avoid (walks hurt all profiles, HRs boost power, hits boost contact)
+    - **🚫 NEW: Team Exclusion**: Exclude entire teams for weather delays, tough matchups, or strategic fades
     - **📊 Weather & Parks**: Already factored into data - focus on lineup verification and strategy
     - **Always verify lineups before finalizing picks**
     
-    **✅ V2.5 Complete System: 8 Profiles | Pitcher Matchup Analysis | Team + Player Exclusions**
+    **✅ Complete System: 8 Profiles | Team + Player Exclusions | Pre-Integrated Environmental Data**
     """)
 
 def info_page():
@@ -1611,17 +1445,12 @@ def info_page():
         #### **Data Sources:**
         1. **Base Probabilities CSV**: Core hitting metrics from ballpark-adjusted models
         2. **Adjustment Factors CSV**: Performance modifiers based on recent form, matchups, conditions
-        3. **Pitcher Walks CSV**: Walk 3+ batters probability (penalty for all profiles - walks prevent hits/HRs)
-        4. **Pitcher HRs CSV**: Allow 2+ home runs probability (bonus for power profiles only)
-        5. **Pitcher Hits CSV**: Allow 8+ hits probability (bonus for contact profiles only)
         
-        **Note: Core data sources already incorporate:**
+        **Note: Both data sources already incorporate:**
         - Weather conditions (temperature, wind, humidity)
         - Ballpark factors (dimensions, altitude, environmental conditions)  
         - Pitcher-specific matchup adjustments
         - Recent form and trend analysis
-        
-        **Pitcher data is optional** - system works fully without it, but enhances accuracy when available.
         
         #### **Validation Process:**
         ```python
@@ -1666,34 +1495,7 @@ def info_page():
         power_prob = adj_XB + adj_HR  # Excludes singles
         ```
         
-        ### **Phase 3: Profile-Based Scoring with Pitcher Matchups**
-        
-        #### **Pitcher Matchup Modifiers (Applied to All Profiles):**
-        ```python
-        # Walk Penalty (applies to ALL profiles - walks prevent hits/HRs)
-        walk_penalty = {
-            '50%+ walk rate': -8,  # Elite walk rate (very bad for us)
-            '40-49% walk rate': -6,  # High walk rate
-            '30-39% walk rate': -4,  # Moderate walk rate  
-            '20-29% walk rate': -2   # Some walks
-        }
-        
-        # Profile-Specific Bonuses
-        if profile_type == 'power':
-            hr_bonus = {
-                '25%+ HR rate': +15,  # Elite HR-prone pitcher
-                '20-24% HR rate': +12,  # Very HR-prone
-                '15-19% HR rate': +8,   # Good HR matchup
-                '10-14% HR rate': +4    # Decent HR matchup
-            }
-        else:  # Contact profiles
-            hit_bonus = {
-                '25%+ hit rate': +12,  # Elite hit-friendly pitcher
-                '20-24% hit rate': +9,  # Very hit-friendly
-                '15-19% hit rate': +6,  # Good hit matchup
-                '10-14% hit rate': +3   # Decent hit matchup
-            }
-        ```
+        ### **Phase 3: Profile-Based Scoring**
         
         #### **Contact Scoring Algorithm:**
         ```python
@@ -1718,20 +1520,6 @@ def info_page():
             'adj_1B': 0.5,      # Reduced singles focus
             'adj_K': -1.0,      # Reduced K penalty
             'adj_BB': -0.3      # Minimal walk penalty
-        }
-        ```
-        
-        #### **Matchup Grade Calculation:**
-        ```python
-        # Combined pitcher matchup modifier creates grade
-        total_modifier = walk_penalty + profile_specific_bonus
-        
-        matchup_grade = {
-            '+10 or higher': 'A+',  # Elite matchup
-            '+5 to +9': 'A',        # Great matchup
-            '0 to +4': 'B',         # Good matchup
-            '-1 to -5': 'C',        # Average/poor matchup
-            '-6 or lower': 'D'      # Avoid matchup
         }
         ```
         
@@ -2820,8 +2608,8 @@ def info_page():
     
     ---
     
-    *Complete Baseball Analytics Reference Manual | A1FADED V2.5 Pitcher Matchup Edition*  
-    *Master every aspect of league-aware baseball analysis with pitcher matchup integration*
+    *Complete Baseball Analytics Reference Manual | A1FADED V2.4 Comprehensive Edition*  
+    *Master every aspect of league-aware baseball analysis*
     """)
 
 def main():
@@ -2851,7 +2639,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V2.5** | Pitcher Matchup Edition")
+    st.sidebar.markdown("**V2.4** | Complete + Hidden Gems")
 
 if __name__ == "__main__":
     main()
