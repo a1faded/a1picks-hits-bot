@@ -7,13 +7,9 @@ import streamlit.components.v1 as components
 import numpy as np
 from datetime import datetime, timedelta
 import time
-import asyncio
-import aiohttp
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import functools
 from typing import Dict, List, Optional, Tuple
-import sqlite3
-import pickle
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -785,40 +781,44 @@ class DataValidator:
         
         return True
 
-# ==================== ASYNC DATA LOADING ====================
+# ==================== CONCURRENT DATA LOADING ====================
 
-class AsyncDataLoader:
-    """Concurrent data loading for improved performance"""
+class ConcurrentDataLoader:
+    """Concurrent data loading using ThreadPoolExecutor (no external dependencies)"""
     
     @staticmethod
-    async def load_multiple_csvs(url_dict: Dict[str, str]) -> Dict[str, Optional[pd.DataFrame]]:
-        """Load multiple CSV files concurrently"""
+    def load_multiple_csvs(url_dict: Dict[str, str]) -> Dict[str, Optional[pd.DataFrame]]:
+        """Load multiple CSV files concurrently using threading"""
         
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
-            tasks = [
-                AsyncDataLoader._load_single_csv(session, description, url) 
-                for description, url in url_dict.items()
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        return dict(zip(url_dict.keys(), results))
-    
-    @staticmethod
-    async def _load_single_csv(session: aiohttp.ClientSession, description: str, 
-                              url: str) -> Optional[pd.DataFrame]:
-        """Load a single CSV file asynchronously"""
-        try:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    df = pd.read_csv(StringIO(content))
-                    return MemoryOptimizer.optimize_dataframe(df)
+        def load_single_csv(description_url_pair):
+            description, url = description_url_pair
+            try:
+                response = requests.get(url, timeout=15)
+                if response.status_code == 200:
+                    df = pd.read_csv(StringIO(response.text))
+                    return description, MemoryOptimizer.optimize_dataframe(df)
                 else:
-                    st.error(f"❌ HTTP {response.status} for {description}")
-                    return None
-        except Exception as e:
-            st.error(f"❌ Failed to load {description}: {str(e)}")
-            return None
+                    st.error(f"❌ HTTP {response.status_code} for {description}")
+                    return description, None
+            except Exception as e:
+                st.error(f"❌ Failed to load {description}: {str(e)}")
+                return description, None
+        
+        # Use ThreadPoolExecutor for concurrent loading
+        results = {}
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Submit all tasks
+            future_to_desc = {
+                executor.submit(load_single_csv, (desc, url)): desc 
+                for desc, url in url_dict.items()
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_desc):
+                description, dataframe = future.result()
+                results[description] = dataframe
+        
+        return results
 
 # ==================== OPTIMIZED DATA PROCESSING ====================
 
@@ -981,17 +981,9 @@ def load_and_process_data():
         unsafe_allow_html=True
     )
     
-    # Concurrent data loading
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    try:
-        data_dict = loop.run_until_complete(
-            AsyncDataLoader.load_multiple_csvs(MLBConfig.CSV_URLS)
-        )
-    finally:
-        loop.close()
-        loading_placeholder.empty()
+    # Concurrent data loading using ThreadPoolExecutor
+    data_dict = ConcurrentDataLoader.load_multiple_csvs(MLBConfig.CSV_URLS)
+    loading_placeholder.empty()
     
     # Validate main datasets
     prob_df = data_dict.get('probabilities')
