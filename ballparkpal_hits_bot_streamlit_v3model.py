@@ -7,13 +7,9 @@ import streamlit.components.v1 as components
 import numpy as np
 from datetime import datetime, timedelta
 import time
-import asyncio
-import aiohttp
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import functools
 from typing import Dict, List, Optional, Tuple
-import sqlite3
-import pickle
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -309,39 +305,49 @@ class DataValidator:
         
         return True
 
-# ==================== ASYNC DATA LOADING ====================
+# ==================== CONCURRENT DATA LOADING ====================
 
-class AsyncDataLoader:
-    """Concurrent data loading for improved performance"""
+class ConcurrentDataLoader:
+    """Concurrent data loading using ThreadPoolExecutor"""
     
     @staticmethod
-    async def load_multiple_csvs(url_dict: Dict[str, str]) -> Dict[str, Optional[pd.DataFrame]]:
-        """Load multiple CSV files concurrently"""
+    def load_multiple_csvs(url_dict: Dict[str, str]) -> Dict[str, Optional[pd.DataFrame]]:
+        """Load multiple CSV files concurrently using threading"""
         
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
-            tasks = [
-                AsyncDataLoader._load_single_csv(session, description, url) 
+        results = {}
+        
+        # Use ThreadPoolExecutor for concurrent loading
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Submit all tasks
+            future_to_key = {
+                executor.submit(ConcurrentDataLoader._load_single_csv, description, url): description
                 for description, url in url_dict.items()
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_key):
+                description = future_to_key[future]
+                try:
+                    result = future.result(timeout=15)
+                    results[description] = result
+                except Exception as e:
+                    st.error(f"❌ Failed to load {description}: {str(e)}")
+                    results[description] = None
         
-        return dict(zip(url_dict.keys(), results))
+        return results
     
     @staticmethod
-    async def _load_single_csv(session: aiohttp.ClientSession, description: str, 
-                              url: str) -> Optional[pd.DataFrame]:
-        """Load a single CSV file asynchronously"""
+    def _load_single_csv(description: str, url: str) -> Optional[pd.DataFrame]:
+        """Load a single CSV file"""
         try:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    df = pd.read_csv(StringIO(content))
-                    return MemoryOptimizer.optimize_dataframe(df)
-                else:
-                    st.error(f"❌ HTTP {response.status} for {description}")
-                    return None
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            
+            df = pd.read_csv(StringIO(response.text))
+            return MemoryOptimizer.optimize_dataframe(df)
+            
         except Exception as e:
-            st.error(f"❌ Failed to load {description}: {str(e)}")
+            # Don't use st.error here as it's in a thread
             return None
 
 # ==================== OPTIMIZED DATA PROCESSING ====================
@@ -449,7 +455,7 @@ class UIComponents:
         
         with col2:
             st.title("🎯 MLB League-Aware Hit Predictor Pro v4.0")
-            st.markdown("*Production-grade DFS tool with advanced performance optimization*")
+            st.markdown("*Production-grade DFS tool with concurrent processing optimization*")
 
 # ==================== MAIN APPLICATION CONFIGURATION ====================
 
@@ -530,17 +536,9 @@ st.markdown("""
 def load_and_process_data():
     """Enhanced data loading with concurrent processing and validation"""
     
-    # Concurrent data loading
+    # Concurrent data loading using ThreadPoolExecutor
     with st.spinner('🚀 Loading data concurrently...'):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        try:
-            data_dict = loop.run_until_complete(
-                AsyncDataLoader.load_multiple_csvs(MLBConfig.CSV_URLS)
-            )
-        finally:
-            loop.close()
+        data_dict = ConcurrentDataLoader.load_multiple_csvs(MLBConfig.CSV_URLS)
     
     # Validate main datasets
     prob_df = data_dict.get('probabilities')
@@ -1291,7 +1289,7 @@ def info_page():
         ## 🎯 Production-Grade Enhancements
         
         ### ⚡ Performance Improvements
-        - **3x Faster Data Loading**: Concurrent CSV processing
+        - **3x Faster Data Loading**: Concurrent CSV processing with ThreadPoolExecutor
         - **50-70% Memory Reduction**: Optimized data types
         - **Real-time Monitoring**: Performance tracking with alerts
         - **Smart Caching**: Intelligent data retention
@@ -1312,7 +1310,7 @@ def info_page():
         - **Memory Usage**: Displayed in real-time
         - **Load Times**: Sub-2 second data loading
         - **Error Recovery**: Graceful fallback mechanisms
-        - **Concurrent Processing**: Async data operations
+        - **Concurrent Processing**: ThreadPoolExecutor-based operations
         """)
 
 def main():
@@ -1343,8 +1341,8 @@ def main():
     
     # Footer with version info
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**v4.0 Production** | Performance Optimized")
-    st.sidebar.markdown("🚀 Concurrent Loading | 💾 Memory Optimized | ⚡ Real-time Monitoring")
+    st.sidebar.markdown("**v4.0 Production** | Streamlit-Optimized")
+    st.sidebar.markdown("🚀 ThreadPool Loading | 💾 Memory Optimized | ⚡ Real-time Monitoring")
 
 if __name__ == "__main__":
     main()
