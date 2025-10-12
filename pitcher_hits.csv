@@ -1,9 +1,3 @@
-Team,Name,Prob,Park
-NYY,Cam Schlittler,4.40%,NYY
-LAD,Yoshinobu Yamamoto,3.70%,LAD
-CHC,Jameson Taillon,3.10%,CHC
-PHI,Aaron Nola,2.80%,LAD
-MIL,Quinn Priester,2.80%,CHC
-DET,Casey Mize,1.30%,DET
-SEA,Bryce Miller,1.30%,DET
-TOR,Louie Varland,1.20%,NYY
+Team,Name,Prob,Park,BP
+TOR,Kevin Gausman,9.80%,TOR,920
+SEA,Bryce Miller,1.60%,TOR,6150
