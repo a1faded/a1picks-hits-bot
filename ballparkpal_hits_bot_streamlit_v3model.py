@@ -11,13 +11,12 @@ st.set_page_config(layout="wide")
 def load_data():
     base_url = "https://raw.githubusercontent.com/a1faded/a1picks-hits-bot/main/"
 
-    prob = pd.read_csv(base_url + "Ballpark Palmodel2.csv")
-    pct = pd.read_csv(base_url + "Ballpark Pal.csv")
+    prob = pd.read_csv(base_url + "Ballpark%20Palmodel2.csv")
+    pct = pd.read_csv(base_url + "Ballpark%20Pal.csv")
     pitcher = pd.read_csv(base_url + "pitcher_data.csv")
 
     df = pd.merge(prob, pct, on=["Tm", "Batter", "Pitcher"], how="inner")
 
-    # Fix pitcher matching (last name + team)
     pitcher['Pitcher_Last'] = pitcher['Pitcher'].str.split().str[-1]
     df['Pitcher_Last'] = df['Pitcher'].str.split().str[-1]
 
