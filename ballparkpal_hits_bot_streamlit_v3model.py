@@ -1,17 +1,14 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
-from io import StringIO
 
-st.set_page_config(layout="wide", page_title="A1PICKS MLB Hit Predictor PRO V4")
+st.set_page_config(layout="wide", page_title="A1PICKS MLB Hit Predictor V4")
 
 # =========================
 # DATA LOADING
 # =========================
 @st.cache_data(ttl=900)
 def load_data():
-    # RESTORED: All 5 working links from your previous version
     csv_urls = {
         'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv',
         'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv',
@@ -21,92 +18,105 @@ def load_data():
     }
 
     try:
-        # Load main batter datasets
-        prob = pd.read_csv(csv_urls['probabilities'])
-        pct = pd.read_csv(csv_urls['percent_change'])
+        # Load core batter data
+        prob_df = pd.read_csv(csv_urls['probabilities'])
+        pct_df = pd.read_csv(csv_urls['percent_change'])
         
-        # Load the 3 pitcher files missing from your previous draft
-        p_walks = pd.read_csv(csv_urls['pitcher_walks'])
-        p_hrs = pd.read_csv(csv_urls['pitcher_hrs'])
-        p_hits = pd.read_csv(csv_urls['pitcher_hits'])
+        # Load the 3 pitcher files
+        p_walks = pd.read_csv(csv_urls['pitcher_walks']).rename(columns={'Prob': 'p_walk_val'})
+        p_hrs = pd.read_csv(csv_urls['pitcher_hrs']).rename(columns={'Prob': 'p_hr_val'})
+        p_hits = pd.read_csv(csv_urls['pitcher_hits']).rename(columns={'Prob': 'p_hit_val'})
 
         # Merge batter data
-        df = pd.merge(prob, pct, on=["Tm", "Batter", "Pitcher"], suffixes=('_prob', '_pct'))
+        df = pd.merge(prob_df, pct_df, on=["Tm", "Batter", "Pitcher"], suffixes=('_prob', '_pct'))
 
-        # Combine the 3 pitcher files into one 'Pitcher Intelligence' dataframe
-        # We use 'Name' and 'Team' to join them as seen in your old script
-        pitcher_intel = pd.merge(p_walks, p_hrs, on=['Team', 'Name', 'Park'], suffixes=('_w', '_hr'))
-        pitcher_intel = pd.merge(pitcher_intel, p_hits, on=['Team', 'Name', 'Park'])
+        # Combine pitcher files into one intelligence frame
+        # We merge on Name and Team (which represents the Pitcher)
+        p_intel = pd.merge(p_walks[['Name', 'Team', 'p_walk_val']], 
+                           p_hrs[['Name', 'Team', 'p_hr_val']], on=['Name', 'Team'], how='outer')
+        p_intel = pd.merge(p_intel, 
+                           p_hits[['Name', 'Team', 'p_hit_val']], on=['Name', 'Team'], how='outer')
         
-        # Format pitcher names for merging (extracting last name for better matching)
-        pitcher_intel['Pitcher_Last'] = pitcher_intel['Name'].str.split().str[-1]
-        df['Pitcher_Last'] = df['Pitcher'].str.split().str[-1]
+        # Match Pitcher Last Name
+        p_intel['P_Last'] = p_intel['Name'].str.split().str[-1]
+        df['P_Last'] = df['Pitcher'].str.split().str[-1]
 
-        # Final merge: Batter data + Pitcher matchup data
-        df = pd.merge(
-            df,
-            pitcher_intel,
-            left_on=["Tm", "Pitcher_Last"],
-            right_on=["Park", "Pitcher_Last"],
-            how="left"
-        )
+        # Final Merge
+        df = pd.merge(df, p_intel, left_on=["Tm", "P_Last"], right_on=["Team", "P_Last"], how="left")
+        
         return df
     except Exception as e:
-        st.error(f"⚠️ Data Sync Error: {e}")
+        st.error(f"Data Loading Error: {e}")
         return pd.DataFrame()
 
 # =========================
-# SCORING ENGINE V4 (With Pitcher Data Integration)
+# SCORING ENGINE V4
 # =========================
 def calculate_v4_scores(df, profile):
     if df.empty: return df
-    
-    # 1. Apply Adjustments from 'percent_change' file
-    metrics = ['1B', 'XB', 'HR', 'K', 'BB']
-    for m in metrics:
-        # Match columns from your CSV structure (e.g., 1B_prob and 1B_pct)
-        df[f'adj_{m}'] = df[f'{m}_prob'] * (1 + df[f'{m}_pct'] / 100)
+    df = df.copy()
 
-    # 2. Pitcher Matchup Modifier (Restored Logic)
-    # Using 'Prob' columns from the pitcher files (renamed during merge)
-    df['pitcher_mod'] = (
-        df['Prob_x'].fillna(15).astype(float) * -0.2 + # Walks penalty
-        df['Prob_y'].fillna(12).astype(float) * 0.5 +  # HR bonus
-        df['Prob'].fillna(18).astype(float) * 0.3      # Hits bonus
-    )
+    # 1. Adjusted Batter Metrics (Prob * % Change)
+    for m in ['1B', 'XB', 'HR', 'K', 'BB']:
+        prob_col = f"{m}_prob"
+        pct_col = f"{m}_pct"
+        if prob_col in df.columns and pct_col in df.columns:
+            df[f'adj_{m}'] = df[prob_col] * (1 + df[pct_col] / 100)
+        else:
+            df[f'adj_{m}'] = 0
 
-    # 3. Calculate Final Hit Probability
+    # 2. Pitcher Matchup Modifier (Using the new names we created in load_data)
+    # Fillna with league averages if pitcher data is missing
+    df['p_walk_val'] = pd.to_numeric(df['p_walk_val'], errors='coerce').fillna(15)
+    df['p_hr_val'] = pd.to_numeric(df['p_hr_val'], errors='coerce').fillna(12)
+    df['p_hit_val'] = pd.to_numeric(df['p_hit_val'], errors='coerce').fillna(18)
+
+    df['pitcher_mod'] = (df['p_walk_val'] * -0.2) + (df['p_hr_val'] * 0.5) + (df['p_hit_val'] * 0.3)
+
+    # 3. Calculation Logic
     df['total_hit_prob'] = df['adj_1B'] + df['adj_XB'] + df['adj_HR']
     
-    # 4. Profile Weighting
     if profile == "power":
-        df['base_score'] = (df['adj_HR'] * 2.5) + (df['adj_XB'] * 1.5) - (df['adj_K'] * 0.5)
-    else:
-        df['base_score'] = (df['adj_1B'] * 2.0) + (df['adj_XB'] * 1.2) - (df['adj_K'] * 1.5)
+        df['raw_score'] = (df['adj_HR'] * 3.0) + (df['adj_XB'] * 1.5) - (df['adj_K'] * 0.8)
+    else: # Contact profile
+        df['raw_score'] = (df['adj_1B'] * 2.5) + (df['adj_XB'] * 1.0) - (df['adj_K'] * 1.5)
 
-    # 5. Final Normalized Score
-    df['Score'] = df['base_score'] + df['pitcher_mod']
-    df['Score'] = 100 * (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min() + 1e-9)
+    # Apply Pitcher Modifier
+    df['final_score'] = df['raw_score'] + df['pitcher_mod']
+
+    # 4. Normalize 0-100
+    s_min = df['final_score'].min()
+    s_max = df['final_score'].max()
+    df['Score'] = 100 * (df['final_score'] - s_min) / (s_max - s_min + 1e-9)
     
+    # Confidence Metric
+    df['confidence'] = (df['total_hit_prob'] * 0.7) + ((1 - df['adj_K']) * 0.3)
+
     return df
 
 # =========================
 # UI / MAIN
 # =========================
-st.title("⚾ A1PICKS MLB Hit Predictor V4 (Full Data Restored)")
+st.title("⚾ A1PICKS MLB Hit Predictor V4")
 
 df = load_data()
 
 if not df.empty:
+    # Sidebar Filters
+    st.sidebar.header("Settings")
     profile = st.sidebar.selectbox("Select Strategy", ["contact", "power"])
-    df = calculate_v4_scores(df, profile)
+    min_score = st.sidebar.slider("Min Score Filter", 0, 100, 40)
     
-    min_score = st.sidebar.slider("Minimum Score", 0, 100, 50)
+    # Run Scoring
+    df_results = calculate_v4_scores(df, profile)
     
-    filtered = df[df['Score'] >= min_score].sort_values("Score", ascending=False)
+    # Filter and Display
+    show_cols = ["Batter", "Pitcher", "Score", "confidence", "total_hit_prob", "adj_K", "adj_HR"]
+    filtered_df = df_results[df_results['Score'] >= min_score].sort_values("Score", ascending=False)
+
+    st.dataframe(filtered_df[show_cols], use_container_width=True)
     
-    st.dataframe(filtered[[
-        "Batter", "Pitcher", "Score", "total_hit_prob", "adj_K", "adj_HR"
-    ]], use_container_width=True)
+    # Optional Debug (Uncomment to see column names if error returns)
+    # st.write("Available Columns:", df.columns.tolist())
 else:
-    st.warning("Could not connect to GitHub. Ensure the repository 'a1picks-hits-bot' is Public.")
+    st.warning("No data found. Please check your GitHub CSV files.")
