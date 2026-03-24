@@ -11,7 +11,7 @@ st.set_page_config(layout="wide")
 # =========================
 @st.cache_data(ttl=900)
 def load_data():
-    base_url = "https://raw.githubusercontent.com/a1faded/a1picks-hits-bot/main/"
+    base_url = "https://github.com/a1faded/a1picks-hits-bot/tree/main"
 
     prob_url = base_url + "Ballpark Palmodel2.csv"
     pct_url = base_url + "Ballpark Pal.csv"
