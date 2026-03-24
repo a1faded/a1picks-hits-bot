@@ -403,80 +403,86 @@ def load_pitcher_matchup_data():
         st.warning(f"⚠️ Could not load pitcher data: {str(e)} - continuing with base analysis")
         return None
 
-def calculate_league_aware_scores(df, profile_type='contact'):
-    """Enhanced scoring algorithm that adapts based on profile type and includes pitcher matchup analysis."""
-    
-    # First, calculate pitcher matchup modifiers and grades
-    df = calculate_pitcher_matchup_grades(df, profile_type)
-    
-    if profile_type == 'power':
-        # Power-focused scoring weights
-        weights = {
-            'adj_XB': 3.0,      # Primary focus: Extra bases
-            'adj_HR': 2.5,      # Primary focus: Home runs  
-            'adj_vs': 1.5,      # Enhanced matchup importance for power
-            'adj_RC': 1.0,      # Run creation
-            'adj_1B': 0.5,      # Reduced singles weight (not relevant for power)
-            'adj_K': -1.0,      # Reduced K penalty (power hitters strike out more)
-            'adj_BB': -0.3      # Minimal BB penalty (some power hitters walk more)
-        }
-        
-        # Power-specific bonuses
-        df['power_bonus'] = np.where(
-            (df['adj_XB'] > 10) & (df['adj_HR'] > 4), 12, 0  # Elite power combo
+def calculate_league_aware_scores(df, profile_type):
+    df = df.copy()
+
+    # --- Percentiles (light influence) ---
+    positive_cols = ['adj_1B', 'adj_XB', 'adj_HR', 'total_hit_prob']
+    negative_cols = ['adj_K', 'adj_BB']
+
+    for col in positive_cols:
+        df[f'{col}_pct'] = df[col].rank(pct=True)
+
+    for col in negative_cols:
+        df[f'{col}_pct'] = 1 - df[col].rank(pct=True)
+
+    def blend(raw, pct, alpha=0.7):
+        return raw * alpha + pct * (1 - alpha)
+
+    # --- League averages (dynamic) ---
+    league_avg_hr = df['adj_HR'].mean()
+    league_avg_xb = df['adj_XB'].mean()
+    league_avg_1b = df['adj_1B'].mean()
+
+    # --- Outcome Value ---
+    df['hit_value'] = (
+        blend(df['adj_1B'], df['adj_1B_pct']) * 1.0 +
+        blend(df['adj_XB'], df['adj_XB_pct']) * 1.6 +
+        blend(df['adj_HR'], df['adj_HR_pct']) * 2.2
+    )
+
+    # --- Risk Penalty ---
+    df['risk_penalty'] = (
+        blend(df['adj_K'], df['adj_K_pct']) * 1.2 +
+        blend(df['adj_BB'], df['adj_BB_pct']) * 0.4
+    )
+
+    df['base_score'] = df['hit_value'] - df['risk_penalty']
+
+    # --- League-relative boosts ---
+    df['power_boost'] = df['adj_HR'] / (league_avg_hr + 1e-9)
+    df['extra_base_boost'] = df['adj_XB'] / (league_avg_xb + 1e-9)
+    df['contact_boost'] = df['adj_1B'] / (league_avg_1b + 1e-9)
+
+    # --- Profile weighting ---
+    if profile_type == "contact":
+        df['profile_score'] = (
+            df['base_score'] * 0.7 +
+            df['contact_boost'] * 0.2 +
+            df['extra_base_boost'] * 0.1
         )
-        
-        df['clutch_power_bonus'] = np.where(
-            (df['adj_XB'] > 8) & (df['adj_vs'] > 5), 8, 0  # Good power + good matchup
+    elif profile_type == "power":
+        df['profile_score'] = (
+            df['base_score'] * 0.7 +
+            df['power_boost'] * 0.25 +
+            df['extra_base_boost'] * 0.05
         )
-        
-        df['consistent_power_bonus'] = np.where(
-            (df['adj_HR'] > 3) & (df['adj_K'] < 25), 5, 0  # HR power without excessive Ks
-        )
-        
-        # Calculate power probability instead of hit probability
-        df['power_prob'] = df['adj_XB'] + df['adj_HR']
-        df['power_prob'] = df['power_prob'].clip(upper=50)  # Cap at reasonable power rate
-        
-        bonus_cols = ['power_bonus', 'clutch_power_bonus', 'consistent_power_bonus']
-        
     else:
-        # Contact-focused scoring weights (original system)
-        weights = {
-            'adj_1B': 2.0,      # Singles (primary base hit)
-            'adj_XB': 1.8,      # Extra bases (also base hits)
-            'adj_vs': 1.2,      # Matchup performance
-            'adj_RC': 0.8,      # Run creation
-            'adj_HR': 0.6,      # Home runs (also base hits)
-            'adj_K': -2.0,      # Heavy penalty for strikeouts (no hit)
-            'adj_BB': -0.8      # Moderate penalty for walks (not hits)
-        }
-        
-        # Contact-focused bonuses
-        df['contact_bonus'] = np.where(
-            (df['total_hit_prob'] > 40) & (df['adj_K'] < 18), 8, 0
-        )
-        
-        df['consistency_bonus'] = np.where(
-            (df['adj_1B'] > 20) & (df['adj_XB'] > 8), 5, 0
-        )
-        
-        df['matchup_bonus'] = np.where(df['adj_vs'] > 5, 3, 0)
-        
-        bonus_cols = ['contact_bonus', 'consistency_bonus', 'matchup_bonus']
-    
-    # Base weighted score calculation
-    df['base_score'] = sum(df[col] * weight for col, weight in weights.items() if col in df.columns)
-    
-    # Calculate final score with appropriate bonuses AND pitcher matchup modifier
-    df['Score'] = df['base_score'] + sum(df[col] for col in bonus_cols if col in df.columns) + df.get('pitcher_matchup_modifier', 0)
-    
-    # Normalize to 0-100 scale
-    if df['Score'].max() != df['Score'].min():
-        df['Score'] = (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min()) * 100
-    else:
-        df['Score'] = 50  # Default if all scores are identical
-    
+        df['profile_score'] = df['base_score']
+
+    # --- Pitcher Multiplier (smooth) ---
+    pitcher_factor = (
+        df['Hit_Probability'] * 0.5 +
+        df['HR_Probability'] * 0.3 +
+        df['Walk_Probability'] * 0.2
+    )
+
+    df['pitcher_multiplier'] = 0.85 + (pitcher_factor * 0.6)
+
+    df['final_score'] = df['profile_score'] * df['pitcher_multiplier']
+
+    # --- Normalize 0–100 ---
+    min_score = df['final_score'].min()
+    max_score = df['final_score'].max()
+
+    df['Score'] = 100 * (df['final_score'] - min_score) / (max_score - min_score + 1e-9)
+
+    # --- Confidence Score (NEW) ---
+    df['confidence'] = (
+        df['total_hit_prob'] * 0.6 +
+        (1 - df['adj_K']) * 0.4
+    )
+
     return df.round(1)
 
 def create_league_aware_filters(df=None):
