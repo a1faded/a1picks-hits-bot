@@ -4,26 +4,32 @@ import numpy as np
 import requests
 from io import StringIO
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="A1PICKS MLB Predictor")
 
 # =========================
 # DATA LOADING
 # =========================
 @st.cache_data(ttl=900)
 def load_data():
-    base_url = "https://github.com/a1faded/a1picks-hits-bot/tree/main"
+    # Using your requested URL setup to ensure compatibility
+    csv_urls = {
+        'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv',
+        'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv',
+        'pitcher_data': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_data.csv'
+    }
 
-    prob_url = base_url + "Ballpark Palmodel2.csv"
-    pct_url = base_url + "Ballpark Pal.csv"
-    pitcher_url = base_url + "pitcher_data.csv"
+    # Loading the main dataframes
+    # Note: 'percent_change' corresponds to the 'prob' variable in your logic
+    # and 'probabilities' corresponds to the 'pct' variable.
+    prob = pd.read_csv(csv_urls['percent_change'])
+    pct = pd.read_csv(csv_urls['probabilities'])
+    pitcher = pd.read_csv(csv_urls['pitcher_data'])
 
-    prob = pd.read_csv(prob_url)
-    pct = pd.read_csv(pct_url)
-    pitcher = pd.read_csv(pitcher_url)
-
+    # Merge main batter datasets
     df = pd.merge(prob, pct, on=["Tm", "Batter", "Pitcher"], how="inner")
 
-    # safer pitcher merge (fixes name collision issue)
+    # Safer pitcher merge (fixes name collision issues)
+    # Creating a join key based on the last name to handle different formatting
     pitcher['Pitcher_Last'] = pitcher['Pitcher'].str.split().str[-1]
     df['Pitcher_Last'] = df['Pitcher'].str.split().str[-1]
 
@@ -61,7 +67,7 @@ def apply_adjustments(df):
 def calculate_league_aware_scores(df, profile_type):
     df = df.copy()
 
-    # Percentiles
+    # Percentiles for ranking
     pos_cols = ['adj_1B', 'adj_XB', 'adj_HR', 'total_hit_prob']
     neg_cols = ['adj_K', 'adj_BB']
 
@@ -74,7 +80,7 @@ def calculate_league_aware_scores(df, profile_type):
     def blend(raw, pct, alpha=0.7):
         return raw * alpha + pct * (1 - alpha)
 
-    # League averages
+    # League averages for boosting
     league_avg_hr = df['adj_HR'].mean()
     league_avg_xb = df['adj_XB'].mean()
     league_avg_1b = df['adj_1B'].mean()
@@ -115,6 +121,7 @@ def calculate_league_aware_scores(df, profile_type):
         df['profile_score'] = df['base_score']
 
     # 🔥 Smooth pitcher multiplier
+    # Handles missing data with fillna(0)
     pitcher_factor = (
         df['Hit_Probability'].fillna(0) * 0.5 +
         df['HR_Probability'].fillna(0) * 0.3 +
@@ -122,16 +129,14 @@ def calculate_league_aware_scores(df, profile_type):
     )
 
     df['pitcher_multiplier'] = 0.85 + (pitcher_factor * 0.6)
-
     df['final_score'] = df['profile_score'] * df['pitcher_multiplier']
 
-    # Normalize
+    # Normalize to 0-100 scale
     min_score = df['final_score'].min()
     max_score = df['final_score'].max()
-
     df['Score'] = 100 * (df['final_score'] - min_score) / (max_score - min_score + 1e-9)
 
-    # NEW: confidence
+    # Confidence Metric
     df['confidence'] = (
         df['total_hit_prob'] * 0.6 +
         (1 - df['adj_K']) * 0.4
@@ -145,36 +150,38 @@ def calculate_league_aware_scores(df, profile_type):
 # =========================
 st.title("⚾ A1PICKS MLB Hit Predictor PRO V4")
 
-df = load_data()
-df = apply_adjustments(df)
+try:
+    df = load_data()
+    df = apply_adjustments(df)
 
-profile = st.selectbox(
-    "Select Profile",
-    ["all", "contact", "power"]
-)
+    profile = st.selectbox(
+        "Select Betting Profile",
+        ["all", "contact", "power"]
+    )
 
-df = calculate_league_aware_scores(df, profile)
+    df = calculate_league_aware_scores(df, profile)
 
-# =========================
-# FILTERS
-# =========================
-min_score = st.slider("Minimum Score", 0, 100, 50)
-df = df[df['Score'] >= min_score]
+    # =========================
+    # FILTERS
+    # =========================
+    min_score = st.slider("Minimum Score Filter", 0, 100, 50)
+    filtered_df = df[df['Score'] >= min_score]
 
-# =========================
-# DISPLAY
-# =========================
-st.dataframe(
-    df.sort_values("Score", ascending=False)[[
-        "Batter",
-        "Pitcher",
-        "Score",
-        "confidence",
-        "total_hit_prob",
-        "adj_K",
-        "adj_HR",
-        "adj_XB"
-    ]]
-)
+    # =========================
+    # DISPLAY
+    # =========================
+    cols_to_show = [
+        "Batter", "Pitcher", "Score", "confidence", 
+        "total_hit_prob", "adj_K", "adj_HR", "adj_XB"
+    ]
 
-st.caption("Data refreshes every 15 minutes.")
+    st.dataframe(
+        filtered_df.sort_values("Score", ascending=False)[cols_to_show],
+        use_container_width=True
+    )
+
+    st.caption("Data refreshes every 15 minutes. Percentages are adjusted based on ballpark factors.")
+
+except Exception as e:
+    st.error(f"Error loading or processing data: {e}")
+    st.info("Check if the GitHub CSV files are currently accessible and formatted correctly.")
