@@ -1699,8 +1699,6 @@ def main_page():
     profile_type = filters.get('profile_type', 'contact')
     df = calculate_league_aware_scores(df, profile_type)
     
-    df = apply_model2_probabilities(df)
-    
     # Apply intelligent filters
     filtered_df = apply_league_aware_filters(df, filters)
     
