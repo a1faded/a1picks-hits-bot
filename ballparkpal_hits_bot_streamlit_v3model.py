@@ -1699,6 +1699,8 @@ def main_page():
     profile_type = filters.get('profile_type', 'contact')
     df = calculate_league_aware_scores(df, profile_type)
     
+    df = apply_model2_probabilities(df)
+    
     # Apply intelligent filters
     filtered_df = apply_league_aware_filters(df, filters)
     
@@ -2007,3 +2009,24 @@ def calculate_league_aware_scores(df, profile_type='contact'):
         df['Score'] = 50
 
     return df.round(1)
+
+
+# === UPDATED DATA FOUNDATION (MODEL2 AS SOURCE OF TRUTH) ===
+def apply_model2_probabilities(df):
+    """Replace reconstructed adj_* with true model probabilities."""
+
+    df['adj_1B'] = df['1B']
+    df['adj_XB'] = df['XB']
+    df['adj_HR'] = df['HR']
+    df['adj_K']  = df['K']
+    df['adj_BB'] = df['BB']
+
+    df['total_hit_prob'] = df['adj_1B'] + df['adj_XB'] + df['adj_HR']
+    df['power_combo'] = df['adj_XB'] + df['adj_HR']
+
+    # Context (small influence only)
+    df['context_power'] = df.get('HR_pct', 0) * 0.05
+    df['context_contact'] = df.get('1B_pct', 0) * 0.03
+    df['context_plate'] = df.get('BB_pct', 0) * 0.02
+
+    return df
