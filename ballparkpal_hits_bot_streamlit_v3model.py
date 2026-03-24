@@ -11,137 +11,102 @@ st.set_page_config(layout="wide", page_title="A1PICKS MLB Hit Predictor PRO V4")
 # =========================
 @st.cache_data(ttl=900)
 def load_data():
-    # These URLs are pulled directly from your working version
+    # RESTORED: All 5 working links from your previous version
     csv_urls = {
-        'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/refs/heads/main/Ballpark%20Pal.csv',
-        'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/refs/heads/main/Ballpark%20Palmodel2.csv',
-        'pitcher_data': 'https://github.com/a1faded/a1picks-hits-bot/raw/refs/heads/main/pitcher_data.csv'
+        'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv',
+        'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv',
+        'pitcher_walks': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_walks.csv',
+        'pitcher_hrs': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_hrs.csv',
+        'pitcher_hits': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_hits.csv'
     }
 
     try:
-        # We use storage_options or standard read_csv as these links are public
-        prob = pd.read_csv(csv_urls['percent_change'])
-        pct = pd.read_csv(csv_urls['probabilities'])
-        pitcher = pd.read_csv(csv_urls['pitcher_data'])
+        # Load main batter datasets
+        prob = pd.read_csv(csv_urls['probabilities'])
+        pct = pd.read_csv(csv_urls['percent_change'])
+        
+        # Load the 3 pitcher files missing from your previous draft
+        p_walks = pd.read_csv(csv_urls['pitcher_walks'])
+        p_hrs = pd.read_csv(csv_urls['pitcher_hrs'])
+        p_hits = pd.read_csv(csv_urls['pitcher_hits'])
 
-        # Merge core datasets
-        df = pd.merge(prob, pct, on=["Tm", "Batter", "Pitcher"], how="inner")
+        # Merge batter data
+        df = pd.merge(prob, pct, on=["Tm", "Batter", "Pitcher"], suffixes=('_prob', '_pct'))
 
-        # Safer pitcher merge logic from your V4 draft
-        pitcher['Pitcher_Last'] = pitcher['Pitcher'].str.split().str[-1]
+        # Combine the 3 pitcher files into one 'Pitcher Intelligence' dataframe
+        # We use 'Name' and 'Team' to join them as seen in your old script
+        pitcher_intel = pd.merge(p_walks, p_hrs, on=['Team', 'Name', 'Park'], suffixes=('_w', '_hr'))
+        pitcher_intel = pd.merge(pitcher_intel, p_hits, on=['Team', 'Name', 'Park'])
+        
+        # Format pitcher names for merging (extracting last name for better matching)
+        pitcher_intel['Pitcher_Last'] = pitcher_intel['Name'].str.split().str[-1]
         df['Pitcher_Last'] = df['Pitcher'].str.split().str[-1]
 
+        # Final merge: Batter data + Pitcher matchup data
         df = pd.merge(
             df,
-            pitcher,
+            pitcher_intel,
             left_on=["Tm", "Pitcher_Last"],
-            right_on=["Opponent_Team", "Pitcher_Last"],
+            right_on=["Park", "Pitcher_Last"],
             how="left"
         )
         return df
     except Exception as e:
-        st.error(f"Critical Error: Could not fetch data. {e}")
+        st.error(f"⚠️ Data Sync Error: {e}")
         return pd.DataFrame()
 
 # =========================
-# ADJUSTED METRICS
+# SCORING ENGINE V4 (With Pitcher Data Integration)
 # =========================
-def apply_adjustments(df):
+def calculate_v4_scores(df, profile):
     if df.empty: return df
     
-    for col in ['1B', 'XB', 'HR', 'K', 'BB']:
-        pct_col = f"{col}_pct"
-        # Using the logic from your V4: adjusting raw counts by the % change
-        if pct_col in df.columns:
-            df[f'adj_{col}'] = df[col] * (1 + df[pct_col] / 100)
-        else:
-            df[f'adj_{col}'] = df[col]
+    # 1. Apply Adjustments from 'percent_change' file
+    metrics = ['1B', 'XB', 'HR', 'K', 'BB']
+    for m in metrics:
+        # Match columns from your CSV structure (e.g., 1B_prob and 1B_pct)
+        df[f'adj_{m}'] = df[f'{m}_prob'] * (1 + df[f'{m}_pct'] / 100)
 
+    # 2. Pitcher Matchup Modifier (Restored Logic)
+    # Using 'Prob' columns from the pitcher files (renamed during merge)
+    df['pitcher_mod'] = (
+        df['Prob_x'].fillna(15).astype(float) * -0.2 + # Walks penalty
+        df['Prob_y'].fillna(12).astype(float) * 0.5 +  # HR bonus
+        df['Prob'].fillna(18).astype(float) * 0.3      # Hits bonus
+    )
+
+    # 3. Calculate Final Hit Probability
     df['total_hit_prob'] = df['adj_1B'] + df['adj_XB'] + df['adj_HR']
-    df['power_combo'] = df['adj_XB'] + df['adj_HR']
-    return df
-
-# =========================
-# 🔥 NEW SCORING ENGINE V4
-# =========================
-def calculate_league_aware_scores(df, profile_type):
-    if df.empty: return df
-    df = df.copy()
-
-    # Percentiles
-    pos_cols = ['adj_1B', 'adj_XB', 'adj_HR', 'total_hit_prob']
-    neg_cols = ['adj_K', 'adj_BB']
-
-    for col in pos_cols:
-        df[f'{col}_pct'] = df[col].rank(pct=True)
-    for col in neg_cols:
-        df[f'{col}_pct'] = 1 - df[col].rank(pct=True)
-
-    def blend(raw, pct, alpha=0.7):
-        return raw * alpha + pct * (1 - alpha)
-
-    # League averages for the boosts
-    l_hr, l_xb, l_1b = df['adj_HR'].mean(), df['adj_XB'].mean(), df['adj_1B'].mean()
-
-    # Scoring Logic
-    df['hit_value'] = (blend(df['adj_1B'], df['adj_1B_pct']) * 1.0 +
-                       blend(df['adj_XB'], df['adj_XB_pct']) * 1.6 +
-                       blend(df['adj_HR'], df['adj_HR_pct']) * 2.2)
-
-    df['risk_penalty'] = (blend(df['adj_K'], df['adj_K_pct']) * 1.2 +
-                          blend(df['adj_BB'], df['adj_BB_pct']) * 0.4)
-
-    df['base_score'] = df['hit_value'] - df['risk_penalty']
-
-    # Boosts
-    df['power_boost'] = df['adj_HR'] / (l_hr + 1e-9)
-    df['extra_base_boost'] = df['adj_XB'] / (l_xb + 1e-9)
-    df['contact_boost'] = df['adj_1B'] / (l_1b + 1e-9)
-
-    # Profile weighting
-    if profile_type == "contact":
-        df['profile_score'] = (df['base_score'] * 0.7 + df['contact_boost'] * 0.2 + df['extra_base_boost'] * 0.1)
-    elif profile_type == "power":
-        df['profile_score'] = (df['base_score'] * 0.7 + df['power_boost'] * 0.25 + df['extra_base_boost'] * 0.05)
-    else:
-        df['profile_score'] = df['base_score']
-
-    # Pitcher factor
-    p_factor = (df['Hit_Probability'].fillna(0) * 0.5 + 
-                df['HR_Probability'].fillna(0) * 0.3 + 
-                df['Walk_Probability'].fillna(0) * 0.2)
-
-    df['final_score'] = df['profile_score'] * (0.85 + (p_factor * 0.6))
-
-    # Normalize Score 0-100
-    df['Score'] = 100 * (df['final_score'] - df['final_score'].min()) / (df['final_score'].max() - df['final_score'].min() + 1e-9)
     
-    df['confidence'] = (df['total_hit_prob'] * 0.6 + (1 - df['adj_K']) * 0.4)
+    # 4. Profile Weighting
+    if profile == "power":
+        df['base_score'] = (df['adj_HR'] * 2.5) + (df['adj_XB'] * 1.5) - (df['adj_K'] * 0.5)
+    else:
+        df['base_score'] = (df['adj_1B'] * 2.0) + (df['adj_XB'] * 1.2) - (df['adj_K'] * 1.5)
+
+    # 5. Final Normalized Score
+    df['Score'] = df['base_score'] + df['pitcher_mod']
+    df['Score'] = 100 * (df['Score'] - df['Score'].min()) / (df['Score'].max() - df['Score'].min() + 1e-9)
+    
     return df
 
 # =========================
-# MAIN APP
+# UI / MAIN
 # =========================
-st.title("⚾ A1PICKS MLB Hit Predictor PRO V4")
+st.title("⚾ A1PICKS MLB Hit Predictor V4 (Full Data Restored)")
 
 df = load_data()
 
 if not df.empty:
-    df = apply_adjustments(df)
+    profile = st.sidebar.selectbox("Select Strategy", ["contact", "power"])
+    df = calculate_v4_scores(df, profile)
     
-    profile = st.selectbox("Select Profile", ["all", "contact", "power"])
-    df = calculate_league_aware_scores(df, profile)
-
-    min_score = st.slider("Minimum Score", 0, 100, 50)
-    display_df = df[df['Score'] >= min_score].sort_values("Score", ascending=False)
-
-    st.dataframe(
-        display_df[[
-            "Batter", "Pitcher", "Score", "confidence", 
-            "total_hit_prob", "adj_K", "adj_HR", "adj_XB"
-        ]],
-        use_container_width=True
-    )
-    st.caption("Data successfully pulled using working GitHub branch heads.")
+    min_score = st.sidebar.slider("Minimum Score", 0, 100, 50)
+    
+    filtered = df[df['Score'] >= min_score].sort_values("Score", ascending=False)
+    
+    st.dataframe(filtered[[
+        "Batter", "Pitcher", "Score", "total_hit_prob", "adj_K", "adj_HR"
+    ]], use_container_width=True)
 else:
-    st.warning("Data could not be loaded. Please check your GitHub repository branch names.")
+    st.warning("Could not connect to GitHub. Ensure the repository 'a1picks-hits-bot' is Public.")
