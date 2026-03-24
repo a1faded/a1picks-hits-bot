@@ -483,7 +483,7 @@ def calculate_league_aware_scores(df, profile_type):
         (1 - df['adj_K']) * 0.4
     )
 
-    return df.round(1)
+    return df
 
 def create_league_aware_filters(df=None):
     """Create baseball-intelligent filtering system based on league averages and player types."""
