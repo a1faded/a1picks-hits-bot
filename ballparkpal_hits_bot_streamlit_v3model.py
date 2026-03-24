@@ -1695,6 +1695,8 @@ def main_page():
     # Create league-aware filters with baseball intelligence
     filters = create_league_aware_filters(df)
     
+    df = apply_model2_probabilities(df)
+    
     # Calculate league-aware scores with profile-specific logic
     profile_type = filters.get('profile_type', 'contact')
     df = calculate_league_aware_scores(df, profile_type)
