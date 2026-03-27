@@ -1,3 +1,13 @@
+"""
+A1PICKS MLB Hit Predictor — V4 Ground-Up Rebuild
+=================================================
+Data source  : BallPark Pal Matchups.csv (single file, replaces old two-CSV setup)
+Scores       : Hit Score | Single Score | XB Score | HR Score
+Park mode    : WITH park (blended avg) or WITHOUT park (toggle)
+Pitcher CSVs : Dropped — pitcher context is baked into BallPark Pal Prob columns
+Historical   : AVG/PA tiebreaker bonus when sample ≥ 10 PA
+"""
+
 import streamlit as st
 import pandas as pd
 import requests
@@ -5,1658 +15,1308 @@ from io import StringIO
 import altair as alt
 import streamlit.components.v1 as components
 import numpy as np
-from datetime import datetime, timedelta
-import time
+from datetime import datetime
 
-# Configure Streamlit page
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE CONFIG
+# ─────────────────────────────────────────────────────────────────────────────
+
 st.set_page_config(
-    page_title="A1PICKS MLB Hit Predictor Pro",
+    page_title="A1PICKS MLB Hit Predictor",
     layout="wide",
     page_icon="⚾",
-    menu_items={
-        'Get Help': 'mailto:your@email.com',
-        'Report a bug': "https://github.com/yourrepo/issues",
-    }
 )
 
-# Constants and Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────────────────────────────────────────
+
 CONFIG = {
-    'csv_urls': {
-        'probabilities': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Pal.csv',
-        'percent_change': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Ballpark%20Palmodel2.csv',
-        'pitcher_walks': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_walks.csv',
-        'pitcher_hrs': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_hrs.csv',
-        'pitcher_hits': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_hits.csv'
-    },
-    'base_hit_weights': {
-        'adj_1B': 2.0,
-        'adj_XB': 1.8,
-        'adj_vs': 1.2,
-        'adj_RC': 0.8,
-        'adj_HR': 0.6,
-        'adj_K': -2.0,
-        'adj_BB': -0.8
-    },
-    'expected_columns': ['Tm', 'Batter', 'vs', 'Pitcher', 'RC', 'HR', 'XB', '1B', 'BB', 'K'],
-    'pitcher_columns': {
-        'walks': ['Team', 'Name', 'Park', 'Prob'],
-        'hrs': ['Team', 'Name', 'Park', 'Prob'],
-        'hits': ['Team', 'Name', 'Park', 'Prob']
-    },
-    'cache_ttl': 900  # 15 minutes
+    'csv_url': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Matchups.csv',
+    'cache_ttl': 900,           # 15 minutes
+    'hist_min_pa': 10,          # minimum PA for historical tiebreaker
+    'hist_bonus_max': 3.0,      # maximum bonus points from historical AVG
+    'league_k_avg': 22.6,
+    'league_bb_avg': 8.5,
 }
 
-# Custom CSS
+# ─────────────────────────────────────────────────────────────────────────────
+# CSS
+# ─────────────────────────────────────────────────────────────────────────────
+
 st.markdown("""
 <style>
-    .reportview-container .main .block-container { padding-top: 2rem; }
-    .sidebar .sidebar-content { padding-top: 2.5rem; }
-    .stRadio [role=radiogroup] { align-items: center; gap: 0.5rem; }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem; border-radius: 10px; color: white;
-        margin: 0.5rem 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .success-card {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        padding: 1rem; border-radius: 10px; color: white; margin: 0.5rem 0;
-    }
-    .warning-card {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        padding: 1rem; border-radius: 10px; color: white; margin: 0.5rem 0;
-    }
-    .score-card-hit {
-        background: linear-gradient(135deg, #1a9641 0%, #52b788 100%);
-        padding: 1rem; border-radius: 10px; color: white;
-        margin: 0.5rem 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .score-card-xb {
-        background: linear-gradient(135deg, #e67e22 0%, #f39c12 100%);
-        padding: 1rem; border-radius: 10px; color: white;
-        margin: 0.5rem 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .score-card-hr {
-        background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
-        padding: 1rem; border-radius: 10px; color: white;
-        margin: 0.5rem 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .staleness-fresh {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        padding: 0.5rem 1rem; border-radius: 8px; color: white;
-        font-weight: bold; text-align: center; margin-bottom: 0.5rem;
-    }
-    .staleness-aging {
-        background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
-        padding: 0.5rem 1rem; border-radius: 8px; color: #333;
-        font-weight: bold; text-align: center; margin-bottom: 0.5rem;
-    }
-    .staleness-stale {
-        background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
-        padding: 0.5rem 1rem; border-radius: 8px; color: white;
-        font-weight: bold; text-align: center; margin-bottom: 0.5rem;
-    }
-    .color-legend {
-        margin: 1rem 0; padding: 1rem; background: #000000;
-        border-radius: 8px; color: white !important;
-    }
-    .hit-probability { font-size: 1.2em; font-weight: bold; color: #28a745; }
+/* ── layout ── */
+.block-container { padding-top: 1.5rem; }
+
+/* ── score cards ── */
+.card {
+    padding: 0.9rem 1rem;
+    border-radius: 10px;
+    color: white;
+    margin: 0.35rem 0;
+    box-shadow: 0 3px 8px rgba(0,0,0,.18);
+}
+.card h4 { margin: 0 0 .3rem 0; font-size: .85rem; opacity: .9; }
+.card h2 { margin: 0; font-size: 1.6rem; font-weight: 800; }
+.card small { opacity: .75; font-size: .75rem; }
+
+.card-blue   { background: linear-gradient(135deg,#2980b9,#6dd5fa); }
+.card-green  { background: linear-gradient(135deg,#11998e,#38ef7d); }
+.card-amber  { background: linear-gradient(135deg,#f7971e,#ffd200); color:#1a1a1a; }
+.card-red    { background: linear-gradient(135deg,#c0392b,#e74c3c); }
+.card-purple { background: linear-gradient(135deg,#667eea,#764ba2); }
+.card-teal   { background: linear-gradient(135deg,#43b89c,#7bd9c8); }
+
+/* ── staleness badge ── */
+.badge {
+    display:inline-block;
+    padding:.3rem .75rem;
+    border-radius:20px;
+    font-size:.8rem;
+    font-weight:700;
+    color:white;
+}
+.badge-green  { background:#27ae60; }
+.badge-yellow { background:#f39c12; color:#1a1a1a; }
+.badge-red    { background:#e74c3c; }
+
+/* ── park toggle notice ── */
+.park-notice {
+    background: #1a1a2e;
+    border-left: 4px solid #f7971e;
+    padding: .6rem 1rem;
+    border-radius: 0 6px 6px 0;
+    color: #ffd200;
+    font-size: .85rem;
+    margin: .5rem 0;
+}
+
+/* ── legend box ── */
+.legend {
+    background:#0d0d0d;
+    border-radius:8px;
+    padding:1rem 1.2rem;
+    color:#e0e0e0;
+    font-size:.83rem;
+    margin:1rem 0;
+    line-height:1.8;
+}
+
+/* ── matchup grade colours (used inline) ── */
+.grade-ap { background:#1a9641; color:white; padding:2px 6px; border-radius:4px; font-weight:700; }
+.grade-a  { background:#a6d96a; color:#111;  padding:2px 6px; border-radius:4px; font-weight:700; }
+.grade-b  { background:#ffffbf; color:#111;  padding:2px 6px; border-radius:4px; }
+.grade-c  { background:#fdae61; color:#111;  padding:2px 6px; border-radius:4px; }
+.grade-d  { background:#d7191c; color:white; padding:2px 6px; border-radius:4px; font-weight:700; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# =============================================================================
-# DATA LOADING & VALIDATION
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def card(css_class: str, icon: str, title: str, value: str, subtitle: str = "") -> str:
+    """Return an HTML metric card."""
+    sub = f"<small>{subtitle}</small>" if subtitle else ""
+    return f"""
+    <div class="card {css_class}">
+        <h4>{icon} {title}</h4>
+        <h2>{value}</h2>
+        {sub}
+    </div>"""
+
+
+def normalize_0_100(series: pd.Series) -> pd.Series:
+    """Min-max normalise a series to 0–100, return 50 if flat."""
+    mn, mx = series.min(), series.max()
+    if mx == mn:
+        return pd.Series(50.0, index=series.index)
+    return ((series - mn) / (mx - mn) * 100).round(1)
+
+
+def staleness_badge() -> str:
+    if 'data_loaded_at' not in st.session_state:
+        return ""
+    mins = int((datetime.now() - st.session_state.data_loaded_at).total_seconds() / 60)
+    if mins < 5:
+        return f'<span class="badge badge-green">🟢 Data fresh ({mins}m ago)</span>'
+    elif mins < 12:
+        return f'<span class="badge badge-yellow">🟡 Data {mins}m old</span>'
+    else:
+        return f'<span class="badge badge-red">🔴 Data {mins}m old — consider refreshing</span>'
+
+
+def color_grade(val: str) -> str:
+    """CSS string for matchup grade cell colouring."""
+    mapping = {
+        'A+': 'background-color:#1a9641;color:white;font-weight:700',
+        'A':  'background-color:#a6d96a;color:#111;font-weight:700',
+        'B':  'background-color:#ffffbf;color:#111',
+        'C':  'background-color:#fdae61;color:#111',
+        'D':  'background-color:#d7191c;color:white;font-weight:700',
+    }
+    return mapping.get(str(val), '')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DATA LOADING
+# ─────────────────────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=CONFIG['cache_ttl'])
-def load_csv_with_validation(url, description, expected_columns, key_columns=None):
-    """Load and validate CSV data with comprehensive error handling."""
+def load_data(url: str) -> pd.DataFrame | None:
+    """Load and lightly validate the Matchups CSV."""
     try:
-        with st.spinner(f'Loading {description}...'):
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
-            df = pd.read_csv(StringIO(response.text))
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        df = pd.read_csv(StringIO(resp.text))
 
-            if df.empty:
-                st.error(f"❌ {description}: No data found")
-                return None
+        required = [
+            'Game', 'Team', 'Batter', 'Pitcher',
+            'HR Prob', 'XB Prob', '1B Prob', 'BB Prob', 'K Prob',
+            'HR Prob (no park)', 'XB Prob (no park)', '1B Prob (no park)',
+            'BB Prob (no park)', 'K Prob (no park)',
+            'RC', 'vs Grade',
+        ]
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            st.error(f"❌ Missing columns in CSV: {missing}")
+            return None
 
-            missing_cols = set(expected_columns) - set(df.columns)
-            if missing_cols:
-                st.error(f"❌ {description}: Missing columns {missing_cols}")
-                return None
+        # Strip whitespace from string columns
+        for col in ['Team', 'Batter', 'Pitcher', 'Game']:
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.strip()
 
-            key_cols = key_columns if key_columns is not None else ['Tm', 'Batter', 'Pitcher']
-            existing_key_cols = [col for col in key_cols if col in df.columns]
-            if existing_key_cols:
-                null_counts = df[existing_key_cols].isnull().sum()
-                if null_counts.any():
-                    problematic_cols = null_counts[null_counts > 0].index.tolist()
-                    st.error(f"❌ {description}: Null values in {problematic_cols}")
-                    return None
-
-            return df
-
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Network error loading {description}: {str(e)}")
-        return None
-    except Exception as e:
-        st.error(f"❌ Error processing {description}: {str(e)}")
-        return None
-
-
-def validate_merge_quality(prob_df, pct_df, merged_df):
-    """Validate the quality of the merge operation."""
-    original_count = len(prob_df)
-    merged_count = len(merged_df)
-
-    if merged_count < original_count:
-        lost_records = original_count - merged_count
-        st.warning(f"⚠️ Lost {lost_records} records during merge ({lost_records/original_count*100:.1f}%)")
-
-    merge_keys = ['Tm', 'Batter', 'Pitcher']
-    duplicates = merged_df.duplicated(subset=merge_keys).sum()
-    if duplicates > 0:
-        st.error(f"🔴 Found {duplicates} duplicate matchups after merge")
-
-    return merged_df
-
-
-# =============================================================================
-# PITCHER MATCHUP GRADES — SMOOTH INTERPOLATION + MULTIPLICATIVE MODIFIER
-# =============================================================================
-
-def calculate_pitcher_matchup_grades(df, profile_type):
-    """
-    Calculate pitcher matchup multipliers and grades using smooth linear interpolation.
-
-    CHANGES FROM V3:
-    - Hard threshold step functions replaced with np.interp smooth curves.
-      Example: previously 24.9% HR prob → 0 bonus, 25.0% → +15 (cliff).
-      Now the bonus scales continuously — no more cliff effects.
-    - Raw modifier mapped to a MULTIPLIER (0.85–1.18) for proportional impact.
-      A+ matchup multiplies score by 1.18. D matchup multiplies by 0.85.
-      This means elite players benefit MORE from great matchups (as they should).
-    """
-    # Initialize neutral defaults
-    df['pitcher_matchup_modifier'] = 0.0
-    df['pitcher_multiplier'] = 1.0
-    df['pitcher_matchup_grade'] = 'B'
-
-    required_cols = ['Walk_3Plus_Probability', 'HR_2Plus_Probability', 'Hit_8Plus_Probability']
-    if not all(col in df.columns for col in required_cols):
         return df
 
-    # Fill missing with neutral league averages
-    df['Walk_3Plus_Probability'] = df['Walk_3Plus_Probability'].fillna(15.0)
-    df['HR_2Plus_Probability']   = df['HR_2Plus_Probability'].fillna(12.0)
-    df['Hit_8Plus_Probability']  = df['Hit_8Plus_Probability'].fillna(18.0)
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Network error loading data: {e}")
+        return None
+    except Exception as e:
+        st.error(f"❌ Error processing data: {e}")
+        return None
 
-    # Walk penalty — smooth, applies to ALL profiles
-    # More walks = fewer PA ending in hits. Scales 0 to -8 across 0%–50% walk rate.
-    walk_penalty = np.interp(
-        df['Walk_3Plus_Probability'].values,
-        [0,  20,  30,  40,  50],
-        [0,  -2,  -4,  -6,  -8]
-    )
-    df['pitcher_matchup_modifier'] = walk_penalty
 
-    if profile_type == 'power':
-        # HR bonus — smooth, power profiles only
-        # HR-prone pitchers are better targets for power hitters.
-        # Scales from 0 (at 0% HR prob) to +15 (at 25%+ HR prob).
-        hr_bonus = np.interp(
-            df['HR_2Plus_Probability'].values,
-            [0,  10,  15,  20,  25],
-            [0,   4,   8,  12,  15]
+# ─────────────────────────────────────────────────────────────────────────────
+# METRIC COMPUTATION
+# Blends park + no-park versions, computes final Prob columns,
+# converts vs Grade → numeric modifier, historical tiebreaker.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_metrics(df: pd.DataFrame, use_park: bool) -> pd.DataFrame:
+    """
+    Derive the working probability columns the scoring engine needs.
+
+    With use_park=True  → average of (with-park) and (no-park) columns.
+    With use_park=False → use only the (no-park) columns.
+
+    Resulting columns (always present after this function):
+        p_hr, p_xb, p_1b, p_bb, p_k   — final probability values used in scoring
+        p_hr_park, p_hr_base           — for the park-impact display
+        p_xb_park, p_xb_base
+        p_1b_park, p_1b_base
+        vs_mod                         — vs Grade mapped to [-1, +1]
+        hist_bonus                     — small tiebreaker from AVG when PA ≥ 10
+        park_pct_hr / park_pct_xb / park_pct_1b  — % delta between park and base
+    """
+    df = df.copy()
+
+    stats = ['HR', 'XB', '1B', 'BB', 'K']
+    park_cols  = {s: f'{s} Prob'          for s in stats}
+    base_cols  = {s: f'{s} Prob (no park)' for s in stats}
+
+    for s in stats:
+        pc = park_cols[s]
+        bc = base_cols[s]
+        df[f'p_{s.lower()}_park'] = pd.to_numeric(df[pc], errors='coerce').fillna(0)
+        df[f'p_{s.lower()}_base'] = pd.to_numeric(df[bc], errors='coerce').fillna(0)
+
+        if use_park:
+            # Blend: straight average of park-adjusted and pure base
+            df[f'p_{s.lower()}'] = (
+                df[f'p_{s.lower()}_park'] + df[f'p_{s.lower()}_base']
+            ) / 2
+        else:
+            df[f'p_{s.lower()}'] = df[f'p_{s.lower()}_base']
+
+    # Park impact % for the park-delta display
+    # How much does the park version differ from the base version (as % of base)
+    for s in ['hr', 'xb', '1b']:
+        base = df[f'p_{s}_base']
+        park = df[f'p_{s}_park']
+        # Positive = park boosts, negative = park suppresses
+        df[f'park_delta_{s}'] = np.where(
+            base > 0,
+            ((park - base) / base * 100).round(1),
+            0.0
         )
-        df['pitcher_matchup_modifier'] += hr_bonus
-    else:
-        # Hit bonus — smooth, contact profiles only
-        # Hit-friendly pitchers are better targets for contact hitters.
-        # Scales from 0 (at 0% hit prob) to +12 (at 25%+ hit prob).
-        hit_bonus = np.interp(
-            df['Hit_8Plus_Probability'].values,
-            [0,  10,  15,  20,  25],
-            [0,   3,   6,   9,  12]
-        )
-        df['pitcher_matchup_modifier'] += hit_bonus
 
-    # Map raw modifier → proportional multiplier
-    # Modifier range -8 to +15 → Multiplier 0.85 to 1.18
-    df['pitcher_multiplier'] = np.interp(
-        df['pitcher_matchup_modifier'].values,
-        [-8,   -5,   0,    5,    10,   15],
-        [0.85, 0.91, 1.0,  1.08, 1.13, 1.18]
+    # vs Grade → moderate continuous modifier [-1, +1] scaled from [-10, +10]
+    df['vs_mod'] = pd.to_numeric(df['vs Grade'], errors='coerce').fillna(0).clip(-10, 10) / 10
+
+    # RC as a quality signal (normalised to 0–1 range for use as a small weight)
+    rc_col = 'RC' if use_park else 'RC (no park)'
+    if rc_col not in df.columns:
+        rc_col = 'RC'
+    df['rc_norm'] = pd.to_numeric(df[rc_col], errors='coerce').fillna(0)
+
+    # Historical tiebreaker: only activated when PA ≥ threshold
+    df['PA']  = pd.to_numeric(df['PA'],  errors='coerce').fillna(0)
+    df['AVG'] = pd.to_numeric(df['AVG'], errors='coerce').fillna(0)
+
+    df['hist_bonus'] = np.where(
+        df['PA'] >= CONFIG['hist_min_pa'],
+        (df['AVG'] * CONFIG['hist_bonus_max']).round(2),
+        0.0
     )
 
-    # Grade from multiplier
-    conditions = [
-        df['pitcher_multiplier'] >= 1.12,
-        df['pitcher_multiplier'] >= 1.06,
-        df['pitcher_multiplier'] >= 0.97,
-        df['pitcher_multiplier'] >= 0.90
-    ]
-    df['pitcher_matchup_grade'] = np.select(
-        conditions, ['A+', 'A', 'B', 'C'], default='D'
-    )
+    # Ensure Starter is numeric
+    df['Starter'] = pd.to_numeric(df['Starter'], errors='coerce').fillna(0).astype(int)
 
     return df
 
 
-# =============================================================================
-# SCORING ENGINE — COMPOSITE + THREE PURPOSE-BUILT SCORES
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# SCORING ENGINE
+# Four purpose-built scores, each normalised to 0–100.
+# Park contribution and base score tracked separately for the park display.
+# ─────────────────────────────────────────────────────────────────────────────
 
-def calculate_league_aware_scores(df, profile_type='contact'):
+def compute_scores(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Four output scores:
+    Produces four score columns, each 0–100:
 
-      Score     — General composite (profile-aware, V3 structure preserved)
-      Hit_Score — Optimized for base hits (singles focus, heavy K penalty)
-      XB_Score  — Optimized for extra base hits (doubles/triples focus)
-      HR_Score  — Optimized for home runs (HR focus, light K penalty)
+    Hit_Score
+        Goal : identify who is most likely to get ANY base hit today
+        Drivers : p_1b (heaviest) + p_xb + p_hr (all contribute to hit probability)
+        Penalties: p_k (heavy — a K means no hit) + p_bb (moderate — a walk isn't a hit)
+        vs/RC    : supporting signal
 
-    CHANGES FROM V3:
-    1. Pitcher modifier is now MULTIPLICATIVE not additive.
-       (base_score + bonuses) × pitcher_multiplier
-       Proportional effect: elite players gain more from A+ matchups.
-    2. Three dedicated scores surface the right player for each bet type
-       without needing to reverse-engineer a single blended number.
-    3. Composite Score structure (weights, bonuses, league anchoring) is
-       preserved exactly from V3 — only the pitcher application changed.
+    Single_Score
+        Goal : identify who is most likely to get a SINGLE specifically
+        Drivers : p_1b (dominant)
+        Penalties: p_k (heavy) + p_bb (moderate) + p_xb (light negative — big XB swing
+                   means the ball leaves the park or goes for extra bases, not a clean single)
+                   + p_hr (penalty — HR swing path ≠ single)
+        Logic   : A pure singles hitter stays in the park. If a guy's XB% and HR% are high,
+                  the ball probably isn't dropping in for a single.
+
+    XB_Score
+        Goal : identify who is most likely to hit a DOUBLE or TRIPLE
+        Drivers : p_xb (dominant)
+        Penalties: p_k (moderate — XB hitters swing harder, more K is acceptable)
+                   + p_bb (same moderate as others — walks block plate appearances)
+        Supporting: p_hr (same power swing path) + vs_mod + rc_norm
+
+    HR_Score
+        Goal : identify who is most likely to hit a HOME RUN
+        Drivers : p_hr (dominant)
+        Penalties: p_k (LIGHT — elite HR hitters naturally K more, don't punish them heavily)
+                   + p_bb (moderate — same reason as all scores)
+        Supporting: p_xb (same power swing), vs_mod, rc_norm
+
+    All four scores also receive:
+        + vs_mod bonus  (–1 to +1, scaled small so it doesn't dominate)
+        + hist_bonus    (only when PA ≥ 10 vs this pitcher; max 3 pts before normalisation)
     """
+    df = df.copy()
 
-    df = calculate_pitcher_matchup_grades(df, profile_type)
+    # ── shared small modifiers ──────────────────────────────────────────────
+    # vs Grade contribution: +/- up to 2 raw score points (won't dominate)
+    vs_contrib = df['vs_mod'] * 2.0
 
-    if 'pitcher_multiplier' not in df.columns:
-        df['pitcher_multiplier'] = 1.0
-
-    # -------------------------------------------------------------------------
-    # COMPOSITE SCORE — Profile-aware (V3 structure preserved)
-    # -------------------------------------------------------------------------
-    if profile_type == 'power':
-        weights = {
-            'adj_XB': 3.0,
-            'adj_HR': 2.5,
-            'adj_vs': 1.5,
-            'adj_RC': 1.0,
-            'adj_1B': 0.5,
-            'adj_K':  -1.0,
-            'adj_BB': -0.3
-        }
-        df['power_bonus']           = np.where((df['adj_XB'] > 10) & (df['adj_HR'] > 4), 12, 0)
-        df['clutch_power_bonus']    = np.where((df['adj_XB'] > 8)  & (df['adj_vs'] > 5), 8, 0)
-        df['consistent_power_bonus']= np.where((df['adj_HR'] > 3)  & (df['adj_K'] < 25), 5, 0)
-        df['power_prob']            = (df['adj_XB'] + df['adj_HR']).clip(upper=50)
-        bonus_cols = ['power_bonus', 'clutch_power_bonus', 'consistent_power_bonus']
+    # RC contribution: small quality signal, normalised to -1..+1 range
+    rc_min, rc_max = df['rc_norm'].min(), df['rc_norm'].max()
+    if rc_max > rc_min:
+        rc_contrib = ((df['rc_norm'] - rc_min) / (rc_max - rc_min) * 2) - 1  # -1..+1
     else:
-        weights = {
-            'adj_1B': 2.0,
-            'adj_XB': 1.8,
-            'adj_vs': 1.2,
-            'adj_RC': 0.8,
-            'adj_HR': 0.6,
-            'adj_K':  -2.0,
-            'adj_BB': -0.8
-        }
-        df['contact_bonus']     = np.where((df['total_hit_prob'] > 40) & (df['adj_K'] < 18), 8, 0)
-        df['consistency_bonus'] = np.where((df['adj_1B'] > 20) & (df['adj_XB'] > 8), 5, 0)
-        df['matchup_bonus']     = np.where(df['adj_vs'] > 5, 3, 0)
-        bonus_cols = ['contact_bonus', 'consistency_bonus', 'matchup_bonus']
+        rc_contrib = pd.Series(0.0, index=df.index)
 
-    df['base_score'] = sum(df[col] * w for col, w in weights.items() if col in df.columns)
-    bonus_sum = sum(df[col] for col in bonus_cols if col in df.columns)
-
-    # Multiplicative pitcher application
-    df['Score'] = (df['base_score'] + bonus_sum) * df['pitcher_multiplier']
-    s_min, s_max = df['Score'].min(), df['Score'].max()
-    df['Score'] = ((df['Score'] - s_min) / (s_max - s_min) * 100) if s_max != s_min else 50
-
-    # -------------------------------------------------------------------------
-    # HIT_SCORE — Optimized for base hits
-    # Primary: adj_1B (singles — the purest base hit signal)
-    # Secondary: adj_XB + adj_HR (also count as base hits)
-    # Penalty: adj_K gets the heaviest weight of the three scores
-    #          because strikeouts are the #1 enemy of base hits
-    # -------------------------------------------------------------------------
-    hit_weights = {
-        'adj_1B': 3.5,
-        'adj_XB': 2.0,
-        'adj_HR': 1.0,
-        'adj_vs': 1.5,
-        'adj_RC': 0.8,
-        'adj_K':  -2.5,
-        'adj_BB': -1.0
-    }
-    df['hit_base'] = sum(df[col] * w for col, w in hit_weights.items() if col in df.columns)
-    df['Hit_Score'] = df['hit_base'] * df['pitcher_multiplier']
-    h_min, h_max = df['Hit_Score'].min(), df['Hit_Score'].max()
-    df['Hit_Score'] = ((df['Hit_Score'] - h_min) / (h_max - h_min) * 100) if h_max != h_min else 50
-
-    # -------------------------------------------------------------------------
-    # XB_SCORE — Optimized for extra base hits (doubles / triples)
-    # Primary: adj_XB rate directly from BallPark Pal simulations
-    # Moderate K penalty — XB hitters can carry higher K rates than contact guys
-    # -------------------------------------------------------------------------
-    xb_weights = {
-        'adj_XB': 5.0,
-        'adj_vs': 1.5,
-        'adj_RC': 1.0,
-        'adj_1B': 0.5,
-        'adj_HR': 0.3,
-        'adj_K':  -1.5,
-        'adj_BB': -0.5
-    }
-    df['xb_base'] = sum(df[col] * w for col, w in xb_weights.items() if col in df.columns)
-    df['XB_Score'] = df['xb_base'] * df['pitcher_multiplier']
-    xb_min, xb_max = df['XB_Score'].min(), df['XB_Score'].max()
-    df['XB_Score'] = ((df['XB_Score'] - xb_min) / (xb_max - xb_min) * 100) if xb_max != xb_min else 50
-
-    # -------------------------------------------------------------------------
-    # HR_SCORE — Optimized for home runs
-    # Primary: adj_HR anchored to 2024 MLB league averages (your existing logic)
-    # Light K penalty — HR hitters naturally strike out more; penalizing them
-    # heavily would wrongly discount legitimate power bats
-    # -------------------------------------------------------------------------
-    hr_weights = {
-        'adj_HR': 5.5,
-        'adj_XB': 1.5,
-        'adj_vs': 1.5,
-        'adj_RC': 0.8,
-        'adj_1B': 0.2,
-        'adj_K':  -0.8,
-        'adj_BB': -0.3
-    }
-    df['hr_base'] = sum(df[col] * w for col, w in hr_weights.items() if col in df.columns)
-    df['HR_Score'] = df['hr_base'] * df['pitcher_multiplier']
-    hr_min, hr_max = df['HR_Score'].min(), df['HR_Score'].max()
-    df['HR_Score'] = ((df['HR_Score'] - hr_min) / (hr_max - hr_min) * 100) if hr_max != hr_min else 50
-
-    return df.round(1)
-
-
-# =============================================================================
-# DATA PIPELINE
-# =============================================================================
-
-@st.cache_data(ttl=CONFIG['cache_ttl'])
-def load_and_process_data():
-    """Enhanced data loading with pitcher matchup data integration."""
-
-    prob_df = load_csv_with_validation(
-        CONFIG['csv_urls']['probabilities'],
-        "Base Probabilities",
-        CONFIG['expected_columns'],
-        key_columns=['Tm', 'Batter', 'Pitcher']
+    # ── HIT SCORE ────────────────────────────────────────────────────────────
+    hit_raw = (
+          df['p_1b']  * 3.0    # Singles — most common hit type, primary driver
+        + df['p_xb']  * 2.0    # XBs — also base hits
+        + df['p_hr']  * 1.0    # HRs — also base hits
+        - df['p_k']   * 2.5    # K = no hit, heaviest penalty
+        - df['p_bb']  * 1.0    # BB = not a hit, moderate penalty
+        + vs_contrib  * 1.0    # matchup quality
+        + rc_contrib  * 0.5    # overall matchup context
+        + df['hist_bonus']
     )
-    pct_df = load_csv_with_validation(
-        CONFIG['csv_urls']['percent_change'],
-        "Adjustment Factors",
-        CONFIG['expected_columns'],
-        key_columns=['Tm', 'Batter', 'Pitcher']
+    df['Hit_Score'] = normalize_0_100(hit_raw)
+
+    # ── SINGLE SCORE ─────────────────────────────────────────────────────────
+    single_raw = (
+          df['p_1b']  * 5.0    # Singles — the entire point, dominant weight
+        - df['p_k']   * 2.5    # K = no hit, same heavy penalty as Hit Score
+        - df['p_bb']  * 1.0    # BB = not a single, moderate penalty
+        - df['p_xb']  * 0.8    # High XB% means the ball carries — bad for singles
+        - df['p_hr']  * 0.5    # High HR% swing path conflicts with singles
+        + vs_contrib  * 0.8
+        + rc_contrib  * 0.4
+        + df['hist_bonus']
     )
+    df['Single_Score'] = normalize_0_100(single_raw)
 
-    if prob_df is None or pct_df is None:
-        st.error("❌ Failed to load required data files")
-        return None
+    # ── XB SCORE ─────────────────────────────────────────────────────────────
+    xb_raw = (
+          df['p_xb']  * 5.0    # Extra base hits — dominant driver
+        + df['p_hr']  * 0.8    # Same power swing path, supporting signal
+        - df['p_k']   * 1.5    # Moderate penalty (XB hitters swing harder, more K ok)
+        - df['p_bb']  * 1.0    # BB same moderate penalty as always
+        + vs_contrib  * 1.2    # matchup matters for hard contact
+        + rc_contrib  * 0.6
+        + df['hist_bonus']
+    )
+    df['XB_Score'] = normalize_0_100(xb_raw)
 
-    try:
-        merged_df = pd.merge(
-            prob_df, pct_df,
-            on=['Tm', 'Batter', 'Pitcher'],
-            suffixes=('_prob', '_pct'),
-            how='inner'
-        )
-        merged_df = validate_merge_quality(prob_df, pct_df, merged_df)
-    except Exception as e:
-        st.error(f"❌ Failed to merge datasets: {str(e)}")
-        return None
+    # ── HR SCORE ─────────────────────────────────────────────────────────────
+    hr_raw = (
+          df['p_hr']  * 6.0    # Home runs — everything
+        + df['p_xb']  * 0.8    # Same power swing, supporting signal
+        - df['p_k']   * 0.8    # LIGHT penalty — HR hitters K more, that's fine
+        - df['p_bb']  * 1.0    # Same moderate penalty as all scores
+        + vs_contrib  * 1.5    # pitcher matchup is extra critical for HRs
+        + rc_contrib  * 0.5
+        + df['hist_bonus']
+    )
+    df['HR_Score'] = normalize_0_100(hr_raw)
 
-    pitcher_data = load_pitcher_matchup_data()
+    # ── Park contribution tracking ────────────────────────────────────────────
+    # For the park-delta display: what % of the blended score comes from park adjustment
+    # We calculate the score using ONLY base (no park) and compare to blended
+    hit_base_raw = (
+          df['p_1b_base'] * 3.0
+        + df['p_xb_base'] * 2.0
+        + df['p_hr_base'] * 1.0
+        - df['p_k_base']  * 2.5
+        - df['p_bb_base'] * 1.0
+        + vs_contrib
+        + rc_contrib * 0.5
+        + df['hist_bonus']
+    )
+    df['Hit_Score_base'] = normalize_0_100(hit_base_raw)
 
-    if pitcher_data is not None and not pitcher_data.empty:
-        try:
-            merged_df = pd.merge(
-                merged_df, pitcher_data,
-                left_on=['Tm', 'Pitcher'],
-                right_on=['Opponent_Team', 'Pitcher_Name'],
-                how='left'
-            )
-        except Exception as e:
-            st.warning(f"⚠️ Pitcher data merge failed: {str(e)} - continuing without pitcher bonuses")
-    else:
-        merged_df['Walk_3Plus_Probability'] = 15.0
-        merged_df['HR_2Plus_Probability']   = 12.0
-        merged_df['Hit_8Plus_Probability']  = 18.0
-        st.info("ℹ️ Using base analysis - pitcher matchup data not available")
+    single_base_raw = (
+          df['p_1b_base'] * 5.0
+        - df['p_k_base']  * 2.5
+        - df['p_bb_base'] * 1.0
+        - df['p_xb_base'] * 0.8
+        - df['p_hr_base'] * 0.5
+        + vs_contrib * 0.8
+        + rc_contrib * 0.4
+        + df['hist_bonus']
+    )
+    df['Single_Score_base'] = normalize_0_100(single_base_raw)
 
-    metrics = ['1B', 'XB', 'vs', 'K', 'BB', 'HR', 'RC']
+    xb_base_raw = (
+          df['p_xb_base'] * 5.0
+        + df['p_hr_base'] * 0.8
+        - df['p_k_base']  * 1.5
+        - df['p_bb_base'] * 1.0
+        + vs_contrib * 1.2
+        + rc_contrib * 0.6
+        + df['hist_bonus']
+    )
+    df['XB_Score_base'] = normalize_0_100(xb_base_raw)
 
-    for metric in metrics:
-        base_col = f'{metric}.1' if metric in ['K', 'BB'] else f'{metric}_prob'
-        pct_col  = f'{metric}_pct'
+    hr_base_raw = (
+          df['p_hr_base'] * 6.0
+        + df['p_xb_base'] * 0.8
+        - df['p_k_base']  * 0.8
+        - df['p_bb_base'] * 1.0
+        + vs_contrib * 1.5
+        + rc_contrib * 0.5
+        + df['hist_bonus']
+    )
+    df['HR_Score_base'] = normalize_0_100(hr_base_raw)
 
-        if base_col in merged_df.columns and pct_col in merged_df.columns:
-            merged_df[f'adj_{metric}'] = merged_df[base_col] * (1 + merged_df[pct_col] / 100)
-            if metric in ['K', 'BB', '1B', 'XB', 'HR']:
-                merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0, upper=100)
-            else:
-                merged_df[f'adj_{metric}'] = merged_df[f'adj_{metric}'].clip(lower=0)
-        else:
-            st.warning(f"⚠️ Using fallback for {metric} - columns {base_col} or {pct_col} not found")
-            merged_df[f'adj_{metric}'] = 20 if metric in ['K', 'BB'] else 0
-
-    merged_df['total_hit_prob'] = (merged_df['adj_1B'] + merged_df['adj_XB'] + merged_df['adj_HR']).clip(upper=100)
-    merged_df['power_combo']    = merged_df['adj_XB'] + merged_df['adj_HR']
-
-    return merged_df
-
-
-def load_pitcher_matchup_data():
-    """Load and combine all pitcher matchup datasets."""
-    try:
-        walks_df = load_csv_with_validation(
-            CONFIG['csv_urls']['pitcher_walks'], "Pitcher Walks Data",
-            CONFIG['pitcher_columns']['walks'], key_columns=['Team', 'Name']
-        )
-        hrs_df = load_csv_with_validation(
-            CONFIG['csv_urls']['pitcher_hrs'], "Pitcher HR Data",
-            CONFIG['pitcher_columns']['hrs'], key_columns=['Team', 'Name']
-        )
-        hits_df = load_csv_with_validation(
-            CONFIG['csv_urls']['pitcher_hits'], "Pitcher Hits Data",
-            CONFIG['pitcher_columns']['hits'], key_columns=['Team', 'Name']
-        )
-
-        if walks_df is None or hrs_df is None or hits_df is None:
-            st.info("ℹ️ Some pitcher data unavailable - using base analysis only")
-            return None
-
-        def clean_prob_column(df, new_col_name):
-            df = df.copy()
-            df['Prob_Clean'] = pd.to_numeric(
-                df['Prob'].astype(str).str.replace('%', '').str.strip(),
-                errors='coerce'
-            )
-            df = df.rename(columns={'Prob_Clean': new_col_name})
-            df['Pitcher_LastName'] = df['Name'].str.split().str[-1]
-            return df[['Team', 'Name', 'Pitcher_LastName', 'Park', new_col_name]]
-
-        walks_clean = clean_prob_column(walks_df, 'Walk_3Plus_Probability')
-        hrs_clean   = clean_prob_column(hrs_df,   'HR_2Plus_Probability')
-        hits_clean  = clean_prob_column(hits_df,  'Hit_8Plus_Probability')
-
-        pitcher_data = pd.merge(walks_clean, hrs_clean,
-                                on=['Team', 'Pitcher_LastName', 'Park'], how='outer')
-        pitcher_data = pd.merge(pitcher_data, hits_clean,
-                                on=['Team', 'Pitcher_LastName', 'Park'], how='outer')
-
-        pitcher_data['Walk_3Plus_Probability'] = pitcher_data['Walk_3Plus_Probability'].fillna(15)
-        pitcher_data['HR_2Plus_Probability']   = pitcher_data['HR_2Plus_Probability'].fillna(12)
-        pitcher_data['Hit_8Plus_Probability']  = pitcher_data['Hit_8Plus_Probability'].fillna(18)
-
-        pitcher_data = pitcher_data.rename(columns={
-            'Team':           'Pitcher_Team',
-            'Pitcher_LastName':'Pitcher_Name',
-            'Park':            'Opponent_Team'
-        })
-
-        return pitcher_data
-
-    except Exception as e:
-        st.warning(f"⚠️ Could not load pitcher data: {str(e)} - continuing with base analysis")
-        return None
+    return df
 
 
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 # FILTERS
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 
-def create_league_aware_filters(df=None):
-    """Create baseball-intelligent filtering system based on league averages and player types."""
-    st.sidebar.header("🎯 Baseball-Smart Filters")
+def build_filters(df: pd.DataFrame) -> dict:
+    """Render sidebar filters and return a filter config dict."""
 
+    st.sidebar.title("🏟️ A1PICKS Filters")
+    st.sidebar.markdown("---")
+
+    filters = {}
+
+    # ── Score type / target ───────────────────────────────────────────────────
+    st.sidebar.markdown("### 🎯 Betting Target")
+
+    target_map = {
+        "🎯 Hit Score  — Any Base Hit":     "hit",
+        "1️⃣ Single Score — Single Specifically": "single",
+        "🔥 XB Score  — Double / Triple":  "xb",
+        "💣 HR Score  — Home Run":          "hr",
+    }
+    selected_label = st.sidebar.selectbox(
+        "Choose Your Betting Target",
+        list(target_map.keys()),
+        help="Each target weights the data differently based on what outcome you're betting on."
+    )
+    filters['target'] = target_map[selected_label]
+
+    score_col_map = {
+        'hit':    'Hit_Score',
+        'single': 'Single_Score',
+        'xb':     'XB_Score',
+        'hr':     'HR_Score',
+    }
+    filters['score_col'] = score_col_map[filters['target']]
+
+    # ── Park adjustment toggle ────────────────────────────────────────────────
+    st.sidebar.markdown("### 🏟️ Park Adjustment")
+    filters['use_park'] = st.sidebar.toggle(
+        "Include Park Factors",
+        value=True,
+        help=(
+            "ON  → Blends park-adjusted + base probabilities. "
+            "Includes ballpark dimensions, weather, etc.\n\n"
+            "OFF → Uses base probabilities only (pure player vs pitcher)."
+        )
+    )
+
+    # ── Starter filter ────────────────────────────────────────────────────────
+    st.sidebar.markdown("### ⚾ Pitcher Type")
+    filters['starters_only'] = st.sidebar.checkbox(
+        "Starters only (exclude relievers)",
+        value=False,
+        help="Only include matchups against starting pitchers."
+    )
+
+    # ── K% / BB% hard caps ───────────────────────────────────────────────────
+    st.sidebar.markdown("### 📊 Stat Filters")
+
+    filters['max_k'] = st.sidebar.slider(
+        "Max K Prob %",
+        min_value=10.0, max_value=50.0,
+        value=35.0, step=0.5,
+        help="Filter out batters with K probability above this threshold."
+    )
+
+    filters['max_bb'] = st.sidebar.slider(
+        "Max BB Prob %",
+        min_value=2.0, max_value=20.0,
+        value=15.0, step=0.5,
+        help="Filter out batters with walk probability above this threshold."
+    )
+
+    # Target-specific minimum probability
+    min_prob_labels = {
+        'hit':    ("Min Hit Prob % (1B+XB+HR)", "total_hit_prob"),
+        'single': ("Min 1B Prob %",             "p_1b"),
+        'xb':     ("Min XB Prob %",             "p_xb"),
+        'hr':     ("Min HR Prob %",             "p_hr"),
+    }
+    prob_label, prob_col = min_prob_labels[filters['target']]
+
+    # Sensible defaults per target
+    defaults = {'hit': 20.0, 'single': 10.0, 'xb': 4.0, 'hr': 2.0}
+    max_vals  = {'hit': 50.0, 'single': 30.0, 'xb': 12.0, 'hr': 8.0}
+
+    filters['min_prob']     = st.sidebar.slider(
+        prob_label,
+        min_value=0.0,
+        max_value=max_vals[filters['target']],
+        value=defaults[filters['target']],
+        step=0.5,
+    )
+    filters['min_prob_col'] = prob_col
+
+    # vs Grade minimum
+    filters['min_vs'] = st.sidebar.slider(
+        "Min vs Grade",
+        min_value=-10, max_value=10,
+        value=-10, step=1,
+        help="Filter by minimum Batter vs Pitcher on-paper rating."
+    )
+
+    # ── Team filters ──────────────────────────────────────────────────────────
+    st.sidebar.markdown("### 🏟️ Team Filters")
+    all_teams = sorted(df['Team'].unique().tolist()) if df is not None else []
+
+    filters['include_teams'] = st.sidebar.multiselect(
+        "Include Only Teams",
+        options=all_teams,
+        help="Leave blank to include all teams."
+    )
+    filters['exclude_teams'] = st.sidebar.multiselect(
+        "Exclude Teams",
+        options=all_teams,
+    )
+
+    # ── Lineup exclusions ─────────────────────────────────────────────────────
+    st.sidebar.markdown("### 🚫 Lineup Status")
     if 'excluded_players' not in st.session_state:
         st.session_state.excluded_players = []
 
-    if st.session_state.get('clear_exclusions', False):
+    all_players = sorted(df['Batter'].unique().tolist()) if df is not None else []
+    selected_exclusions = st.sidebar.multiselect(
+        "Players NOT Playing Today",
+        options=all_players,
+        default=st.session_state.excluded_players,
+        help="Exclude confirmed scratches / injured players.",
+        key="lineup_exclusions"
+    )
+    st.session_state.excluded_players = selected_exclusions
+    filters['excluded_players'] = selected_exclusions
+
+    if st.sidebar.button("🔄 Clear All Exclusions"):
         st.session_state.excluded_players = []
-        st.session_state.clear_exclusions = False
+        st.rerun()
 
-    if 'quick_exclude_players' in st.session_state:
-        for player in st.session_state.quick_exclude_players:
-            if player not in st.session_state.excluded_players:
-                st.session_state.excluded_players.append(player)
-        st.session_state.quick_exclude_players = []
+    # ── Sort & display count ──────────────────────────────────────────────────
+    st.sidebar.markdown("### 🔢 Display")
 
-    LEAGUE_K_AVG  = 22.6
-    LEAGUE_BB_AVG = 8.5
-    filters = {}
-
-    st.sidebar.markdown("### **📊 2024 League Context**")
-    st.sidebar.markdown(f"- **K% League Avg**: {LEAGUE_K_AVG}%\n- **BB% League Avg**: {LEAGUE_BB_AVG}%")
-
-    if df is not None and not df.empty:
-        st.sidebar.markdown(f"**📈 Today's Pool:** {len(df)} matchups")
-        avg_k  = df['adj_K'].mean()  if 'adj_K'  in df.columns else 0
-        avg_bb = df['adj_BB'].mean() if 'adj_BB' in df.columns else 0
-        st.sidebar.markdown(f"**Today's Avg K%:** {avg_k:.1f}%")
-        st.sidebar.markdown(f"**Today's Avg BB%:** {avg_bb:.1f}%")
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### **🎯 Player Type Focus**")
-
-    player_type_options = {
-        "🏆 Contact-Aggressive Hitters": {
-            'description': "Low K% + Low BB% (Elite for base hits)",
-            'max_k': 19.0, 'max_bb': 7.0, 'min_hit_prob': 32, 'profile_type': 'contact'
-        },
-        "⭐ Elite Contact Specialists": {
-            'description': "Ultra-low K% (Pure contact)",
-            'max_k': 14.0, 'max_bb': 9.5, 'min_hit_prob': 28, 'profile_type': 'contact'
-        },
-        "⚡ Swing-Happy Hitters": {
-            'description': "Ultra-low BB% (Aggressive approach)",
-            'max_k': 24.0, 'max_bb': 5.0, 'min_hit_prob': 30, 'profile_type': 'contact'
-        },
-        "🔷 Above-Average Contact": {
-            'description': "Better than league average K%",
-            'max_k': 20.0, 'max_bb': 12.0, 'min_hit_prob': 25, 'profile_type': 'contact'
-        },
-        "💥 Contact Power Hitters": {
-            'description': "Low K% + High XB% & HR% (Power with contact)",
-            'max_k': 20.0, 'max_bb': 12.0, 'min_xb': 7.0, 'min_hr': 2.5,
-            'min_vs': -5, 'profile_type': 'power'
-        },
-        "🚀 Pure Power Sluggers": {
-            'description': "High XB% & HR% (Power over contact)",
-            'max_k': 100, 'max_bb': 100, 'min_xb': 9.0, 'min_hr': 3.5,
-            'min_vs': -10, 'profile_type': 'power'
-        },
-        "⚾ All Power Players": {
-            'description': "All players ranked by power potential (Research mode)",
-            'max_k': 100, 'max_bb': 100, 'min_xb': 0, 'min_hr': 0,
-            'min_vs': -10, 'profile_type': 'power'
-        },
-        "🌐 All Players": {
-            'description': "No restrictions",
-            'max_k': 100, 'max_bb': 100, 'min_hit_prob': 20, 'profile_type': 'all'
-        }
+    sort_options = {
+        "Score (High→Low)":     (filters['score_col'], False),
+        "Hit Prob % (High→Low)": ("total_hit_prob",    False),
+        "1B Prob % (High→Low)":  ("p_1b",              False),
+        "XB Prob % (High→Low)":  ("p_xb",              False),
+        "HR Prob % (High→Low)":  ("p_hr",              False),
+        "K Prob % (Low→High)":   ("p_k",               True),
+        "BB Prob % (Low→High)":  ("p_bb",              True),
+        "vs Grade (High→Low)":   ("vs Grade",          False),
     }
+    filters['sort_label'] = st.sidebar.selectbox("Sort By", list(sort_options.keys()))
+    filters['sort_col'], filters['sort_asc'] = sort_options[filters['sort_label']]
 
-    selected_type = st.sidebar.selectbox(
-        "Choose Hitter Profile",
-        options=list(player_type_options.keys()),
-        index=0,
-        help="Each profile targets different hitting approaches based on league averages"
+    filters['result_count'] = st.sidebar.selectbox(
+        "Show Top N",
+        options=[5, 10, 15, 20, 25, 30, "All"],
+        index=2,
     )
 
-    type_config = player_type_options[selected_type]
-    filters['max_k']        = type_config['max_k']
-    filters['max_bb']       = type_config['max_bb']
-    filters['profile_type'] = type_config['profile_type']
-
-    if type_config['profile_type'] == 'power':
-        filters['min_xb']       = type_config.get('min_xb', 0)
-        filters['min_hr']       = type_config.get('min_hr', 0)
-        filters['min_vs']       = type_config.get('min_vs', -10)
-        filters['min_hit_prob'] = 0
-    else:
-        filters['min_hit_prob'] = type_config.get('min_hit_prob', 20)
-        filters['min_xb'] = 0
-        filters['min_hr'] = 0
-        filters['min_vs'] = -10
-
-    st.sidebar.markdown(f"**📋 {selected_type}**")
-    st.sidebar.markdown(f"*{type_config['description']}*")
-    st.sidebar.markdown(f"- Max K%: {filters['max_k']:.1f}%")
-    st.sidebar.markdown(f"- Max BB%: {filters['max_bb']:.1f}%")
-
-    if type_config['profile_type'] == 'power':
-        st.sidebar.markdown(f"- Min XB%: {filters['min_xb']:.1f}%")
-        st.sidebar.markdown(f"- Min HR%: {filters['min_hr']:.1f}%")
-        st.sidebar.markdown(f"- Min vs Pitcher: {filters['min_vs']}")
-    else:
-        st.sidebar.markdown(f"- Min Hit Prob: {filters['min_hit_prob']}%")
-
-    # ADVANCED OPTIONS
-    with st.sidebar.expander("⚙️ Fine-Tune Filters"):
-        max_k_value  = float(max(5.0,  min(35.0, filters['max_k'])))
-        max_bb_value = float(max(2.0,  min(15.0, filters['max_bb'])))
-
-        filters['custom_max_k'] = st.slider(
-            "Custom Max K% Override", 5.0, 35.0, max_k_value, 0.5,
-            help=f"League avg: {LEAGUE_K_AVG}% | Elite: ≤12.0%"
-        )
-        filters['custom_max_bb'] = st.slider(
-            "Custom Max BB% Override", 2.0, 15.0, max_bb_value, 0.5,
-            help=f"League avg: {LEAGUE_BB_AVG}% | Aggressive: ≤4.0%"
-        )
-
-        if filters['custom_max_k']  != filters['max_k']:  filters['max_k']  = filters['custom_max_k']
-        if filters['custom_max_bb'] != filters['max_bb']: filters['max_bb'] = filters['custom_max_bb']
-
-        filters['min_vs_pitcher'] = st.slider("vs Pitcher Rating", -10, 10, 0, 1,
-            help="Matchup advantage/disadvantage vs this pitcher type")
-
-        filters['best_per_team_only'] = st.checkbox(
-            "🏟️ Show only best player per team", value=False,
-            help="Filter to show only the highest-scoring player from each team"
-        )
-
-        team_options = sorted(df['Tm'].unique().tolist()) if df is not None and not df.empty else []
-
-        filters['selected_teams'] = st.multiselect(
-            "Filter by Teams (Include Only)", options=team_options,
-            help="Leave empty to include all teams"
-        )
-        filters['excluded_teams'] = st.multiselect(
-            "Exclude Teams", options=team_options,
-            help="Select teams to completely exclude from analysis"
-        )
-
-        # Sort options — includes all three purpose-built scores
-        st.markdown("**🔢 Sort Results**")
-        sort_options = {
-            "Score (High to Low)":          ("Score",          False),
-            "Score (Low to High)":          ("Score",          True),
-            "Hit Score (High to Low)":      ("Hit_Score",      False),
-            "Hit Score (Low to High)":      ("Hit_Score",      True),
-            "XB Score (High to Low)":       ("XB_Score",       False),
-            "XB Score (Low to High)":       ("XB_Score",       True),
-            "HR Score (High to Low)":       ("HR_Score",       False),
-            "HR Score (Low to High)":       ("HR_Score",       True),
-            "Hit Prob% (High to Low)":      ("total_hit_prob", False),
-            "Hit Prob% (Low to High)":      ("total_hit_prob", True),
-            "HR% (High to Low)":            ("adj_HR",         False),
-            "HR% (Low to High)":            ("adj_HR",         True),
-            "XB% (High to Low)":            ("adj_XB",         False),
-            "XB% (Low to High)":            ("adj_XB",         True),
-            "Contact% (High to Low)":       ("adj_1B",         False),
-            "Contact% (Low to High)":       ("adj_1B",         True),
-            "K% (Low to High)":             ("adj_K",          True),
-            "K% (High to Low)":             ("adj_K",          False),
-            "BB% (Low to High)":            ("adj_BB",         True),
-            "BB% (High to Low)":            ("adj_BB",         False),
-            "vs Pitcher (High to Low)":     ("adj_vs",         False),
-            "vs Pitcher (Low to High)":     ("adj_vs",         True),
-            "Power Combo (High to Low)":    ("power_combo",    False),
-            "Power Combo (Low to High)":    ("power_combo",    True),
-        }
-
-        filters['primary_sort'] = st.selectbox(
-            "Sort By", options=list(sort_options.keys()), index=0,
-            help="Choose how to sort the results"
-        )
-        filters['sort_col'], filters['sort_asc'] = sort_options[filters['primary_sort']]
-
-        filters['result_count'] = st.selectbox(
-            "Number of Results", options=[5, 10, 15, 20, 25, 30, "All"], index=2,
-            help="Choose how many results to display"
-        )
-
-    # LINEUP STATUS MANAGEMENT
-    with st.sidebar.expander("🏟️ Lineup Status Management"):
-        st.markdown("**Exclude players not in today's lineups:**")
-
-        all_players = sorted(df['Batter'].unique().tolist()) if df is not None and not df.empty else []
-        current_exclusions = st.session_state.excluded_players.copy()
-
-        selected_exclusions = st.multiselect(
-            "Players NOT Playing Today",
-            options=all_players,
-            default=current_exclusions,
-            help="Select players who are confirmed out of lineups",
-            key="lineup_exclusions"
-        )
-
-        st.session_state.excluded_players = selected_exclusions
-        filters['excluded_players'] = selected_exclusions
-
-        if selected_exclusions:
-            st.info(f"🚫 Currently excluding {len(selected_exclusions)} players")
-
-        if st.button("🔄 Clear All Exclusions", key="sidebar_clear"):
-            st.session_state.excluded_players = []
-            st.rerun()
-
-        st.markdown("**Quick Exclude Options:**")
-        filters['auto_exclude_injured'] = st.checkbox("🏥 Auto-exclude common injury-prone players")
-        filters['show_lineup_warnings'] = st.checkbox("📊 Show lineup confidence warnings")
-
-    # REAL-TIME SIDEBAR PREVIEW
-    if df is not None and not df.empty:
-        try:
-            preview_df = df.copy()
-            excluded_players = st.session_state.excluded_players
-            if excluded_players:
-                preview_df = preview_df[~preview_df['Batter'].isin(excluded_players)]
-
-            excluded_teams = filters.get('excluded_teams', [])
-            if excluded_teams:
-                preview_df = preview_df[~preview_df['Tm'].isin(excluded_teams)]
-
-            selected_teams = filters.get('selected_teams', [])
-            if selected_teams:
-                preview_df = preview_df[preview_df['Tm'].isin(selected_teams)]
-
-            if filters.get('profile_type') == 'power':
-                preview_query = (
-                    f"adj_K <= {filters['max_k']:.1f} and "
-                    f"adj_BB <= {filters['max_bb']:.1f} and "
-                    f"adj_XB >= {filters['min_xb']:.1f} and "
-                    f"adj_HR >= {filters['min_hr']:.1f} and "
-                    f"adj_vs >= {filters['min_vs']}"
-                )
-            else:
-                preview_query = (
-                    f"adj_K <= {filters['max_k']:.1f} and "
-                    f"adj_BB <= {filters['max_bb']:.1f} and "
-                    f"total_hit_prob >= {filters['min_hit_prob']}"
-                )
-
-            preview_df = preview_df.query(preview_query)
-
-            matching_count    = len(preview_df)
-            excluded_count    = len(excluded_players)
-            excluded_teams_count = len(excluded_teams)
-
-            if matching_count == 0:
-                st.sidebar.error("❌ No players match current profile")
-                if excluded_count > 0:
-                    st.sidebar.markdown(f"**💡 Note:** {excluded_count} players excluded")
-                st.sidebar.markdown("**💡 Try:** Different player type or custom overrides")
-            elif matching_count < 5:
-                st.sidebar.warning(f"⚠️ Only {matching_count} players match")
-                if excluded_count > 0:
-                    st.sidebar.markdown(f"**📊 Pool:** {matching_count} playing + {excluded_count} excluded")
-            else:
-                st.sidebar.success(f"✅ {matching_count} players match profile")
-                if excluded_count > 0:
-                    st.sidebar.markdown(f"**📊 Lineup Status:** {matching_count} confirmed, {excluded_count} excluded")
-                if excluded_teams_count > 0:
-                    st.sidebar.markdown(f"**🚫 Excluded Teams:** {', '.join(excluded_teams)}")
-
-                avg_k_filtered  = preview_df['adj_K'].mean()
-                avg_bb_filtered = preview_df['adj_BB'].mean()
-                k_vs_league     = LEAGUE_K_AVG  - avg_k_filtered
-                bb_vs_league    = LEAGUE_BB_AVG - avg_bb_filtered
-
-                result_count  = filters.get('result_count', 15)
-                display_count = matching_count if result_count == "All" else min(matching_count, result_count)
-
-                st.sidebar.markdown("**📊 vs League (Playing Players):**")
-                st.sidebar.markdown(f"K%: {k_vs_league:+.1f}% {'better' if k_vs_league > 0 else 'worse'} than league")
-                st.sidebar.markdown(f"BB%: {bb_vs_league:+.1f}% {'more aggressive' if bb_vs_league > 0 else 'less aggressive'} than league")
-
-                if result_count == "All":
-                    st.sidebar.markdown(f"**📋 Showing:** All {matching_count} players")
-                else:
-                    st.sidebar.markdown(f"**📋 Showing:** Top {display_count} of {matching_count}")
-
-        except Exception as e:
-            st.sidebar.warning(f"⚠️ Preview unavailable: {str(e)}")
+    # ── Best per team ─────────────────────────────────────────────────────────
+    filters['best_per_team'] = st.sidebar.checkbox(
+        "🏟️ Best player per team only",
+        value=False,
+        help="Show only the top-scoring player from each team."
+    )
 
     return filters
 
 
-def apply_league_aware_filters(df, filters):
-    """Apply baseball-intelligent filtering based on league averages and player types."""
+# ─────────────────────────────────────────────────────────────────────────────
+# APPLY FILTERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
+    """Apply all filters and return a sorted, limited result set."""
 
     if df is None or df.empty:
-        return df
+        return pd.DataFrame()
 
-    NUMERIC_SORT_COLS = [
-        'adj_HR', 'adj_K', 'adj_XB', 'adj_1B', 'adj_BB', 'adj_vs',
-        'Score', 'Hit_Score', 'XB_Score', 'HR_Score',
-        'total_hit_prob', 'power_combo'
-    ]
+    out = df.copy()
 
-    excluded_players = st.session_state.get('excluded_players', [])
-    if excluded_players:
-        excluded_count = len(df[df['Batter'].isin(excluded_players)])
-        df = df[~df['Batter'].isin(excluded_players)]
-        if excluded_count > 0:
-            st.info(f"🏟️ Excluded {excluded_count} players not in today's lineups")
+    # Starter filter
+    if filters.get('starters_only'):
+        out = out[out['Starter'] == 1]
 
-    excluded_teams = filters.get('excluded_teams', [])
-    if excluded_teams:
-        excluded_team_players = len(df[df['Tm'].isin(excluded_teams)])
-        df = df[~df['Tm'].isin(excluded_teams)]
-        if excluded_team_players > 0:
-            st.info(f"🚫 Excluded {excluded_team_players} players from teams: {', '.join(excluded_teams)}")
+    # Player exclusions
+    excl = filters.get('excluded_players', [])
+    if excl:
+        n_before = len(out)
+        out = out[~out['Batter'].isin(excl)]
+        n_excl = n_before - len(out)
+        if n_excl:
+            st.info(f"🚫 Excluded {n_excl} player(s) from today's lineups")
 
-    query_parts = []
+    # Team filters
+    inc_teams = filters.get('include_teams', [])
+    if inc_teams:
+        out = out[out['Team'].isin(inc_teams)]
 
-    if 'max_k' in filters and filters['max_k'] < 100:
-        query_parts.append(f"adj_K <= {filters['max_k']:.1f}")
-    if 'max_bb' in filters and filters['max_bb'] < 100:
-        query_parts.append(f"adj_BB <= {filters['max_bb']:.1f}")
+    exc_teams = filters.get('exclude_teams', [])
+    if exc_teams:
+        before = len(out)
+        out = out[~out['Team'].isin(exc_teams)]
+        removed = before - len(out)
+        if removed:
+            st.info(f"🚫 Excluded {removed} players from teams: {', '.join(exc_teams)}")
 
-    if filters.get('profile_type') == 'power':
-        if filters.get('min_xb', 0) > 0:
-            query_parts.append(f"adj_XB >= {filters['min_xb']:.1f}")
-        if filters.get('min_hr', 0) > 0:
-            query_parts.append(f"adj_HR >= {filters['min_hr']:.1f}")
-        if filters.get('min_vs', -10) > -10:
-            query_parts.append(f"adj_vs >= {filters['min_vs']}")
-    else:
-        if filters.get('min_hit_prob', 0) > 0:
-            query_parts.append(f"total_hit_prob >= {filters['min_hit_prob']:.1f}")
+    # Stat caps
+    out = out[out['p_k']  <= filters['max_k']]
+    out = out[out['p_bb'] <= filters['max_bb']]
 
-    if filters.get('min_vs_pitcher', 0) != 0:
-        query_parts.append(f"adj_vs >= {filters['min_vs_pitcher']}")
+    # Min prob (target-specific)
+    min_col = filters.get('min_prob_col', 'total_hit_prob')
+    if min_col in out.columns:
+        out = out[out[min_col] >= filters['min_prob']]
 
-    if filters.get('selected_teams'):
-        query_parts.append("Tm in " + str(filters['selected_teams']))
-    if filters.get('excluded_teams'):
-        query_parts.append("Tm not in " + str(filters['excluded_teams']))
+    # vs Grade minimum
+    if filters['min_vs'] > -10:
+        out = out[pd.to_numeric(out['vs Grade'], errors='coerce').fillna(-10) >= filters['min_vs']]
 
-    try:
-        filtered_df = df.query(" and ".join(query_parts)) if query_parts else df.copy()
+    # Best per team
+    score_col = filters['score_col']
+    if filters.get('best_per_team') and not out.empty:
+        out = out.loc[out.groupby('Team')[score_col].idxmax()].copy()
+        st.info(f"🏟️ Showing best player from each of {len(out)} teams")
 
-        if filters.get('best_per_team_only', False):
-            filtered_df = filtered_df.loc[filtered_df.groupby('Tm')['Score'].idxmax()].copy()
-            st.info(f"🏟️ Showing best player from each of {len(filtered_df['Tm'].unique())} teams")
+    # Sort
+    sort_c = filters['sort_col']
+    sort_a = filters['sort_asc']
+    if sort_c in out.columns:
+        out[sort_c] = pd.to_numeric(out[sort_c], errors='coerce')
+        out = out.sort_values(sort_c, ascending=sort_a, na_position='last')
 
-        if 'power_combo' not in filtered_df.columns:
-            filtered_df['power_combo'] = filtered_df['adj_XB'] + filtered_df['adj_HR']
+    # Limit
+    n = filters['result_count']
+    if n != "All":
+        out = out.head(int(n))
 
-        sort_col = filters.get('sort_col', 'Score')
-        sort_asc = filters.get('sort_asc', False)
-
-        try:
-            if sort_col in NUMERIC_SORT_COLS and sort_col in filtered_df.columns:
-                filtered_df[sort_col] = pd.to_numeric(filtered_df[sort_col], errors='coerce')
-            filtered_df = filtered_df.sort_values(sort_col, ascending=sort_asc, na_position='last')
-        except Exception as sort_error:
-            st.warning(f"⚠️ Sorting failed, using default Score sort: {sort_error}")
-            filtered_df = filtered_df.sort_values('Score', ascending=False)
-
-        result_count = filters.get('result_count', 15)
-        return filtered_df if result_count == "All" else filtered_df.head(result_count)
-
-    except Exception as e:
-        st.error(f"❌ Filter error: {str(e)}")
-        if 'power_combo' not in df.columns:
-            df['power_combo'] = df['adj_XB'] + df['adj_HR']
-        try:
-            sort_col = filters.get('sort_col', 'Score')
-            sort_asc = filters.get('sort_asc', False)
-            if sort_col in NUMERIC_SORT_COLS and sort_col in df.columns:
-                df[sort_col] = pd.to_numeric(df[sort_col], errors='coerce')
-            sorted_df = df.sort_values(sort_col, ascending=sort_asc, na_position='last')
-        except Exception:
-            sorted_df = df.sort_values('Score', ascending=False)
-        result_count = filters.get('result_count', 15)
-        return sorted_df if result_count == "All" else sorted_df.head(result_count)
+    return out
 
 
-# =============================================================================
-# DISPLAY COMPONENTS
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# DISPLAY HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
 
-def create_league_aware_header():
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        st.image('https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true', width=200)
-    with col2:
-        st.title("🎯 MLB League-Aware Hit Predictor Pro")
-        st.markdown("*Find hitters with the best base hit probability using 2024 league context*")
-
-
-def create_staleness_indicator():
-    """
-    Shows how fresh the cached data is. Green → Yellow → Red as data ages.
-    Resets to green when the user clicks Refresh Data.
-    """
-    if 'data_load_time' not in st.session_state:
-        st.session_state.data_load_time = datetime.now()
-
-    elapsed   = int((datetime.now() - st.session_state.data_load_time).total_seconds())
-    mins_old  = elapsed // 60
-    secs_old  = elapsed % 60
-    ttl_left  = max(0, CONFIG['cache_ttl'] - elapsed)
-    ttl_mins  = ttl_left // 60
-
-    if mins_old == 0:
-        label     = f"🟢 Data is fresh — loaded {secs_old}s ago"
-        css_class = "staleness-fresh"
-    elif mins_old < 10:
-        label     = f"🟡 Data is {mins_old}m {secs_old}s old — refreshes in ~{ttl_mins}m"
-        css_class = "staleness-aging"
-    else:
-        label     = f"🔴 Data is {mins_old}m old — consider refreshing"
-        css_class = "staleness-stale"
-
-    st.markdown(f'<div class="{css_class}">{label}</div>', unsafe_allow_html=True)
-    st.markdown("")
+def render_header():
+    c1, c2 = st.columns([1, 5])
+    with c1:
+        st.image(
+            'https://github.com/a1faded/a1picks-hits-bot/blob/main/a1sports.png?raw=true',
+            width=180
+        )
+    with c2:
+        st.title("⚾ A1PICKS MLB Hit Predictor")
+        st.markdown("*Extract the best betting targets from BallPark Pal simulation data*")
 
 
-def create_data_quality_dashboard(df):
-    if df is None or df.empty:
-        st.error("No data available for quality analysis")
+def render_data_dashboard(df: pd.DataFrame):
+    """Top-level data quality / overview cards."""
+    st.markdown("---")
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        st.markdown(card("card-blue", "📈", "Matchups", str(len(df))), unsafe_allow_html=True)
+    with c2:
+        st.markdown(card("card-blue", "👤", "Batters", str(df['Batter'].nunique())), unsafe_allow_html=True)
+    with c3:
+        st.markdown(card("card-blue", "🏟️", "Teams", str(df['Team'].nunique())), unsafe_allow_html=True)
+    with c4:
+        avg_hp = df['total_hit_prob'].mean()
+        st.markdown(card("card-green", "🎯", "Avg Hit Prob", f"{avg_hp:.1f}%"), unsafe_allow_html=True)
+    with c5:
+        sb = staleness_badge()
+        age_html = sb if sb else '<span class="badge badge-green">🟢 Just loaded</span>'
+        st.markdown(card("card-purple", "🕐", "Data Age", age_html, "Refreshes every 15 min"),
+                    unsafe_allow_html=True)
+
+    st.markdown("---")
+
+
+def render_park_notice(filtered_df: pd.DataFrame, filters: dict):
+    """Show park-adjustment context when park mode is active."""
+    if not filters['use_park']:
+        st.markdown(
+            '<div class="park-notice">🏟️ <b>Park Adjustment OFF</b> — '
+            'Scores use pure player vs pitcher probabilities only (no park factors, weather, etc.)</div>',
+            unsafe_allow_html=True
+        )
         return
 
-    st.subheader("📊 Today's Data Overview")
-    col1, col2, col3, col4 = st.columns(4)
+    score_col      = filters['score_col']
+    base_score_col = score_col + '_base'
+    if base_score_col not in filtered_df.columns or filtered_df.empty:
+        return
 
-    with col1:
-        st.markdown(f'<div class="metric-card"><h3>📈 Total Matchups</h3><h2>{len(df)}</h2></div>',
-                    unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="metric-card"><h3>👤 Unique Batters</h3><h2>{df["Batter"].nunique()}</h2></div>',
-                    unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="metric-card"><h3>🏟️ Teams Playing</h3><h2>{df["Tm"].nunique()}</h2></div>',
-                    unsafe_allow_html=True)
-    with col4:
-        avg_hit = df['total_hit_prob'].mean()
-        st.markdown(f'<div class="success-card"><h3>🎯 Avg Hit Probability</h3><h2>{avg_hit:.1f}%</h2></div>',
-                    unsafe_allow_html=True)
+    avg_blended = filtered_df[score_col].mean()
+    avg_base    = filtered_df[base_score_col].mean()
+    delta       = avg_blended - avg_base
+    pct_contrib = (delta / avg_base * 100) if avg_base != 0 else 0
+
+    direction = "boosted" if delta >= 0 else "reduced"
+    colour    = "#38ef7d" if delta >= 0 else "#e74c3c"
+
+    st.markdown(
+        f'<div class="park-notice">'
+        f'🏟️ <b>Park Adjustment ON</b> — Park factors have '
+        f'<span style="color:{colour};font-weight:700">{direction} scores by ~{abs(pct_contrib):.1f}%</span> '
+        f'on average vs base (no-park) probabilities. '
+        f'Toggle park off to see true base scores.'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
 
-def display_league_aware_results(filtered_df, filters):
-    """Display results with the three purpose-built scores and full league context."""
+def render_score_summary_cards(filtered_df: pd.DataFrame, filters: dict):
+    """Four cards showing top player per score type."""
+    if filtered_df.empty:
+        return
 
-    LEAGUE_K_AVG  = 22.6
-    LEAGUE_BB_AVG = 8.5
+    score_cols = ['Hit_Score', 'Single_Score', 'XB_Score', 'HR_Score']
+    icons      = ['🎯', '1️⃣', '🔥', '💣']
+    labels     = ['Hit Score', 'Single Score', 'XB Score', 'HR Score']
+    css        = ['card-green', 'card-teal', 'card-amber', 'card-red']
+
+    cols = st.columns(4)
+    for i, (sc, icon, lbl, css_c) in enumerate(zip(score_cols, icons, labels, css)):
+        if sc not in filtered_df.columns:
+            continue
+        row = filtered_df.loc[filtered_df[sc].idxmax()]
+        base_col = sc + '_base'
+        park_str = ""
+        if filters['use_park'] and base_col in filtered_df.columns:
+            base_val   = row[base_col]
+            blend_val  = row[sc]
+            park_delta = blend_val - base_val
+            park_pct   = (park_delta / base_val * 100) if base_val != 0 else 0
+            sign       = "+" if park_delta >= 0 else ""
+            park_str   = f" (park {sign}{park_pct:.1f}%)"
+
+        with cols[i]:
+            st.markdown(
+                card(css_c, icon, lbl,
+                     f"{row['Batter']}",
+                     f"Score: {row[sc]:.1f}{park_str} | {row['Team']}"),
+                unsafe_allow_html=True
+            )
+
+
+def render_results_table(filtered_df: pd.DataFrame, filters: dict):
+    """Render the main styled results dataframe."""
 
     if filtered_df.empty:
-        st.warning("⚠️ No players match your current player type filters")
-        st.markdown("""
-        ### 💡 **Suggested Adjustments:**
-        - Try **"Above-Average Contact"** for more options
-        - Use **custom overrides** in advanced settings
-        - Consider **"All Players"** to see the full pool
-        """)
+        st.warning("⚠️ No players match your current filters. Try relaxing the thresholds.")
         return
 
-    result_count  = filters.get('result_count', 15)
-    best_per_team = filters.get('best_per_team_only', False)
+    score_col      = filters['score_col']
+    base_score_col = score_col + '_base'
+    use_park       = filters['use_park']
 
-    if best_per_team:
-        st.subheader(f"🏟️ Best Player from Each Team ({len(filtered_df)} teams)"
-                     if result_count == "All"
-                     else f"🏟️ Top {len(filtered_df)} Teams - Best Player Each")
-    else:
-        st.subheader(f"🎯 All {len(filtered_df)} Base Hit Candidates"
-                     if result_count == "All"
-                     else f"🎯 Top {len(filtered_df)} Base Hit Candidates")
-
-    # Key insights row
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        best_hit_prob = filtered_df['total_hit_prob'].iloc[0] if len(filtered_df) > 0 else 0
-        st.markdown(f'<div class="success-card"><h4>🥇 Best Hit Probability</h4>'
-                    f'<h2>{best_hit_prob:.1f}%</h2><small>Target: 35%+</small></div>',
-                    unsafe_allow_html=True)
-    with col2:
-        avg_k      = filtered_df['adj_K'].mean()
-        k_vs_league = LEAGUE_K_AVG - avg_k
-        color      = "success-card" if k_vs_league > 0 else "metric-card"
-        st.markdown(f'<div class="{color}"><h4>⚾ K% vs League</h4>'
-                    f'<h2>{k_vs_league:+.1f}%</h2><small>League: {LEAGUE_K_AVG}%</small></div>',
-                    unsafe_allow_html=True)
-    with col3:
-        avg_bb       = filtered_df['adj_BB'].mean()
-        bb_vs_league = LEAGUE_BB_AVG - avg_bb
-        color        = "success-card" if bb_vs_league > 0 else "metric-card"
-        st.markdown(f'<div class="{color}"><h4>🚶 BB% vs League</h4>'
-                    f'<h2>{bb_vs_league:+.1f}%</h2><small>League: {LEAGUE_BB_AVG}%</small></div>',
-                    unsafe_allow_html=True)
-    with col4:
-        if 'pitcher_matchup_grade' in filtered_df.columns and filtered_df['pitcher_matchup_grade'].notna().any():
-            a_plus = (filtered_df['pitcher_matchup_grade'] == 'A+').sum()
-            st.markdown(f'<div class="success-card"><h4>🎯 Elite Matchups</h4>'
-                        f'<h2>{a_plus}/{len(filtered_df)}</h2><small>A+ Pitcher Spots</small></div>',
-                        unsafe_allow_html=True)
-        else:
-            elite_k = (filtered_df['adj_K'] <= 12.0).sum()
-            st.markdown(f'<div class="success-card"><h4>⭐ Elite Contact</h4>'
-                        f'<h2>{elite_k}/{len(filtered_df)}</h2><small>K% ≤12.0%</small></div>',
-                        unsafe_allow_html=True)
-
-    # Three score leader cards
-    st.markdown("---")
-    st.markdown("#### 🎯 Purpose-Built Score Leaders")
-
-    score_cols_exist = all(c in filtered_df.columns for c in ['Hit_Score', 'XB_Score', 'HR_Score'])
-
-    if score_cols_exist:
-        sc1, sc2, sc3 = st.columns(3)
-
-        top_hit = filtered_df.loc[filtered_df['Hit_Score'].idxmax()]
-        top_xb  = filtered_df.loc[filtered_df['XB_Score'].idxmax()]
-        top_hr  = filtered_df.loc[filtered_df['HR_Score'].idxmax()]
-
-        with sc1:
-            st.markdown(f"""
-            <div class="score-card-hit">
-                <h4>🟢 Hit Score Leader</h4>
-                <h3>{top_hit['Batter']}</h3>
-                <p>Score: <strong>{top_hit['Hit_Score']:.1f}</strong> | Hit Prob: {top_hit['total_hit_prob']:.1f}%</p>
-                <small>Best base hit target today</small>
-            </div>""", unsafe_allow_html=True)
-
-        with sc2:
-            st.markdown(f"""
-            <div class="score-card-xb">
-                <h4>🟠 XB Score Leader</h4>
-                <h3>{top_xb['Batter']}</h3>
-                <p>Score: <strong>{top_xb['XB_Score']:.1f}</strong> | XB%: {top_xb['adj_XB']:.1f}%</p>
-                <small>Best doubles/extra base target today</small>
-            </div>""", unsafe_allow_html=True)
-
-        with sc3:
-            st.markdown(f"""
-            <div class="score-card-hr">
-                <h4>🔴 HR Score Leader</h4>
-                <h3>{top_hr['Batter']}</h3>
-                <p>Score: <strong>{top_hr['HR_Score']:.1f}</strong> | HR%: {top_hr['adj_HR']:.1f}%</p>
-                <small>Best home run target today</small>
-            </div>""", unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # Active profile + sort info
-    filter_profile = "Custom"
-    if filters.get('max_k', 100) <= 17 and filters.get('max_bb', 100) <= 6:
-        filter_profile = "Contact-Aggressive Hitters"
-    elif filters.get('max_k', 100) <= 12:
-        filter_profile = "Elite Contact Specialists"
-    elif filters.get('max_bb', 100) <= 4:
-        filter_profile = "Swing-Happy Hitters"
-    elif filters.get('max_k', 100) <= 17:
-        filter_profile = "Above-Average Contact"
-    elif filters.get('max_k', 100) >= 100:
-        filter_profile = "All Players"
-
-    col_p, col_s = st.columns(2)
-    with col_p: st.markdown(f"**🎯 Active Profile:** {filter_profile}")
-    with col_s: st.markdown(f"**🔢 Sorting:** {filters.get('primary_sort', 'Score (High to Low)')}")
-
-    # Results table
     display_df = filtered_df.copy()
-    display_df['K_vs_League']  = LEAGUE_K_AVG  - display_df['adj_K']
-    display_df['BB_vs_League'] = LEAGUE_BB_AVG - display_df['adj_BB']
 
-    if 'power_combo' not in display_df.columns:
-        display_df['power_combo'] = display_df['adj_XB'] + display_df['adj_HR']
+    # League context columns
+    display_df['K% vs Lg']  = (CONFIG['league_k_avg']  - display_df['p_k']).round(1)
+    display_df['BB% vs Lg'] = (CONFIG['league_bb_avg'] - display_df['p_bb']).round(1)
 
-    excluded_players = st.session_state.get('excluded_players', [])
-    display_df['Lineup_Status'] = display_df['Batter'].apply(
-        lambda x: '🏟️' if x not in excluded_players else '❌'
-    )
+    # Park delta for active score
+    if use_park and base_score_col in display_df.columns:
+        display_df['Park Δ'] = (display_df[score_col] - display_df[base_score_col]).round(1)
+    else:
+        display_df['Park Δ'] = 0.0
 
-    display_columns = {'Lineup_Status': 'Status', 'Batter': 'Batter', 'Tm': 'Team', 'Pitcher': 'Pitcher'}
+    # Total hit prob display
+    display_df['Hit Prob %'] = display_df['total_hit_prob'].round(1)
 
-    if score_cols_exist:
-        display_columns['Hit_Score'] = 'Hit Score'
-        display_columns['XB_Score']  = 'XB Score'
-        display_columns['HR_Score']  = 'HR Score'
+    # Historical sample flag
+    display_df['Hist PA'] = display_df['PA'].astype(int)
+    display_df['AVG vs P'] = display_df['AVG'].round(3)
 
-    display_columns.update({
-        'total_hit_prob': 'Hit Prob %',
-        'adj_1B':         'Contact %',
-        'adj_XB':         'XB %',
-        'adj_HR':         'HR %',
-        'power_combo':    'Power Combo %',
-        'K_vs_League':    'K% vs League',
-        'BB_vs_League':   'BB% vs League',
-        'adj_vs':         'vs Pitcher',
-        'Score':          'Score'
+    # Active score label
+    score_label_map = {
+        'Hit_Score':    '🎯 Hit',
+        'Single_Score': '1️⃣ Single',
+        'XB_Score':     '🔥 XB',
+        'HR_Score':     '💣 HR',
+    }
+    active_label = score_label_map.get(score_col, 'Score')
+
+    # Rename vs Grade for clarity
+    display_df['vs Grade'] = pd.to_numeric(display_df['vs Grade'], errors='coerce').round(0).astype(int)
+
+    # Column selection for display
+    cols_to_show = {
+        'Batter':      'Batter',
+        'Team':        'Team',
+        'Pitcher':     'Pitcher',
+        score_col:     active_label,
+    }
+
+    # Park base score column (if park mode on)
+    if use_park and base_score_col in display_df.columns:
+        cols_to_show[base_score_col] = f'{active_label} (no park)'
+        cols_to_show['Park Δ']       = 'Park Δ'
+
+    # All four scores always shown (for reference)
+    all_score_cols = {
+        'Hit_Score':    '🎯 Hit',
+        'Single_Score': '1️⃣ Single',
+        'XB_Score':     '🔥 XB',
+        'HR_Score':     '💣 HR',
+    }
+    for sc, sl in all_score_cols.items():
+        if sc != score_col and sc in display_df.columns:
+            cols_to_show[sc] = sl
+
+    cols_to_show.update({
+        'Hit Prob %': 'Hit Prob %',
+        'p_1b':       '1B Prob %',
+        'p_xb':       'XB Prob %',
+        'p_hr':       'HR Prob %',
+        'p_k':        'K Prob %',
+        'p_bb':       'BB Prob %',
+        'K% vs Lg':   'K% vs Lg',
+        'BB% vs Lg':  'BB% vs Lg',
+        'vs Grade':   'vs Grade',
+        'Hist PA':    'Hist PA',
+        'AVG vs P':   'AVG vs P',
     })
 
-    if 'pitcher_matchup_grade' in display_df.columns and display_df['pitcher_matchup_grade'].notna().any():
-        display_columns['pitcher_matchup_grade'] = 'Matchup'
+    # Build display frame
+    existing_cols = [c for c in cols_to_show if c in display_df.columns]
+    out_df = display_df[existing_cols].rename(columns=cols_to_show)
 
-    available_cols = [c for c in display_columns if c in display_df.columns]
-    rename_map     = {c: display_columns[c] for c in available_cols}
-    styled_df      = display_df[available_cols].rename(columns=rename_map)
+    # Format dict
+    fmt = {}
+    for new_name in out_df.columns:
+        if 'Prob %' in new_name or new_name in ['1B Prob %', 'XB Prob %', 'HR Prob %', 'K Prob %', 'BB Prob %']:
+            fmt[new_name] = "{:.1f}%"
+        elif 'Score' in new_name or new_name in [active_label, f'{active_label} (no park)',
+                                                   '🎯 Hit', '1️⃣ Single', '🔥 XB', '💣 HR']:
+            fmt[new_name] = "{:.1f}"
+        elif new_name == 'Park Δ':
+            fmt[new_name] = "{:+.1f}"
+        elif 'vs Lg' in new_name:
+            fmt[new_name] = "{:+.1f}%"
+        elif new_name == 'AVG vs P':
+            fmt[new_name] = "{:.3f}"
 
-    fmt = {
-        'Hit Prob %':    "{:.1f}%",
-        'Contact %':     "{:.1f}%",
-        'XB %':          "{:.1f}%",
-        'HR %':          "{:.1f}%",
-        'Power Combo %': "{:.1f}%",
-        'K% vs League':  "{:+.1f}%",
-        'BB% vs League': "{:+.1f}%",
-        'vs Pitcher':    "{:.0f}",
-        'Score':         "{:.1f}"
-    }
-    if score_cols_exist:
-        fmt['Hit Score'] = "{:.1f}"
-        fmt['XB Score']  = "{:.1f}"
-        fmt['HR Score']  = "{:.1f}"
+    styled = out_df.style.format(fmt, na_rep="—")
 
-    styler = styled_df.style.format(fmt)
-    styler = (styler
-        .background_gradient(subset=['Score'],         cmap='RdYlGn',  vmin=0,   vmax=100)
-        .background_gradient(subset=['Hit Prob %'],    cmap='Greens',  vmin=20,  vmax=50)
-        .background_gradient(subset=['Power Combo %'], cmap='Oranges', vmin=0,   vmax=20)
-        .background_gradient(subset=['K% vs League'],  cmap='RdYlGn',  vmin=-8,  vmax=12)
-        .background_gradient(subset=['BB% vs League'], cmap='RdYlGn',  vmin=-5,  vmax=6)
-    )
-
-    if score_cols_exist:
-        styler = (styler
-            .background_gradient(subset=['Hit Score'], cmap='Greens',  vmin=0, vmax=100)
-            .background_gradient(subset=['XB Score'],  cmap='Oranges', vmin=0, vmax=100)
-            .background_gradient(subset=['HR Score'],  cmap='Reds',    vmin=0, vmax=100)
-        )
-
-    if 'Matchup' in styled_df.columns:
-        def color_matchup_grade(val):
-            colors = {
-                'A+': 'background-color: #1a9641; color: white; font-weight: bold',
-                'A':  'background-color: #a6d96a; color: black; font-weight: bold',
-                'B':  'background-color: #ffffbf; color: black',
-                'C':  'background-color: #fdae61; color: black',
-                'D':  'background-color: #d7191c; color: white; font-weight: bold'
+    # Colour gradients on score columns
+    score_display_names = [n for n in out_df.columns
+                           if any(e in n for e in ['Hit', 'Single', 'XB', 'HR', '🎯', '1️⃣', '🔥', '💣'])
+                           and 'no park' not in n and 'Park' not in n and 'Prob' not in n]
+    for sdn in score_display_names:
+        try:
+            cmap = {
+                '🎯 Hit':    'Greens',
+                '1️⃣ Single': 'YlGn',
+                '🔥 XB':     'YlOrBr',
+                '💣 HR':     'YlOrRd',
             }
-            return colors.get(val, '')
-        styler = styler.apply(
-            lambda x: [color_matchup_grade(v) if x.name == 'Matchup' else '' for v in x], axis=0
+            styled = styled.background_gradient(
+                subset=[sdn],
+                cmap=cmap.get(sdn, 'Greens'),
+                vmin=0, vmax=100
+            )
+        except Exception:
+            pass
+
+    # Park delta colouring
+    if 'Park Δ' in out_df.columns:
+        styled = styled.background_gradient(
+            subset=['Park Δ'], cmap='RdYlGn', vmin=-10, vmax=10
         )
 
-    st.dataframe(styler, use_container_width=True)
+    # K% vs league (positive = better contact = green)
+    if 'K% vs Lg' in out_df.columns:
+        styled = styled.background_gradient(
+            subset=['K% vs Lg'], cmap='RdYlGn', vmin=-8, vmax=12
+        )
 
-    # Legend
-    matchup_guide = ""
-    if 'Matchup' in styled_df.columns:
-        matchup_guide = """<br>
-        <strong>Matchup Grades (Smooth ×Multiplier):</strong>
-        <span style="background-color:#1a9641;color:white;padding:2px 4px;border-radius:3px;">A+ ×1.18</span>
-        <span style="background-color:#a6d96a;color:black;padding:2px 4px;border-radius:3px;">A ×1.08</span>
-        <span style="background-color:#ffffbf;color:black;padding:2px 4px;border-radius:3px;">B ×1.00</span>
-        <span style="background-color:#fdae61;color:black;padding:2px 4px;border-radius:3px;">C ×0.91</span>
-        <span style="background-color:#d7191c;color:white;padding:2px 4px;border-radius:3px;">D ×0.85</span>"""
+    # vs Grade colouring
+    if 'vs Grade' in out_df.columns:
+        styled = styled.background_gradient(
+            subset=['vs Grade'], cmap='RdYlGn', vmin=-10, vmax=10
+        )
+
+    st.dataframe(styled, use_container_width=True)
+
+    # ── Legend ────────────────────────────────────────────────────────────────
+    park_note = (
+        "Park Δ = how much park factors shifted this player's active score "
+        "(positive = park helped, negative = park hurt). "
+        "Toggle 'Include Park Factors' OFF in sidebar to see pure base scores."
+        if use_park else
+        "Park Adjustment is OFF — all scores based on pure player vs pitcher probabilities."
+    )
+    hist_note = f"Hist PA / AVG vs P: historical PA ≥ {CONFIG['hist_min_pa']} triggers a small score tiebreaker bonus."
 
     st.markdown(f"""
-    <div class="color-legend">
-        <strong>📊 V4 Results Guide:</strong><br>
-        <strong>Status:</strong> 🏟️ = Confirmed Playing | ❌ = Excluded<br>
-        <strong>🟢 Hit Score:</strong> Optimized for base hits — highest adj_1B weight + heaviest K penalty<br>
-        <strong>🟠 XB Score:</strong> Optimized for doubles/extra bases — driven by adj_XB from BallPark Pal sims<br>
-        <strong>🔴 HR Score:</strong> Optimized for home runs — driven by adj_HR with light K penalty<br>
-        <strong>Score:</strong> General composite (profile-aware) |
-        <span style="color:#1a9641;">●</span> Elite 70+ |
-        <span style="color:#fdae61;">●</span> Good 50-69 |
-        <span style="color:#d7191c;">●</span> Risky &lt;50<br>
-        <strong>K% vs League:</strong> <span style="color:#1a9641;">●</span> Positive = Better Contact |
-        <span style="color:#d7191c;">●</span> Negative = More strikeouts<br>
-        <strong>BB% vs League:</strong> <span style="color:#1a9641;">●</span> Positive = More Aggressive |
-        <span style="color:#d7191c;">●</span> Negative = More patient{matchup_guide}
+    <div class="legend">
+        <b>📊 Score Guide</b><br>
+        🎯 <b>Hit Score</b> — Best target for any base hit bet (1B+XB+HR). Heavy K% penalty.<br>
+        1️⃣ <b>Single Score</b> — Best target for a single specifically.
+            High XB%/HR% is penalised here — power swing ≠ single.<br>
+        🔥 <b>XB Score</b> — Best target for a double or triple. adj_XB dominant.<br>
+        💣 <b>HR Score</b> — Best target for a home run. Light K% penalty (power hitters K more).<br>
+        <br>
+        <b>vs Grade</b> — Batter vs this pitcher on-paper rating (−10 to +10).<br>
+        <b>K% vs Lg</b> — Positive = better contact than league avg ({CONFIG['league_k_avg']}%).<br>
+        <b>BB% vs Lg</b> — Positive = more aggressive than league avg ({CONFIG['league_bb_avg']}%).<br>
+        <br>
+        {park_note}<br>
+        {hist_note}
     </div>
     """, unsafe_allow_html=True)
 
-    # Smart Profile Diversity Analysis
-    if len(filtered_df) >= 3:
-        st.markdown("### 🔍 **Smart Profile Diversity Analysis**")
 
-        profile_criteria = {
-            "🏆 Contact-Aggressive": {"max_k": 19.0, "max_bb": 7.0,  "icon": "🏆", "type": "contact"},
-            "⭐ Elite Contact":       {"max_k": 14.0, "max_bb": 9.5,  "icon": "⭐", "type": "contact"},
-            "⚡ Swing-Happy":         {"max_k": 24.0, "max_bb": 5.0,  "icon": "⚡", "type": "contact"},
-            "🔷 Above-Average":       {"max_k": 20.0, "max_bb": 12.0, "icon": "🔷", "type": "contact"},
-            "💥 Contact Power":       {"max_k": 20.0, "max_bb": 12.0, "min_xb": 7.0,  "min_hr": 2.5, "icon": "💥", "type": "power"},
-            "🚀 Pure Power":          {"max_k": 100,  "max_bb": 100,  "min_xb": 9.0,  "min_hr": 3.5, "icon": "🚀", "type": "power"},
-            "⚾ All Power":           {"max_k": 100,  "max_bb": 100,  "min_xb": 0,    "min_hr": 0,   "icon": "⚾", "type": "power"}
-        }
+def render_profile_diversity(filtered_df: pd.DataFrame, use_park: bool):
+    """Show the best player per betting target as a quick-scan summary."""
 
-        excl = st.session_state.get('excluded_players', [])
-
-        def get_profile_players(criteria):
-            mask = (
-                (filtered_df['adj_K']  <= criteria['max_k']) &
-                (filtered_df['adj_BB'] <= criteria['max_bb']) &
-                (~filtered_df['Batter'].isin(excl))
-            )
-            if criteria["type"] == "power":
-                mask &= (filtered_df['adj_XB'] >= criteria.get('min_xb', 0))
-                mask &= (filtered_df['adj_HR'] >= criteria.get('min_hr', 0))
-            return filtered_df[mask].copy()
-
-        # Find overall best
-        overall_best_player = None
-        overall_best_score  = -1
-        for profile_name, criteria in profile_criteria.items():
-            pp = get_profile_players(criteria)
-            if not pp.empty and pp.iloc[0]['Score'] > overall_best_score:
-                overall_best_score  = pp.iloc[0]['Score']
-                overall_best_player = pp.iloc[0]['Batter']
-
-        player_usage = {'overall_best': overall_best_player, 'shown_contact': False, 'shown_power': False}
-        profile_analysis = {}
-
-        for profile_name, criteria in profile_criteria.items():
-            pp = get_profile_players(criteria)
-            if pp.empty:
-                continue
-
-            selected_player, selected_rank = None, 1
-
-            for idx, candidate in pp.head(3).iterrows():
-                is_best = candidate['Batter'] == player_usage['overall_best']
-                if criteria["type"] == "power":
-                    if not player_usage['shown_power'] or not is_best:
-                        selected_player = candidate
-                        selected_rank   = list(pp.head(3).index).index(idx) + 1
-                        if is_best: player_usage['shown_power'] = True
-                        break
-                else:
-                    if not (is_best and player_usage['shown_contact']):
-                        selected_player = candidate
-                        selected_rank   = list(pp.head(3).index).index(idx) + 1
-                        if is_best: player_usage['shown_contact'] = True
-                        break
-
-            if selected_player is None:
-                selected_player = pp.iloc[0]
-                selected_rank   = 1
-
-            overall_rank = filtered_df[filtered_df['Batter'] == selected_player['Batter']].index[0] + 1
-            profile_analysis[profile_name] = {
-                'player':           selected_player,
-                'rank_overall':     overall_rank,
-                'rank_in_profile':  selected_rank,
-                'count_in_profile': len(pp)
-            }
-
-        if profile_analysis:
-            st.markdown("**🎯 Top Player by Profile:**")
-
-            shown_players      = set()
-            profiles_to_display = {}
-            for profile_name, analysis in profile_analysis.items():
-                pname = analysis['player']['Batter']
-                if pname not in shown_players or len(shown_players) < 3:
-                    profiles_to_display[profile_name] = analysis
-                    shown_players.add(pname)
-                elif len(profiles_to_display) < 6:
-                    profiles_to_display[profile_name] = analysis
-
-            cols = st.columns(min(len(profiles_to_display), 4))
-
-            for i, (profile_name, analysis) in enumerate(profiles_to_display.items()):
-                player       = analysis['player']
-                overall_rank = analysis['rank_overall']
-                profile_rank = analysis['rank_in_profile']
-                profile_count= analysis['count_in_profile']
-
-                with cols[i % len(cols)]:
-                    icon = profile_criteria[profile_name]['icon']
-                    st.markdown(f"**{icon} {profile_name.split(' ', 1)[1]}**")
-
-                    rank_label = f"#{overall_rank} overall" + (f", #{profile_rank} in profile" if profile_rank > 1 else "")
-                    medal = "🥇" if overall_rank == 1 else "🥈" if overall_rank <= 3 else ""
-                    label = f"{medal} **{player['Batter']}** ({rank_label})"
-
-                    if overall_rank <= 3:
-                        st.success(label)
-                    else:
-                        st.info(label)
-
-                    if profile_rank > 1:
-                        st.caption(f"💡 Showing #{profile_rank} for diversity")
-
-                    if profile_criteria[profile_name]["type"] == "power":
-                        xb_s  = f" | XB Score: {player['XB_Score']:.1f}"  if 'XB_Score'  in player.index else ""
-                        hr_s  = f" | HR Score: {player['HR_Score']:.1f}"  if 'HR_Score'  in player.index else ""
-                        st.markdown(
-                            f"**XB%:** {player['adj_XB']:.1f}% | **HR%:** {player['adj_HR']:.1f}%  \n"
-                            f"**Power Combo:** {(player['adj_XB']+player['adj_HR']):.1f}%{xb_s}{hr_s}  \n"
-                            f"**vs Pitcher:** {player['adj_vs']:.0f} | **Score:** {player['Score']:.1f}"
-                        )
-                    else:
-                        hit_s = f" | Hit Score: {player['Hit_Score']:.1f}" if 'Hit_Score' in player.index else ""
-                        st.markdown(
-                            f"**Hit Prob:** {player['total_hit_prob']:.1f}%{hit_s}  \n"
-                            f"**K% vs League:** {LEAGUE_K_AVG - player['adj_K']:+.1f}%  \n"
-                            f"**BB% vs League:** {LEAGUE_BB_AVG - player['adj_BB']:+.1f}%  \n"
-                            f"**Score:** {player['Score']:.1f}"
-                        )
-
-                    st.caption(f"📊 {profile_count} players in profile")
-
-            st.markdown("---")
-            st.markdown("**📋 Profile Summary:**")
-
-            best_overall  = max(profiles_to_display.values(), key=lambda x: x['player']['Score'])
-            best_name     = best_overall['player']['Batter']
-            best_profile  = next(k for k, v in profiles_to_display.items() if v['player']['Batter'] == best_name)
-            all_unique    = {a['player']['Batter']: a['player'] for a in profiles_to_display.values()}
-
-            insights = [f"🏆 **Overall Best**: {best_name} ({best_profile.split()[0]})"]
-
-            elite_power = [n for n, p in all_unique.items() if p['adj_XB'] + p['adj_HR'] > 12]
-            if elite_power:
-                insights.append(f"💥 **Elite Power Available**: {', '.join(list(set(elite_power))[:3])}")
-
-            high_hit = [n for n, p in all_unique.items() if p['total_hit_prob'] > 40]
-            if high_hit:
-                insights.append(f"🎯 **40%+ Hit Probability**: {', '.join(list(set(high_hit))[:3])}")
-
-            combo = [n for n, p in all_unique.items() if p['adj_XB'] + p['adj_HR'] > 10 and p['adj_K'] <= 17]
-            if combo:
-                insights.append(f"⚡ **Power + Contact Combo**: {', '.join(list(set(combo))[:3])}")
-
-            insights.append(f"📊 **Profile Diversity**: {len(profiles_to_display)}/7 profiles have viable options")
-
-            for insight in insights:
-                st.success(insight)
-
-            st.markdown("**💡 Strategic Recommendations:**")
-            power_avail   = any("Power" in p for p in profile_analysis)
-            contact_avail = any(p in ["🏆 Contact-Aggressive", "⭐ Elite Contact"] for p in profile_analysis)
-
-            if power_avail and contact_avail:
-                st.info("⚖️ **Balanced Strategy**: Both power and contact available — diversify by contest type")
-            elif "💥 Contact Power" in profile_analysis:
-                st.info("🎯 **Premium Power**: Contact power available — ideal for tournament ceiling plays")
-            elif "🚀 Pure Power" in profile_analysis:
-                st.info("💥 **High-Risk/High-Reward**: Pure power available — GPP leverage play")
-            elif "🏆 Contact-Aggressive" in profile_analysis:
-                st.info("🛡️ **Safety**: Focus Contact-Aggressive for consistent base hits")
-            elif "⚡ Swing-Happy" in profile_analysis:
-                st.info("🔥 **Aggressive**: Swing-Happy available for leverage plays")
-
-        else:
-            st.warning("⚠️ No players available in any standard profiles after exclusions")
-
-        excl_list = st.session_state.get('excluded_players', [])
-        if excl_list:
-            with st.expander("💡 Lineup Management Tips"):
-                st.markdown(f"""
-                **Players Currently Excluded**: {', '.join(excl_list)}
-                - ✅ Check official lineups 2-3 hours before first pitch
-                - ✅ Monitor injury reports and weather delays
-                - ✅ Have backup players ready from same profile
-                """)
-        else:
-            with st.expander("💡 Lineup Confirmation Reminder"):
-                st.markdown("""
-                **🏟️ Don't forget to verify lineups!**
-                Check official team lineups 2-3 hours before games.
-                Monitor for late scratches due to injury/rest/weather.
-                """)
-    else:
-        st.info("💡 Need at least 3 players for Smart Profile Diversity Analysis")
-
-
-def create_enhanced_visualizations(df, filtered_df):
-    st.subheader("📈 Base Hit Analysis Charts")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        chart1 = alt.Chart(df).mark_bar(color='#1f77b4', opacity=0.7).encode(
-            alt.X('Score:Q', bin=alt.Bin(maxbins=15), title='Base Hit Score'),
-            alt.Y('count()', title='Number of Players'),
-            tooltip=['count()']
-        ).properties(title='Score Distribution (All Players)', width=350, height=300)
-        st.altair_chart(chart1, use_container_width=True)
-
-    with col2:
-        chart2 = alt.Chart(filtered_df).mark_circle(size=100, opacity=0.7).encode(
-            alt.X('total_hit_prob:Q', title='Total Hit Probability %'),
-            alt.Y('adj_K:Q', title='Strikeout Risk %'),
-            alt.Color('Score:Q', scale=alt.Scale(scheme='viridis')),
-            alt.Size('adj_1B:Q', title='Single %'),
-            tooltip=['Batter', 'total_hit_prob', 'adj_K', 'Score']
-        ).properties(title='Hit Probability vs Strikeout Risk', width=350, height=300)
-        st.altair_chart(chart2, use_container_width=True)
-
-    if not filtered_df.empty:
-        team_stats = filtered_df.groupby('Tm').agg({
-            'total_hit_prob': 'mean', 'Score': 'mean', 'Batter': 'count'
-        }).round(1).reset_index()
-        team_stats.columns = ['Team', 'Avg Hit Prob %', 'Avg Score', 'Players']
-        team_stats = team_stats.sort_values('Avg Hit Prob %', ascending=False)
-        st.subheader("🏟️ Team Performance Summary")
-        st.dataframe(team_stats, use_container_width=True)
-
-
-# =============================================================================
-# MAIN PAGE
-# =============================================================================
-
-def main_page():
-    """Enhanced main page with staleness tracking and three-score system."""
-    create_league_aware_header()
-
-    # Initialize staleness clock (reset on Refresh)
-    if 'data_load_time' not in st.session_state:
-        st.session_state.data_load_time = datetime.now()
-
-    create_staleness_indicator()
-
-    with st.spinner('🔄 Loading and analyzing today\'s matchups...'):
-        df = load_and_process_data()
-
-    if df is None:
-        st.error("❌ Unable to load data. Please check your internet connection and try again.")
+    if len(filtered_df) < 3:
+        st.info("💡 Need at least 3 players for profile diversity analysis.")
         return
 
-    create_data_quality_dashboard(df)
+    with st.expander("🔍 Best Player per Betting Target", expanded=True):
+        score_defs = [
+            ('Hit_Score',    '🎯 Hit',    'card-green',  'Best for any base hit bet'),
+            ('Single_Score', '1️⃣ Single', 'card-teal',   'Best for single specifically'),
+            ('XB_Score',     '🔥 XB',     'card-amber',  'Best for double / triple'),
+            ('HR_Score',     '💣 HR',     'card-red',    'Best for home run'),
+        ]
+        cols = st.columns(4)
+        for i, (sc, lbl, css, desc) in enumerate(score_defs):
+            if sc not in filtered_df.columns:
+                continue
+            row = filtered_df.loc[filtered_df[sc].idxmax()]
 
-    filters     = create_league_aware_filters(df)
-    profile_type = filters.get('profile_type', 'contact')
-    df          = calculate_league_aware_scores(df, profile_type)
-    filtered_df = apply_league_aware_filters(df, filters)
+            base_col  = sc + '_base'
+            park_note = ""
+            if use_park and base_col in filtered_df.columns:
+                delta    = row[sc] - row[base_col]
+                pct      = (delta / row[base_col] * 100) if row[base_col] != 0 else 0
+                sign     = "+" if delta >= 0 else ""
+                park_note = f"Park: {sign}{pct:.1f}%"
 
-    display_league_aware_results(filtered_df, filters)
-    create_enhanced_visualizations(df, filtered_df)
+            k_vs_lg  = CONFIG['league_k_avg']  - row['p_k']
+            bb_vs_lg = CONFIG['league_bb_avg'] - row['p_bb']
+            hist_str = (
+                f"Hist: {int(row['PA'])} PA / {row['AVG']:.3f} avg"
+                if row['PA'] >= CONFIG['hist_min_pa'] else "No history vs pitcher"
+            )
 
-    # Export & controls
+            with cols[i]:
+                st.markdown(f"**{lbl}** — {desc}")
+                st.success(f"**{row['Batter']}** ({row['Team']})")
+                st.markdown(f"""
+| Metric | Value |
+|--------|-------|
+| Score | **{row[sc]:.1f}** {park_note} |
+| Hit Prob % | {row['total_hit_prob']:.1f}% |
+| 1B% / XB% / HR% | {row['p_1b']:.1f}% / {row['p_xb']:.1f}% / {row['p_hr']:.1f}% |
+| K% | {row['p_k']:.1f}% (vs Lg: {k_vs_lg:+.1f}%) |
+| BB% | {row['p_bb']:.1f}% (vs Lg: {bb_vs_lg:+.1f}%) |
+| vs Grade | {int(row['vs Grade'])} |
+| {hist_str} | |
+""")
+
+
+def render_visualizations(df: pd.DataFrame, filtered_df: pd.DataFrame, score_col: str):
+    """Charts: score distribution + scatter."""
+
+    st.subheader("📈 Analysis Charts")
+    c1, c2 = st.columns(2)
+
+    with c1:
+        chart = alt.Chart(df).mark_bar(color='#2980b9', opacity=0.7).encode(
+            alt.X(f'{score_col}:Q', bin=alt.Bin(maxbins=15), title='Score'),
+            alt.Y('count()', title='Players'),
+            tooltip=['count()']
+        ).properties(title=f'{score_col} Distribution (All Players)', width=350, height=280)
+        st.altair_chart(chart, use_container_width=True)
+
+    with c2:
+        if not filtered_df.empty:
+            chart2 = alt.Chart(filtered_df).mark_circle(size=90, opacity=0.75).encode(
+                alt.X('total_hit_prob:Q',  title='Hit Prob %'),
+                alt.Y('p_k:Q',            title='K Prob %'),
+                alt.Color(f'{score_col}:Q', scale=alt.Scale(scheme='viridis')),
+                alt.Size('p_hr:Q',         title='HR Prob %'),
+                tooltip=['Batter', 'Team', f'{score_col}', 'total_hit_prob', 'p_k', 'p_hr']
+            ).properties(title='Hit Prob vs K Risk (filtered players)', width=350, height=280)
+            st.altair_chart(chart2, use_container_width=True)
+
+    # Four-score comparison (filtered, ≤30 players)
+    if not filtered_df.empty and len(filtered_df) <= 30:
+        score_melt = filtered_df[['Batter', 'Hit_Score', 'Single_Score', 'XB_Score', 'HR_Score']].melt(
+            id_vars='Batter',
+            var_name='Score Type',
+            value_name='Score'
+        )
+        score_melt['Score Type'] = score_melt['Score Type'].map({
+            'Hit_Score':    '🎯 Hit',
+            'Single_Score': '1️⃣ Single',
+            'XB_Score':     '🔥 XB',
+            'HR_Score':     '💣 HR',
+        })
+        chart3 = alt.Chart(score_melt).mark_bar().encode(
+            alt.X('Batter:N', sort='-y'),
+            alt.Y('Score:Q'),
+            alt.Color('Score Type:N', scale=alt.Scale(
+                domain=['🎯 Hit', '1️⃣ Single', '🔥 XB', '💣 HR'],
+                range=['#27ae60', '#43b89c', '#f39c12', '#e74c3c']
+            )),
+            alt.Column('Score Type:N', title=None),
+            tooltip=['Batter', 'Score Type', alt.Tooltip('Score:Q', format='.1f')]
+        ).properties(width=200, height=260, title='All Four Scores by Player')
+        st.altair_chart(chart3, use_container_width=True)
+
+    # Team summary
+    if not filtered_df.empty:
+        team_agg = filtered_df.groupby('Team').agg(
+            Players=('Batter', 'count'),
+            Avg_Hit_Prob=('total_hit_prob', 'mean'),
+            Avg_Hit_Score=('Hit_Score', 'mean'),
+            Avg_XB_Score=('XB_Score', 'mean'),
+            Avg_HR_Score=('HR_Score', 'mean'),
+        ).round(1).sort_values('Avg_Hit_Prob', ascending=False).reset_index()
+        team_agg.columns = ['Team', 'Players', 'Avg Hit Prob%', '🎯 Hit Score', '🔥 XB Score', '💣 HR Score']
+        st.subheader("🏟️ Team Summary")
+        st.dataframe(team_agg, use_container_width=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIN PAGE
+# ─────────────────────────────────────────────────────────────────────────────
+
+def main_page():
+    render_header()
+
+    # Track freshness
+    if 'data_loaded_at' not in st.session_state:
+        st.session_state.data_loaded_at = datetime.now()
+
+    # Load raw data
+    with st.spinner("⚾ Loading today's matchups from BallPark Pal..."):
+        raw_df = load_data(CONFIG['csv_url'])
+
+    if raw_df is None:
+        st.error("❌ Could not load data. Check your connection or refresh.")
+        return
+
+    # Build filters FIRST (uses raw team/player lists before metric computation)
+    filters = build_filters(raw_df)
+
+    # Compute metrics (park blend depends on toggle)
+    df = compute_metrics(raw_df, use_park=filters['use_park'])
+
+    # Total hit prob is used in multiple places
+    df['total_hit_prob'] = (df['p_1b'] + df['p_xb'] + df['p_hr']).clip(upper=100).round(1)
+
+    # Compute scores
+    df = compute_scores(df)
+
+    # Dashboard
+    render_data_dashboard(df)
+
+    # Apply filters
+    filtered_df = apply_filters(df, filters)
+
+    # Park notice
+    render_park_notice(filtered_df if not filtered_df.empty else df, filters)
+
+    # Score summary cards
+    if not filtered_df.empty:
+        render_score_summary_cards(filtered_df, filters)
+        st.markdown("---")
+
+    # Result count header
+    score_col = filters['score_col']
+    target_labels = {
+        'Hit_Score':    '🎯 Any Base Hit',
+        'Single_Score': '1️⃣ Single',
+        'XB_Score':     '🔥 Extra Base Hit',
+        'HR_Score':     '💣 Home Run',
+    }
+    st.subheader(f"Top {len(filtered_df)} {target_labels.get(score_col, 'Hit')} Candidates")
+
+    # Results table
+    render_results_table(filtered_df, filters)
+
+    # Profile diversity
+    if not filtered_df.empty:
+        render_profile_diversity(filtered_df, filters['use_park'])
+
+    # Charts
+    if not filtered_df.empty:
+        render_visualizations(df, filtered_df, score_col)
+
+    # ── Controls row ──────────────────────────────────────────────────────────
     st.markdown("---")
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("📊 Export Results to CSV"):
-            csv = filtered_df.to_csv(index=False)
+        if st.button("🔄 Refresh Data"):
+            st.cache_data.clear()
+            st.session_state.data_loaded_at = datetime.now()
+            st.rerun()
+
+    with col2:
+        if not filtered_df.empty:
+            csv_data = filtered_df.to_csv(index=False)
             st.download_button(
-                "💾 Download CSV", csv,
-                f"mlb_predictions_{datetime.now().strftime('%Y%m%d')}.csv",
+                "💾 Export Results (CSV)",
+                csv_data,
+                f"a1picks_mlb_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv"
             )
 
-    with col2:
-        if st.button("🔄 Refresh Data"):
-            st.cache_data.clear()
-            st.session_state.data_load_time = datetime.now()  # Reset staleness clock
-            st.rerun()
-
     with col3:
-        if st.button("🏟️ Clear Exclusions"):
-            st.session_state.excluded_players = []
-            st.rerun()
+        sb = staleness_badge()
+        if sb:
+            st.markdown(sb, unsafe_allow_html=True)
 
-    with col4:
-        st.info(f"🕐 Session: {datetime.now().strftime('%H:%M:%S')}")
-
-    # Quick lineup management
+    # ── Quick Lineup Exclusions ───────────────────────────────────────────────
     if not filtered_df.empty:
-        with st.expander("⚡ Quick Lineup Management"):
-            st.markdown("**Quick exclude players from results:**")
-            result_players     = filtered_df['Batter'].tolist()
-            current_exclusions = st.session_state.excluded_players
-            available_to_exclude = [p for p in result_players if p not in current_exclusions]
+        with st.expander("⚡ Quick Player Exclusions"):
+            st.markdown("Quickly exclude players from the current results:")
+            result_players   = filtered_df['Batter'].tolist()
+            current_excl     = st.session_state.excluded_players
+            available        = [p for p in result_players if p not in current_excl]
 
-            if available_to_exclude:
+            if available:
                 cl, cr = st.columns(2)
-                with cl:
-                    st.markdown("**Players in Current Results:**")
-                    for i, player in enumerate(available_to_exclude[:5]):
-                        if st.button(f"❌ Exclude {player}", key=f"exclude_{i}"):
+                for i, player in enumerate(available[:5]):
+                    with cl:
+                        if st.button(f"❌ {player}", key=f"qx_{i}"):
                             if player not in st.session_state.excluded_players:
                                 st.session_state.excluded_players.append(player)
                             st.rerun()
-                with cr:
-                    if len(available_to_exclude) > 5:
-                        st.markdown("**More Players:**")
-                        for i, player in enumerate(available_to_exclude[5:10]):
-                            if st.button(f"❌ Exclude {player}", key=f"exclude_more_{i}"):
-                                if player not in st.session_state.excluded_players:
-                                    st.session_state.excluded_players.append(player)
-                                st.rerun()
+                for i, player in enumerate(available[5:10]):
+                    with cr:
+                        if st.button(f"❌ {player}", key=f"qx2_{i}"):
+                            if player not in st.session_state.excluded_players:
+                                st.session_state.excluded_players.append(player)
+                            st.rerun()
             else:
-                st.info("🎯 All players in results are already confirmed playing")
+                st.success("✅ All current results are confirmed playing.")
 
-            if current_exclusions:
-                st.markdown("**Currently Excluded Players:**")
-                st.info(f"🚫 {', '.join(current_exclusions)}")
-                if st.button("🔄 Re-include All Excluded Players", key="main_clear"):
+            if current_excl:
+                st.markdown(f"**Excluded:** {', '.join(current_excl)}")
+                if st.button("🔄 Re-include All", key="main_clear"):
                     st.session_state.excluded_players = []
-                    st.session_state.clear_exclusions = True
                     st.rerun()
-            else:
-                st.success("✅ All players currently included in analysis")
 
-    # Strategy playbook
+    # ── Strategy guide ────────────────────────────────────────────────────────
     st.markdown("---")
     st.markdown("""
-    ### 🎯 **V4.0 DFS STRATEGIC PLAYBOOK**
+### 🎯 V4 Betting Strategy Guide
 
-    #### **🎯 Three-Score System — How to Use Each**
-    - **🟢 Hit Score** → Sort by Hit Score for cash games and base hit props. Highest weight on adj_1B + heaviest K penalty. Your safest floor play each day.
-    - **🟠 XB Score** → Sort by XB Score for doubles props and GPP upside. Primary driver is adj_XB direct from BallPark Pal simulations. Best for hitter-friendly slates.
-    - **🔴 HR Score** → Sort by HR Score for HR props and GPP ceiling plays. Primary driver is adj_HR anchored to 2024 league averages. Light K penalty keeps legitimate power bats in view.
+#### Score → Bet Type Mapping
+| Score | Use For | K% Tolerance | Key Stats |
+|-------|---------|-------------|-----------|
+| 🎯 Hit Score | Any base hit prop | Low — K kills hits | 1B Prob + XB Prob + HR Prob |
+| 1️⃣ Single Score | Hit a single | Low — also penalises high XB/HR% | 1B Prob dominant |
+| 🔥 XB Score | Double or Triple | Medium — power contact acceptable | XB Prob dominant |
+| 💣 HR Score | Home run | High — power hitters K more, that's ok | HR Prob dominant |
 
-    #### **📊 Core Strategy Framework**
-    - **Cash Games**: Sort by Hit Score | Target 35%+ hit probability + positive K% vs league
-    - **Small GPP**: Mix Hit Score + XB Score leaders | Balance safety with ceiling
-    - **Large GPP**: Lead with HR Score + XB Score | Prioritize differentiation
+#### Park Toggle
+- **ON** (default): Blends park-adjusted + base probabilities. Best for real games — accounts for
+  ballpark dimensions, wind, temperature.
+- **OFF**: Pure player vs pitcher. Shows "true" skill matchup stripped of environment.
+- The **Park Δ** column shows exactly how much park factors influenced each player's score.
 
-    #### **🏟️ Pitcher Matchup Grades (V4 Smooth Scale)**
-    - Grades now use smooth linear interpolation — no cliff effects between thresholds
-    - Applied multiplicatively: A+ multiplies score ×1.18 | D multiplies ×0.85
-    - Better players benefit proportionally MORE from elite matchups
+#### Key Tips
+- For **cash game / safe** bets: sort by Hit Score, target players with high vs Grade and low K%
+- For **singles props**: use Single Score — the negative weight on XB/HR% is intentional
+- For **doubles/triples**: XB Score with a positive vs Grade is the sweet spot
+- For **HR props**: HR Score with forgiving K% filter — don't penalise power hitters for striking out
 
-    #### **💰 Bankroll Management**
-    - **20% Rule**: Never put more than 20% of bankroll in Pure Power or Swing-Happy profiles
-    - **Diversification**: Build 60% Hit Score + 40% XB/HR Score portfolio
-    - **Late Swap**: Always have a Hit Score backup for uncertain power plays
-
-    **⚾ Three scores → Three bet types → Dominate the slate**
-
-    **Version 4.0 — Three Purpose-Built Scores | Smooth Pitcher Grades (×Multiplier) | Data Staleness Indicator**
+**V4.0 — Ground-Up Rebuild | Single CSV | 4 Purpose-Built Scores | Park Toggle | Smooth Scoring**
     """)
 
 
-# =============================================================================
-# INFO PAGE
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# REFERENCE PAGE
+# ─────────────────────────────────────────────────────────────────────────────
 
 def info_page():
-    st.title("📚 MLB Hit Predictor V4 — Complete Reference Manual")
+    st.title("📚 A1PICKS MLB Hit Predictor — Reference Manual")
 
     with st.expander("📖 System Overview", expanded=True):
-        st.markdown("""
-        # 🎯 MLB Hit Predictor Pro V4.0
+        st.markdown(f"""
+## Purpose
+Extract the best betting targets from BallPark Pal's simulation data (3,000 runs per game).
+BallPark Pal already handles weather, park factors, recent performance, and pitch-mix matchups.
+This tool weights and filters that output to surface the best targets for four specific bet types.
 
-        ## Purpose
-        Extracts the best targets from BallPark Pal's 3,000-simulation-per-game data.
-        The tool does NOT try to predict better than BallPark Pal — it weights and filters
-        the simulation output to surface the clearest hitter targets for each bet type.
+## Data Source
+Single `Matchups.csv` from BallPark Pal. Each row = one batter vs one pitcher matchup.
 
-        ## 📊 Core Metrics (unchanged from V3)
-        - **Hit Probability**: Combined adj_1B% + adj_XB% + adj_HR%
-        - **K% vs League**: 22.6% − Player K% (Positive = Better contact)
-        - **BB% vs League**: 8.5% − Player BB% (Positive = More aggressive)
-        - **Power Combo**: adj_XB% + adj_HR% combined rate
+| Column Group | Meaning |
+|---|---|
+| `HR/XB/1B/BB/K Prob` | Probability % with park factors |
+| `HR/XB/1B/BB/K Prob (no park)` | Same, without park/weather adjustment |
+| `HR/XB/1B/BB/K Boost` | BallPark Pal's matchup adjustment factor |
+| `RC` / `RC (no park)` | Runs Created — overall matchup quality indicator |
+| `vs Grade` | Batter vs pitcher on-paper rating (−10 to +10) |
+| `PA, AVG, H, HR (hist)...` | Historical PA this batter has vs this pitcher |
 
-        ## 🎯 Three Purpose-Built Scores (NEW in V4)
+## Four Scores
 
-        ### 🟢 Hit Score
-        Optimized for base hit probability. Heaviest weight on adj_1B (singles)
-        with the most aggressive K% penalty. Use for base hit props and cash games.
+### 🎯 Hit Score
+Optimised for **any base hit** prop.
+- p_1b × 3.0 + p_xb × 2.0 + p_hr × 1.0 − p_k × 2.5 − p_bb × 1.0
+- K% carries the heaviest penalty — a strikeout guarantees no hit.
 
-        ### 🟠 XB Score
-        Optimized for extra base hits (doubles/triples). Primary driver is adj_XB
-        from BallPark Pal simulations. Moderate K% penalty. Use for doubles props
-        and GPP differentiation plays.
+### 1️⃣ Single Score
+Optimised for **single specifically**.
+- p_1b × 5.0 − p_k × 2.5 − p_bb × 1.0 − p_xb × 0.8 − p_hr × 0.5
+- High XB% and HR% are penalised: a ball hit with that authority doesn't stay a single.
 
-        ### 🔴 HR Score
-        Optimized for home runs. Primary driver is adj_HR anchored to 2024 MLB
-        league averages. Light K% penalty (HR hitters naturally K more).
-        Use for HR props and GPP ceiling plays.
+### 🔥 XB Score
+Optimised for **double or triple**.
+- p_xb × 5.0 + p_hr × 0.8 − p_k × 1.5 − p_bb × 1.0
+- Moderate K% tolerance — harder contact correlates with more swing-and-miss.
 
-        ## 🏟️ Pitcher Matchup Grades (Improved in V4)
+### 💣 HR Score
+Optimised for **home run**.
+- p_hr × 6.0 + p_xb × 0.8 − p_k × 0.8 − p_bb × 1.0
+- Light K% penalty — power hitters naturally strike out more; that's acceptable here.
 
-        Smooth linear interpolation replaces hard step thresholds. Grades now map
-        to a proportional multiplier applied to all scores:
+## Park Adjustment
+Blended mode averages the with-park and no-park probability columns before scoring.
+The **Park Δ** column shows the exact score impact of park factors for each player.
 
-        | Grade | Multiplier | Meaning |
-        |-------|-----------|---------|
-        | A+    | ×1.18     | Elite matchup |
-        | A     | ×1.08     | Great matchup |
-        | B     | ×1.00     | Neutral |
-        | C     | ×0.91     | Below average |
-        | D     | ×0.85     | Avoid |
+## Historical Tiebreaker
+When a batter has ≥ {CONFIG['hist_min_pa']} plate appearances against this specific pitcher,
+their batting average vs that pitcher adds up to {CONFIG['hist_bonus_max']} bonus points
+to the raw score before normalisation. This is a small tiebreaker only — it won't override
+the simulation probabilities.
 
-        Because the multiplier is proportional, a player with Score 80 gains more
-        points from an A+ matchup than a player with Score 40 — as it should be.
-
-        ## 🕐 Data Staleness Indicator (NEW in V4)
-        Shows how old the current cached data is (green/yellow/red).
-        BallPark Pal data refreshes every 15 minutes. Hit Refresh Data to force reload.
-
-        ## 🏆 Strategic Framework
-
-        ### Cash Games → Hit Score
-        - Target: 35%+ hit probability
-        - Sort by Hit Score
-        - Profile: Contact-Aggressive + Elite Contact
-
-        ### Small GPP → Hit + XB Score Mix
-        - Lead with Hit Score safe plays
-        - Add 1-2 XB Score leaders for upside
-
-        ### Large GPP → HR + XB Score Targeting
-        - 40% HR Score leaders (ceiling)
-        - 30% XB Score leaders (doubles upside)
-        - 30% Contrarian Hit Score plays
-
-        ## 💰 Bankroll Management
-        - **20% Rule**: Max 20% in high-variance profiles
-        - **Portfolio**: 60% Hit Score + 40% XB/HR allocation
-        - **Late Swap**: Always have a Hit Score backup ready
+## vs Grade
+BallPark Pal's on-paper rating of this specific batter vs this specific pitcher (−10 to +10),
+based on pitch mix, batter tendencies, and location tendencies. Applied as a small modifier
+(±2 raw points) to all four scores.
         """)
 
 
-# =============================================================================
-# MAIN
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# NAVIGATION
+# ─────────────────────────────────────────────────────────────────────────────
 
 def main():
-    st.sidebar.title("🏟️ Navigation")
     st.sidebar.markdown("---")
 
+    # Optional music
     if st.sidebar.checkbox("🎵 Background Music"):
-        audio_url = "https://github.com/a1faded/a1picks-hits-bot/raw/refs/heads/main/Take%20Me%20Out%20to%20the%20Ballgame%20-%20Nancy%20Bea%20-%20Dodger%20Stadium%20Organ.mp3"
-        components.html(f"""
-        <audio controls autoplay loop style="width: 100%;">
-            <source src="{audio_url}" type="audio/mpeg">
-        </audio>
-        """, height=60)
+        audio_url = (
+            "https://github.com/a1faded/a1picks-hits-bot/raw/refs/heads/main/"
+            "Take%20Me%20Out%20to%20the%20Ballgame%20-%20Nancy%20Bea%20-%20Dodger%20Stadium%20Organ.mp3"
+        )
+        components.html(
+            f'<audio controls autoplay loop style="width:100%;">'
+            f'<source src="{audio_url}" type="audio/mpeg"></audio>',
+            height=60
+        )
 
-    app_mode = st.sidebar.radio(
-        "Choose Section",
-        ["🎯 League-Aware Predictor", "📚 Strategic Guide"],
+    page = st.sidebar.radio(
+        "Navigate",
+        ["⚾ Hit Predictor", "📚 Reference Manual"],
         index=0
     )
 
-    if app_mode == "🎯 League-Aware Predictor":
+    if page == "⚾ Hit Predictor":
         main_page()
     else:
         info_page()
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**V4.0** | Three Scores · Smooth Grades · Staleness Indicator")
+    st.sidebar.markdown("**V4.0** | Ground-Up Rebuild | 4 Scores | Park Toggle")
 
 
 if __name__ == "__main__":
