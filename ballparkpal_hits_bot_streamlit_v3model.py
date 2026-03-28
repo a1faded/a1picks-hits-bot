@@ -32,7 +32,7 @@ st.set_page_config(
 # ─────────────────────────────────────────────────────────────────────────────
 
 CONFIG = {
-    'csv_url': 'https://github.com/a1faded/a1picks-hits-bot/raw/main/Matchups.csv',
+    'csv_url': 'https://a1ballparkpal.tiiny.site/Matchups.csv',
     'cache_ttl': 900,           # 15 minutes
     'hist_min_pa': 10,          # minimum PA for historical tiebreaker
     'hist_bonus_max': 3.0,      # maximum bonus points from historical AVG
