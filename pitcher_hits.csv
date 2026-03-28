@@ -1,5 +1,31 @@
-Team,Name,Prob,Park
-TOR,Kevin Gausman,5.10%,SEA
-LAD,Shohei Ohtani,3.10%,LAD
-SEA,Bryce Miller,2.60%,SEA
-MIL,Jose Quintana,0.40%,LAD
+Team,Name,Park,Prob
+ARI,Eduardo Rodriguez,LAD,12.4%
+COL,Michael Lorenzen,MIA,11.5%
+KC,Michael Wacha,ATL,10.6%
+NYY,Will Warren,SF,9.7%
+STL,Michael McGreevy,STL,9.6%
+SF,Tyler Mahle,SF,9.1%
+WAS,Miles Mikolas,CHC,8.3%
+SD,Randy Vasquez,SD,7.8%
+BOS,Sonny Gray,CIN,7.1%
+NYM,David Peterson,NYM,6.8%
+ATH,Jeffrey Springs,TOR,6.6%
+ATL,Reynaldo Lopez,ATL,5.4%
+DET,Jack Flaherty,SD,5.2%
+LAA,Reid Detmers,HOU,4.9%
+LAD,Tyler Glasnow,LAD,4.6%
+CIN,Brady Singer,CIN,4.1%
+CHC,Cade Horton,CHC,4.0%
+PIT,Mitch Keller,NYM,3.9%
+HOU,Cristian Javier,HOU,3.7%
+MIL,Chad Patrick,MIL,3.6%
+TOR,Dylan Cease,TOR,3.4%
+CHW,Sean Burke,MIL,3.0%
+BAL,Kyle Bradish,BAL,2.6%
+PHI,Aaron Nola,PHI,2.6%
+MIN,Taj Bradley,BAL,2.6%
+TB,Joe Boyle,STL,2.1%
+TEX,Jacob deGrom,PHI,1.7%
+SEA,Bryan Woo,SEA,1.6%
+MIA,Eury Perez,MIA,1.4%
+CLE,Joey Cantillo,SEA,1.3%
