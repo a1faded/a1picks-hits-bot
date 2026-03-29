@@ -1046,23 +1046,28 @@ def render_score_summary_cards(slate_df: pd.DataFrame, filters: dict):
         ('XB_Score',     'scard-xb',     '🔥', 'XB',     'Double / Triple'),
         ('HR_Score',     'scard-hr',     '💣', 'HR',     'Home Run'),
     ]
+    use_gc    = filters.get('use_gc', False)
     cards_html = '<div class="score-grid">'
     for sc, css, icon, short, desc in defs:
         if sc not in slate_df.columns:
             continue
-        row      = slate_df.loc[slate_df[sc].idxmax()]
+        # Rank by GC score when toggle is ON (game environment determines best player)
+        rank_sc  = (sc + '_gc') if (use_gc and sc + '_gc' in slate_df.columns) else sc
+        row      = slate_df.loc[slate_df[rank_sc].idxmax()]
+        disp_val = row[rank_sc]   # show the GC-adjusted score
         base_col = sc + '_base'
         park_str = ""
         if filters['use_park'] and base_col in slate_df.columns and row.get(base_col, 0) != 0:
             delta    = row[sc] - row[base_col]
             pct      = delta / row[base_col] * 100
             park_str = f" · park {'+' if delta>=0 else ''}{pct:.0f}%"
+        gc_str = " ⛅" if use_gc and rank_sc != sc else ""
         cards_html += f"""
 <div class="scard {css}">
-  <div class="sc-type"><span>{icon} {short}</span> — {desc}</div>
+  <div class="sc-type"><span>{icon} {short}</span>{gc_str} — {desc}</div>
   <div class="sc-name">{row['Batter']}</div>
   <div class="sc-meta">{row['Team']} vs {row['Pitcher']}{park_str}</div>
-  <div class="sc-score">{row[sc]:.1f}</div>
+  <div class="sc-score">{disp_val:.1f}</div>
 </div>"""
     cards_html += '</div>'
     st.markdown(cards_html, unsafe_allow_html=True)
@@ -1128,7 +1133,11 @@ def render_pitcher_landscape(pitcher_df, df: pd.DataFrame):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def render_park_notice(slate_df: pd.DataFrame, filters: dict):
-    sc, base_sc, use_park = filters['score_col'], filters['score_col']+'_base', filters['use_park']
+    sc_base  = filters.get('score_col_base', filters['score_col'].replace('_gc',''))
+    use_gc   = filters.get('use_gc', False)
+    sc       = (sc_base + '_gc') if (use_gc and sc_base + '_gc' in slate_df.columns) else sc_base
+    base_sc  = sc_base + '_base'
+    use_park = filters['use_park']
     if not use_park:
         st.markdown('<div class="notice notice-park">🏟️ <b>Park OFF</b> — pure player vs pitcher, no environment.</div>', unsafe_allow_html=True)
         return
@@ -1153,8 +1162,9 @@ def render_game_conditions_panel(slate_df: pd.DataFrame, filters: dict, game_con
     Displays each game's environment stats with a visual indicator
     of whether conditions favor or suppress the active bet type.
     """
-    use_gc = filters.get('use_gc', False)
-    sc     = filters['score_col']
+    use_gc  = filters.get('use_gc', False)
+    sc_base = filters.get('score_col_base', filters['score_col'].replace('_gc',''))
+    sc      = (sc_base + '_gc') if (use_gc and sc_base + '_gc' in slate_df.columns) else sc_base
 
     if not use_gc:
         return
@@ -1228,11 +1238,11 @@ def render_results_table(filtered_df: pd.DataFrame, filters: dict):
 
     use_gc   = filters.get('use_gc', False)
     use_park = filters['use_park']
-    sc_base  = filters['score_col']                    # e.g. 'Hit_Score'
-    sc_gc    = sc_base + '_gc'                         # e.g. 'Hit_Score_gc'
-    base_sc  = sc_base + '_base'                       # e.g. 'Hit_Score_base'
+    sc_base  = filters.get('score_col_base', filters['score_col'].replace('_gc',''))  # always the non-gc base
+    sc_gc    = sc_base + '_gc'
+    base_sc  = sc_base + '_base'                       # park-free version for Park Δ
 
-    # Active score: use _gc version when toggle ON and column exists
+    # Active score column: _gc when toggle ON and column exists, otherwise base
     sc = sc_gc if (use_gc and sc_gc in filtered_df.columns) else sc_base
 
     disp = filtered_df.copy()
@@ -1352,13 +1362,17 @@ def render_best_per_target(slate_df: pd.DataFrame, filters: dict):
             ('XB_Score',     'pcard-xb',     '🔥', 'XB',     'Double / Triple'),
             ('HR_Score',     'pcard-hr',     '💣', 'HR',     'Home Run'),
         ]
+        use_gc     = filters.get('use_gc', False)
         cards_html = '<div class="pcard-grid">'
         LG = CONFIG
 
         for sc, css, icon, short, desc in defs:
             if sc not in slate_df.columns:
                 continue
-            row      = slate_df.loc[slate_df[sc].idxmax()]
+            # Rank by GC score when toggle ON
+            rank_sc  = (sc + '_gc') if (use_gc and sc + '_gc' in slate_df.columns) else sc
+            row      = slate_df.loc[slate_df[rank_sc].idxmax()]
+            disp_val = float(row[rank_sc])
             base_col = sc + '_base'
             park_row = ""
             if filters['use_park'] and base_col in slate_df.columns and row.get(base_col, 0) != 0:
@@ -1383,7 +1397,7 @@ def render_best_per_target(slate_df: pd.DataFrame, filters: dict):
   <div class="pcard-header">
     <div><div class="pcard-name">{row['Batter']}</div>
       <div class="pcard-team">{row['Team']} · {icon} {desc}</div></div>
-    <div class="pcard-score">{row[sc]:.1f}</div>
+    <div class="pcard-score">{disp_val:.1f}</div>
   </div>
   <div class="pcard-row"><span class="pk">Pitcher</span><span class="pv">{row['Pitcher']} {gph}</span></div>
   <div class="pcard-row"><span class="pk">Hit Prob</span><span class="pv">{row['total_hit_prob']:.1f}%</span></div>
