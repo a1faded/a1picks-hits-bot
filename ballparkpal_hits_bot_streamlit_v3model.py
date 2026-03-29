@@ -1581,21 +1581,36 @@ def _render_parlay_results(pool, leg_bets, parlay_type, game_label, sgp=False):
         leg_candidates = []
         for sc in leg_bets:
             if sc not in pool.columns:
-                leg_candidates.append([])
+                leg_candidates.append(pd.DataFrame())
                 continue
+
+            # Build the column list carefully:
+            # Always include the four base scores + GC variants if present.
+            # Never include sc twice — use a set then restore order.
+            base_cols = ['Batter','Team','Pitcher','Game',
+                         'total_hit_prob','p_1b','p_xb','p_hr','p_k','p_bb','vs Grade',
+                         'pitch_grade','Hit_Score','Single_Score','XB_Score','HR_Score',
+                         'PA','AVG']
+            # Add GC variants if they exist
+            for gc_col in ['Hit_Score_gc','Single_Score_gc','XB_Score_gc','HR_Score_gc']:
+                if gc_col in pool.columns and gc_col not in base_cols:
+                    base_cols.append(gc_col)
+            # Make sure the active score column is included exactly once
+            if sc not in base_cols:
+                base_cols.insert(4, sc)
+            # Remove any columns not in pool
+            safe_cols = [c for c in base_cols if c in pool.columns]
+
             per_game_best = (
                 pool.sort_values(sc, ascending=False)
                 .drop_duplicates(subset='Game')
-                [['Batter','Team','Pitcher','Game', sc,
-                  'total_hit_prob','p_1b','p_xb','p_hr','p_k','p_bb','vs Grade',
-                  'pitch_grade','Hit_Score','Single_Score','XB_Score','HR_Score',
-                  'PA','AVG']]
+                [safe_cols]
                 .head(12)
             )
             leg_candidates.append(per_game_best)
 
         # Build combos: one player per leg, all from different games
-        if any(len(lc) == 0 for lc in leg_candidates):
+        if any((isinstance(lc, pd.DataFrame) and lc.empty) or (not isinstance(lc, pd.DataFrame) and len(lc) == 0) for lc in leg_candidates):
             st.warning("Could not find enough candidates for this configuration.")
             return
 
@@ -1622,7 +1637,9 @@ def _render_parlay_results(pool, leg_bets, parlay_type, game_label, sgp=False):
             scores = []
             for batter, sc, cand_df in zip(combo, leg_bets, leg_candidates):
                 row = cand_df[cand_df['Batter'] == batter]
-                scores.append(float(row.iloc[0][sc]))
+                # Use .values[0] to guarantee scalar even if column appears multiple times
+                val = row[sc].values[0] if sc in row.columns else 0.0
+                scores.append(float(val))
             conf = len(scores) / sum(1/s for s in scores if s > 0) if all(s > 0 for s in scores) else 0
             if conf > best_conf:
                 best_conf  = conf
@@ -1653,7 +1670,8 @@ def _render_parlay_results(pool, leg_bets, parlay_type, game_label, sgp=False):
                 if row.empty or sc not in row.columns:
                     valid = False
                     break
-                scores.append(float(row.iloc[0][sc]))
+                val = row[sc].values[0]
+                scores.append(float(val))
             if not valid:
                 continue
             conf = len(scores) / sum(1/s for s in scores if s > 0) if all(s > 0 for s in scores) else 0
@@ -1714,45 +1732,49 @@ def _show_parlay_card(combo_batters, combo_scores, leg_bets, leg_candidates,
     leg_htmls = ""
 
     for i, (batter, sc, score) in enumerate(zip(combo_batters, leg_bets, combo_scores)):
-        # Find this player's full row
-        row = None
-        for cdf in leg_candidates:
-            m = cdf[cdf['Batter'] == batter] if cdf is not None and not cdf.empty else pd.DataFrame()
-            if not m.empty:
-                row = m.iloc[0]
-                break
-        if row is None:
-            m2 = pool[pool['Batter'] == batter]
-            row = m2.iloc[0] if not m2.empty else None
-
-        if row is None:
+        # Always look up the full row from pool (no duplicate columns, guaranteed clean)
+        m2 = pool[pool['Batter'] == batter]
+        if m2.empty:
             leg_htmls += f'<div class="parlay-leg"><div class="leg-num">Leg {i+1}</div><div class="leg-batter">{batter}</div><div class="leg-meta">Data unavailable</div></div>'
             continue
+        row = m2.iloc[0]
 
-        k_lg  = LG['league_k_avg']  - row['p_k']
-        bb_lg = LG['league_bb_avg'] - row['p_bb']
-        hr_lg = row['p_hr'] - LG['league_hr_avg']
+        def _safe(col, default=0.0):
+            """Safely extract a scalar from a row that may have been built from mixed sources."""
+            v = row.get(col, default)
+            if hasattr(v, '__len__') and not isinstance(v, str):
+                return float(v.iloc[0]) if len(v) > 0 else default
+            return float(v) if v is not None else default
+
+        k_lg  = LG['league_k_avg']  - _safe('p_k')
+        bb_lg = LG['league_bb_avg'] - _safe('p_bb')
+        hr_lg = _safe('p_hr') - LG['league_hr_avg']
         k_cls  = "pos-val" if k_lg  >= 0 else "neg-val"
         bb_cls = "pos-val" if bb_lg >= 0 else "neg-val"
         hr_cls = "pos-val" if hr_lg >= 0 else "neg-val"
         col    = score_css.get(sc, 'var(--accent)')
         lbl    = lbl_map.get(sc, sc)
         gph    = grade_pill(str(row.get('pitch_grade','B')))
-        hist_row = f'<div class="pcard-row"><span class="pk">Hist</span><span class="pv">{int(row["PA"])} PA · {row["AVG"]:.3f}</span></div>' if row['PA'] >= LG['hist_min_pa'] else ""
+        pa_val = _safe('PA')
+        hist_row = (
+            f'<div class="pcard-row"><span class="pk">Hist</span>'
+            f'<span class="pv">{int(pa_val)} PA · {_safe("AVG"):.3f}</span></div>'
+            if pa_val >= LG['hist_min_pa'] else ""
+        )
 
         leg_htmls += f"""
 <div class="parlay-leg">
   <div class="leg-num">Leg {i+1}</div>
   <div class="leg-batter">{batter}</div>
-  <div class="leg-meta">{row['Team']} vs {row['Pitcher']} {gph}</div>
+  <div class="leg-meta">{row.get('Team','?')} vs {row.get('Pitcher','?')} {gph}</div>
   <div class="leg-score" style="color:{col}">{lbl} &nbsp; {score:.1f}</div>
   <div style="margin-top:.45rem">
-    <div class="pcard-row"><span class="pk">Hit Prob</span><span class="pv">{row['total_hit_prob']:.1f}%</span></div>
-    <div class="pcard-row"><span class="pk">1B/XB/HR</span><span class="pv">{row['p_1b']:.1f}/{row['p_xb']:.1f}/{row['p_hr']:.1f}%</span></div>
-    <div class="pcard-row"><span class="pk">K%</span><span class="pv">{row['p_k']:.1f}% <span class="{k_cls}">({k_lg:+.1f})</span></span></div>
-    <div class="pcard-row"><span class="pk">BB%</span><span class="pv">{row['p_bb']:.1f}% <span class="{bb_cls}">({bb_lg:+.1f})</span></span></div>
+    <div class="pcard-row"><span class="pk">Hit Prob</span><span class="pv">{_safe('total_hit_prob'):.1f}%</span></div>
+    <div class="pcard-row"><span class="pk">1B/XB/HR</span><span class="pv">{_safe('p_1b'):.1f}/{_safe('p_xb'):.1f}/{_safe('p_hr'):.1f}%</span></div>
+    <div class="pcard-row"><span class="pk">K%</span><span class="pv">{_safe('p_k'):.1f}% <span class="{k_cls}">({k_lg:+.1f})</span></span></div>
+    <div class="pcard-row"><span class="pk">BB%</span><span class="pv">{_safe('p_bb'):.1f}% <span class="{bb_cls}">({bb_lg:+.1f})</span></span></div>
     <div class="pcard-row"><span class="pk">HR vs Lg</span><span class="pv {hr_cls}">{hr_lg:+.2f}%</span></div>
-    <div class="pcard-row"><span class="pk">vs Grade</span><span class="pv">{int(row['vs Grade'])}</span></div>
+    <div class="pcard-row"><span class="pk">vs Grade</span><span class="pv">{int(_safe('vs Grade'))}</span></div>
     {hist_row}
   </div>
 </div>"""
