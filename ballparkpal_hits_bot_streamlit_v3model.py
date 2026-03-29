@@ -1452,340 +1452,332 @@ def render_visualizations(df: pd.DataFrame, filtered_df: pd.DataFrame, score_col
             st.dataframe(ts, use_container_width=True, hide_index=True)
 
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# PARLAY BUILDER PAGE
+# PARLAY BUILDER  —  V2
 # ─────────────────────────────────────────────────────────────────────────────
+
+_SCORE_MAP  = {'🎯 Hit':'Hit_Score','1️⃣ Single':'Single_Score',
+               '🔥 XB (Double/Triple)':'XB_Score','💣 HR':'HR_Score'}
+_LBL_MAP    = {'Hit_Score':'🎯 Hit','Single_Score':'1️⃣ Single',
+               'XB_Score':'🔥 XB','HR_Score':'💣 HR'}
+_SCORE_CSS  = {'Hit_Score':'var(--hit)','Single_Score':'var(--single)',
+               'XB_Score':'var(--xb)','HR_Score':'var(--hr)'}
+
+# Bet-type-aware game condition weights: (hits20, hr4, runs10, k20, walks8)
+_GC_WEIGHTS = {
+    'Hit_Score':    (1.8, 0.4, 1.0, 1.5, 1.0),
+    'Single_Score': (1.8, 0.2, 1.0, 1.5, 1.0),
+    'XB_Score':     (1.2, 1.0, 1.0, 1.2, 1.0),
+    'HR_Score':     (0.4, 1.8, 1.0, 1.2, 1.0),
+}
+
+
+def _gc_adjusted_score(pool: pd.DataFrame, sc: str) -> pd.Series:
+    """Re-compute game-conditions adjustment with bet-type-aware weights."""
+    if sc not in pool.columns:
+        return pd.Series(50.0, index=pool.index)
+    gc_cols = ['gc_hr4','gc_hits20','gc_k20','gc_walks8','gc_runs10','gc_qs']
+    if not all(c in pool.columns for c in gc_cols):
+        return pool[sc]
+    base_sc = sc.replace('_gc','')
+    if base_sc not in pool.columns:
+        base_sc = sc
+    M, CAP = CONFIG['gc_max_mult'], CONFIG['gc_cap']
+    hits_w, hr4_w, runs_w, k_w, walk_w = _GC_WEIGHTS.get(base_sc, (1.0,1.0,1.0,1.0,1.0))
+    def _d(s, anchor, rng, direction=1):
+        return np.clip((s - anchor) / rng * M * direction, -M, M)
+    d_hits = _d(pool['gc_hits20'], CONFIG['gc_hits20_anchor'], 12.0, +1) * hits_w
+    d_hr4  = _d(pool['gc_hr4'],    CONFIG['gc_hr4_anchor'],   15.0, +1) * hr4_w
+    d_runs = _d(pool['gc_runs10'], CONFIG['gc_runs10_anchor'],20.0, +1) * runs_w
+    d_k    = _d(pool['gc_k20'],    CONFIG['gc_k20_anchor'],   20.0, -1) * k_w
+    d_walk = _d(pool['gc_walks8'], CONFIG['gc_walks8_anchor'],15.0, -1) * walk_w
+    d_qs   = _d(pool['gc_qs'],     CONFIG['gc_qs_anchor'],    15.0, -1)
+    combined = (d_hits + d_hr4 + d_runs + d_k + d_walk + d_qs).clip(-CAP, CAP)
+    raw = pool[base_sc] * (1 + combined)
+    mn, mx = raw.min(), raw.max()
+    if mx == mn:
+        return pd.Series(50.0, index=pool.index)
+    return ((raw - mn) / (mx - mn) * 100).round(1)
+
+
+def _build_all_combos(pool: pd.DataFrame, leg_bets: list, sgp: bool,
+                      locked: list, env_filter: bool) -> list:
+    """Build ALL valid combos ranked by harmonic mean confidence."""
+    legs = len(leg_bets)
+    if sgp:
+        primary_sc = leg_bets[0]
+        ranked     = pool.sort_values(primary_sc, ascending=False)
+        candidates = ranked['Batter'].unique().tolist()
+        if locked:
+            candidates = [p for p in locked if p in candidates] + [p for p in candidates if p not in locked]
+        all_combos_raw = list(itertools.combinations(candidates[:min(10, len(candidates))], legs))
+        leg_candidates = None
+    else:
+        leg_candidates = []
+        for sc in leg_bets:
+            if sc not in pool.columns:
+                return []
+            gc_sc = _gc_adjusted_score(pool, sc)
+            ps = pool.copy()
+            ps['_gc_adj'] = gc_sc.values
+            if locked:
+                ps['_locked'] = ps['Batter'].isin(locked).astype(int)
+                ps = ps.sort_values(['_locked','_gc_adj'], ascending=[False,False])
+            else:
+                ps = ps.sort_values('_gc_adj', ascending=False)
+            per_game = ps.drop_duplicates(subset='Game').head(12)
+            leg_candidates.append(per_game)
+        all_combos_raw = list(itertools.product(*[lc['Batter'].tolist() for lc in leg_candidates]))
+
+    ranked_combos = []
+    for combo in all_combos_raw:
+        if len(set(combo)) < legs:
+            continue
+        if not sgp:
+            games_in_combo = []
+            valid = True
+            for batter, cand in zip(combo, leg_candidates):
+                row = cand[cand['Batter'] == batter]
+                if row.empty:
+                    valid = False
+                    break
+                games_in_combo.append(row.iloc[0]['Game'])
+            if not valid or len(set(games_in_combo)) < legs:
+                continue
+        scores = []
+        valid  = True
+        for batter, sc in zip(combo, leg_bets):
+            row = pool[pool['Batter'] == batter]
+            if row.empty or sc not in row.columns:
+                valid = False
+                break
+            scores.append(float(row[sc].values[0]))
+        if not valid:
+            continue
+        conf = (len(scores) / sum(1/s for s in scores if s > 0)) if all(s > 0 for s in scores) else 0
+        ranked_combos.append((combo, scores, conf))
+
+    ranked_combos.sort(key=lambda x: x[2], reverse=True)
+    return ranked_combos
+
 
 def parlay_page(df: pd.DataFrame):
-    """
-    Parlay Builder — suggests best multi-leg combos based on scores.
-
-    Logic:
-    - Cross-game: picks top players from different games (independent events)
-    - SGP Stack:  picks top players from the SAME team in one game (offensive correlation)
-    - SGP Split:  picks players from BOTH teams in one game (high-scoring game needed)
-    - User chooses bet type per leg (or mixed)
-    - Confidence = harmonic mean of leg scores (penalises weak legs more than average)
-    """
     st.title("⚡ Parlay Builder")
     st.markdown(
-        '<div class="notice notice-info">ℹ️ This tool surfaces the best combinations based on scores. '
-        'A high score means stronger statistical foundation — it does NOT guarantee the outcome. '
-        'Parlay risk increases with each leg. Use as a research tool, not a guarantee.</div>',
+        '<div class="notice notice-info">ℹ️ Scores are a statistical foundation — not a guarantee. '
+        'Parlay risk compounds with each leg. Use as research, not a tip sheet.</div>',
         unsafe_allow_html=True
     )
-
     if df is None or df.empty:
-        st.error("No data loaded — go to the Predictor tab first.")
+        st.error("No data loaded.")
         return
 
-    # ── Settings ─────────────────────────────────────────────────────────────
-    col_set1, col_set2, col_set3, col_set4 = st.columns(4)
+    all_batters = sorted(df['Batter'].unique().tolist())
+    global_excl = st.session_state.get('excluded_players', [])
 
-    with col_set1:
-        parlay_type = st.selectbox(
-            "Parlay Type",
-            ["Cross-Game", "SGP — Stack (same team)", "SGP — Split (both teams)"]
+    with st.expander("🚫 Exclude Players (Parlay Builder)", expanded=False):
+        parlay_excl = st.multiselect(
+            "Exclude from parlay candidates",
+            options=all_batters,
+            default=global_excl,
+            help="These exclusions apply only inside the Parlay Builder.",
+            key="parlay_exclusions"
         )
+    pool = df[~df['Batter'].isin(parlay_excl)].copy()
 
-    with col_set2:
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        parlay_type = st.selectbox("Parlay Type",
+            ["Cross-Game", "SGP — Stack (same team)", "SGP — Split (both teams)"])
+    with c2:
         legs = st.selectbox("Number of Legs", [2, 3, 4], index=1)
-
-    with col_set3:
-        bet_mode = st.selectbox(
-            "Bet Mode",
-            ["Same bet on all legs", "Mixed — I'll choose per leg"]
-        )
-
-    with col_set4:
-        excl = st.session_state.get('excluded_players', [])
-        st.metric("Excluded Players", len(excl),
-                  help="Players excluded in the Predictor sidebar are also excluded here")
-
-    st.markdown("---")
-
-    # ── Bet type per leg ─────────────────────────────────────────────────────
-    score_map = {'🎯 Hit':'Hit_Score','1️⃣ Single':'Single_Score',
-                 '🔥 XB (Double/Triple)':'XB_Score','💣 HR':'HR_Score'}
-    score_cols_needed = []
+    with c3:
+        bet_mode = st.selectbox("Bet Mode",
+            ["Same bet on all legs", "Mixed — I'll choose per leg"])
+    with c4:
+        env_filter = st.toggle("🌦️ Weight Game Conditions", value=True,
+            help="Hit bets: 20+ Hits signal weighted 1.8×. HR bets: 4+ HR signal weighted 1.8×.")
 
     if bet_mode == "Same bet on all legs":
-        all_bet = st.selectbox("Bet Type (all legs)", list(score_map.keys()))
-        leg_bets = [score_map[all_bet]] * legs
+        all_bet  = st.selectbox("Bet Type (all legs)", list(_SCORE_MAP.keys()))
+        leg_bets = [_SCORE_MAP[all_bet]] * legs
     else:
         leg_cols = st.columns(legs)
         leg_bets = []
         for i, lc in enumerate(leg_cols):
             with lc:
-                choice = st.selectbox(f"Leg {i+1}", list(score_map.keys()), key=f"leg_bet_{i}")
-                leg_bets.append(score_map[choice])
+                choice = st.selectbox(f"Leg {i+1}", list(_SCORE_MAP.keys()), key=f"lb_{i}")
+                leg_bets.append(_SCORE_MAP[choice])
 
-    score_cols_needed = list(set(leg_bets))
+    with st.expander("🔒 Lock Players (anchor specific players)", expanded=False):
+        st.caption("Locked players are prioritised. Leave empty for fully automatic.")
+        max_lock = min(legs - 1, 2)
+        locked = st.multiselect(f"Lock up to {max_lock} player(s)", options=all_batters,
+                                max_selections=max_lock, key="parlay_locked") if max_lock > 0 else []
 
-    # ── Filter working pool ───────────────────────────────────────────────────
-    pool = df.copy()
-    if excl:
-        pool = pool[~pool['Batter'].isin(excl)]
+    st.markdown("---")
 
-    # ── SGP: pick a game ─────────────────────────────────────────────────────
-    if parlay_type.startswith("SGP"):
+    sgp = parlay_type.startswith("SGP")
+    chosen_game = None
+    if sgp:
         games = sorted(pool['Game'].unique().tolist())
         if not games:
             st.warning("No games available.")
             return
         chosen_game = st.selectbox("Select Game for SGP", games)
-        game_pool   = pool[pool['Game'] == chosen_game].copy()
-
+        game_pool = pool[pool['Game'] == chosen_game].copy()
         if parlay_type == "SGP — Stack (same team)":
-            # Pick best team in this game by average score of primary leg
             primary_sc = leg_bets[0]
             team_avg   = game_pool.groupby('Team')[primary_sc].mean()
-            best_team  = team_avg.idxmax()
-            sgp_pool   = game_pool[game_pool['Team'] == best_team].copy()
-        else:  # Split
+            sgp_pool   = game_pool[game_pool['Team'] == team_avg.idxmax()].copy()
+        else:
             sgp_pool = game_pool.copy()
-
-        _render_parlay_results(sgp_pool, leg_bets, parlay_type, chosen_game, sgp=True)
-
+        build_pool = sgp_pool
     else:
-        # Cross-game: top player per game per leg bet type
-        _render_parlay_results(pool, leg_bets, parlay_type, None, sgp=False)
+        build_pool = pool
 
+    cache_key = (f"parlay_{parlay_type}_{legs}_{'-'.join(leg_bets)}_{env_filter}_"
+                 f"{'-'.join(sorted(locked))}_{chosen_game or 'cg'}_{'-'.join(sorted(parlay_excl))}")
 
-def _render_parlay_results(pool, leg_bets, parlay_type, game_label, sgp=False):
-    """Core parlay combination logic and display."""
-
-    legs = len(leg_bets)
-    LG   = CONFIG
-
-    lbl_map = {'Hit_Score':'🎯 Hit','Single_Score':'1️⃣ Single',
-               'XB_Score':'🔥 XB','HR_Score':'💣 HR'}
-    score_css = {'Hit_Score':'var(--hit)','Single_Score':'var(--single)',
-                 'XB_Score':'var(--xb)','HR_Score':'var(--hr)'}
-
-    if sgp:
-        # For SGP: rank pool by primary bet, take top unique players
-        primary_sc = leg_bets[0]
-        ranked = pool.sort_values(primary_sc, ascending=False)
-        # Avoid same player for each leg if possible
-        candidates = ranked['Batter'].unique().tolist()
-        if len(candidates) < legs:
-            st.warning(f"⚠️ Only {len(candidates)} unique players in this game/team — need at least {legs}.")
-            return
-        # Build combos for SGP
-        all_combos = list(itertools.combinations(candidates[:min(8, len(candidates))], legs))
+    if st.session_state.get('parlay_cache_key') != cache_key:
+        combos = _build_all_combos(build_pool, leg_bets, sgp, locked, env_filter)
+        st.session_state['parlay_combos']    = combos
+        st.session_state['parlay_combo_idx'] = 0
+        st.session_state['parlay_cache_key'] = cache_key
     else:
-        # Cross-game: for each leg, get best player from a DIFFERENT game
-        games = pool['Game'].unique().tolist()
-        # Build per-leg candidate lists: top player per game
-        leg_candidates = []
-        for sc in leg_bets:
-            if sc not in pool.columns:
-                leg_candidates.append(pd.DataFrame())
-                continue
+        combos = st.session_state.get('parlay_combos', [])
 
-            # Build the column list carefully:
-            # Always include the four base scores + GC variants if present.
-            # Never include sc twice — use a set then restore order.
-            base_cols = ['Batter','Team','Pitcher','Game',
-                         'total_hit_prob','p_1b','p_xb','p_hr','p_k','p_bb','vs Grade',
-                         'pitch_grade','Hit_Score','Single_Score','XB_Score','HR_Score',
-                         'PA','AVG']
-            # Add GC variants if they exist
-            for gc_col in ['Hit_Score_gc','Single_Score_gc','XB_Score_gc','HR_Score_gc']:
-                if gc_col in pool.columns and gc_col not in base_cols:
-                    base_cols.append(gc_col)
-            # Make sure the active score column is included exactly once
-            if sc not in base_cols:
-                base_cols.insert(4, sc)
-            # Remove any columns not in pool
-            safe_cols = [c for c in base_cols if c in pool.columns]
-
-            per_game_best = (
-                pool.sort_values(sc, ascending=False)
-                .drop_duplicates(subset='Game')
-                [safe_cols]
-                .head(12)
-            )
-            leg_candidates.append(per_game_best)
-
-        # Build combos: one player per leg, all from different games
-        if any((isinstance(lc, pd.DataFrame) and lc.empty) or (not isinstance(lc, pd.DataFrame) and len(lc) == 0) for lc in leg_candidates):
-            st.warning("Could not find enough candidates for this configuration.")
-            return
-
-        # Find best combo: maximise harmonic mean of leg scores
-        best_combo  = None
-        best_conf   = -1
-        seen_batters = set()
-
-        for combo in itertools.product(*[lc['Batter'].tolist() for lc in leg_candidates]):
-            if len(set(combo)) < legs:  # no duplicates
-                continue
-            combo_games = []
-            valid = True
-            for batter, sc, cand_df in zip(combo, leg_bets, leg_candidates):
-                row = cand_df[cand_df['Batter'] == batter]
-                if row.empty:
-                    valid = False
-                    break
-                combo_games.append(row.iloc[0]['Game'])
-            if not valid:
-                continue
-            if len(set(combo_games)) < legs:  # enforce different games
-                continue
-            scores = []
-            for batter, sc, cand_df in zip(combo, leg_bets, leg_candidates):
-                row = cand_df[cand_df['Batter'] == batter]
-                # Use .values[0] to guarantee scalar even if column appears multiple times
-                val = row[sc].values[0] if sc in row.columns else 0.0
-                scores.append(float(val))
-            conf = len(scores) / sum(1/s for s in scores if s > 0) if all(s > 0 for s in scores) else 0
-            if conf > best_conf:
-                best_conf  = conf
-                best_combo = (combo, scores)
-
-        if best_combo is None:
-            st.warning("Could not build a valid combo with unique games for each leg.")
-            return
-
-        # Show result
-        combo_batters, combo_scores = best_combo
-        _show_parlay_card(combo_batters, combo_scores, leg_bets, leg_candidates,
-                          lbl_map, score_css, parlay_type, game_label, pool, sgp=False)
+    if not combos:
+        st.warning("⚠️ Could not build any valid combinations. Try relaxing exclusions or adding more games.")
         return
 
-    # SGP display
-    if sgp:
-        primary_sc = leg_bets[0]
-        ranked_full = pool.sort_values(primary_sc, ascending=False)
-        # Score all combos, pick best
-        best_combo  = None
-        best_conf   = -1
-        for combo in all_combos:
-            scores = []
-            valid  = True
-            for batter, sc in zip(combo, leg_bets):
-                row = ranked_full[ranked_full['Batter'] == batter]
-                if row.empty or sc not in row.columns:
-                    valid = False
-                    break
-                val = row[sc].values[0]
-                scores.append(float(val))
-            if not valid:
-                continue
-            conf = len(scores) / sum(1/s for s in scores if s > 0) if all(s > 0 for s in scores) else 0
-            if conf > best_conf:
-                best_conf  = conf
-                best_combo = (combo, scores)
+    total_combos = min(len(combos), 50)
+    idx = min(st.session_state.get('parlay_combo_idx', 0), total_combos - 1)
 
-        if best_combo is None:
-            st.warning("Could not build a valid SGP combination.")
-            return
+    nav_c1, nav_c2, nav_c3, nav_c4 = st.columns([2,1,1,2])
+    with nav_c1:
+        st.markdown(
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:.85rem;'
+            f'color:var(--muted);padding:.4rem 0">Combo {idx+1} of {total_combos}</div>',
+            unsafe_allow_html=True)
+    with nav_c2:
+        if st.button("◀ Prev", disabled=(idx == 0)):
+            st.session_state['parlay_combo_idx'] = max(0, idx - 1)
+            st.rerun()
+    with nav_c3:
+        if st.button("Next ▶", disabled=(idx >= total_combos - 1)):
+            st.session_state['parlay_combo_idx'] = min(total_combos - 1, idx + 1)
+            st.rerun()
+    with nav_c4:
+        if st.button("🎲 Random"):
+            import random
+            st.session_state['parlay_combo_idx'] = random.randint(0, total_combos - 1)
+            st.rerun()
 
-        combo_batters, combo_scores = best_combo
-        # Build fake leg_candidates for display
-        sgp_candidates = [ranked_full[['Batter','Team','Pitcher','Game',
-                           sc,'total_hit_prob','p_1b','p_xb','p_hr','p_k','p_bb',
-                           'vs Grade','pitch_grade','Hit_Score','Single_Score',
-                           'XB_Score','HR_Score','PA','AVG']] for sc in leg_bets]
-        _show_parlay_card(combo_batters, combo_scores, leg_bets, sgp_candidates,
-                          lbl_map, score_css, parlay_type, game_label, pool, sgp=True)
+    combo_batters, combo_scores, conf = combos[idx]
+    _show_parlay_card(combo_batters, combo_scores, leg_bets, conf,
+                      _LBL_MAP, _SCORE_CSS, parlay_type, chosen_game, pool, sgp, env_filter)
 
 
-def _show_parlay_card(combo_batters, combo_scores, leg_bets, leg_candidates,
-                      lbl_map, score_css, parlay_type, game_label, pool, sgp):
-    """Render the parlay card display."""
+def _show_parlay_card(combo_batters, combo_scores, leg_bets, conf,
+                      lbl_map, score_css, parlay_type, game_label, pool, sgp, env_filter):
+    """Render the parlay combo card."""
     LG   = CONFIG
     legs = len(combo_batters)
 
-    # Harmonic mean confidence
-    valid_scores = [s for s in combo_scores if s > 0]
-    conf = (len(valid_scores) / sum(1/s for s in valid_scores)) if valid_scores else 0
+    if not sgp:
+        player_games = [pool[pool['Batter']==b].iloc[0]['Game']
+                        for b in combo_batters if not pool[pool['Batter']==b].empty]
+        if len(player_games) != len(set(player_games)):
+            st.markdown(
+                '<div class="notice notice-warn">⚠️ <b>Correlation Warning</b> — '
+                'Two or more legs are from the same game. Outcomes are not fully independent.</div>',
+                unsafe_allow_html=True)
 
-    # Confidence label
-    if conf >= 70:
-        conf_lbl = "🟢 Strong Foundation"
-        conf_note = "All legs have solid statistical backing."
-    elif conf >= 50:
-        conf_lbl = "🟡 Moderate Foundation"
-        conf_note = "Most legs are solid; check weaker legs carefully."
-    else:
-        conf_lbl = "🔴 Weak Foundation"
-        conf_note = "One or more legs have limited statistical support."
-
-    # Summary card
+    conf_lbl, conf_note = (
+        ("🟢 Strong", "All legs have solid backing.") if conf >= 70 else
+        ("🟡 Moderate", "Most legs solid — check flagged legs.") if conf >= 50 else
+        ("🔴 Weak", "One or more legs have limited support.")
+    )
+    env_note = " · 🌦️ bet-type conditions weighted" if env_filter else ""
     st.markdown(f"""
 <div class="parlay-summary">
-  <div class="ps-title">{parlay_type} · {legs}-Leg Parlay{(' · ' + game_label) if game_label else ''}</div>
-  <div class="ps-conf">{conf:.1f} <span style="font-size:.8rem;color:var(--muted)">/ 100 confidence</span></div>
+  <div class="ps-title">{parlay_type} · {legs}-Leg{(' · ' + game_label) if game_label else ''}{env_note}</div>
+  <div class="ps-conf">{conf:.1f} <span style="font-size:.8rem;color:var(--muted)">/ 100</span></div>
   <div class="ps-sub">{conf_lbl} — {conf_note}</div>
-  <div class="ps-sub" style="margin-top:.3rem;font-size:.7rem">
-    Confidence = harmonic mean of leg scores. Penalises weak legs more than a simple average.
-    This is NOT a win probability.
-  </div>
-</div>
-""", unsafe_allow_html=True)
+  <div class="ps-sub" style="font-size:.7rem;margin-top:.2rem">Harmonic mean of leg scores. Weak legs penalised heavily. Not a win probability.</div>
+</div>""", unsafe_allow_html=True)
 
-    # Leg cards
-    st.markdown('<div class="parlay-grid">', unsafe_allow_html=True)
     leg_htmls = ""
+    clip_lines = []
 
     for i, (batter, sc, score) in enumerate(zip(combo_batters, leg_bets, combo_scores)):
-        # Always look up the full row from pool (no duplicate columns, guaranteed clean)
         m2 = pool[pool['Batter'] == batter]
         if m2.empty:
             leg_htmls += f'<div class="parlay-leg"><div class="leg-num">Leg {i+1}</div><div class="leg-batter">{batter}</div><div class="leg-meta">Data unavailable</div></div>'
             continue
         row = m2.iloc[0]
 
-        def _safe(col, default=0.0):
-            """Safely extract a scalar from a row that may have been built from mixed sources."""
+        def _s(col, default=0.0):
             v = row.get(col, default)
-            if hasattr(v, '__len__') and not isinstance(v, str):
-                return float(v.iloc[0]) if len(v) > 0 else default
-            return float(v) if v is not None else default
+            try:
+                return float(v)
+            except Exception:
+                return default
 
-        k_lg  = LG['league_k_avg']  - _safe('p_k')
-        bb_lg = LG['league_bb_avg'] - _safe('p_bb')
-        hr_lg = _safe('p_hr') - LG['league_hr_avg']
-        k_cls  = "pos-val" if k_lg  >= 0 else "neg-val"
-        bb_cls = "pos-val" if bb_lg >= 0 else "neg-val"
+        k_lg = LG['league_k_avg'] - _s('p_k')
+        hr_lg = _s('p_hr') - LG['league_hr_avg']
+        k_cls = "pos-val" if k_lg >= 0 else "neg-val"
         hr_cls = "pos-val" if hr_lg >= 0 else "neg-val"
-        col    = score_css.get(sc, 'var(--accent)')
-        lbl    = lbl_map.get(sc, sc)
-        gph    = grade_pill(str(row.get('pitch_grade','B')))
-        pa_val = _safe('PA')
-        hist_row = (
-            f'<div class="pcard-row"><span class="pk">Hist</span>'
-            f'<span class="pv">{int(pa_val)} PA · {_safe("AVG"):.3f}</span></div>'
-            if pa_val >= LG['hist_min_pa'] else ""
-        )
+        col_css = score_css.get(sc, 'var(--accent)')
+        lbl = lbl_map.get(sc, sc)
+        gph = grade_pill(str(row.get('pitch_grade','B')))
+        pa_val = _s('PA')
+        hist_row = (f'<div class="pcard-row"><span class="pk">Hist</span>' +
+                    f'<span class="pv">{int(pa_val)} PA · {_s("AVG"):.3f}</span></div>') if pa_val >= LG['hist_min_pa'] else ""
+
+        if score >= 70:
+            sbadge = '<span style="background:#052e16;color:#4ade80;padding:1px 6px;border-radius:10px;font-size:.65rem;font-weight:700">STRONG</span>'
+        elif score >= 50:
+            sbadge = '<span style="background:#1c1400;color:#fbbf24;padding:1px 6px;border-radius:10px;font-size:.65rem;font-weight:700">OK</span>'
+        else:
+            sbadge = '<span style="background:#1c0000;color:#f87171;padding:1px 6px;border-radius:10px;font-size:.65rem;font-weight:700">⚠️ WEAK</span>'
+
+        gc_adj = float(_gc_adjusted_score(pool, sc).loc[m2.index[0]])
+        cond_delta = gc_adj - _s(sc)
+        cond_str = ""
+        if env_filter and abs(cond_delta) >= 0.5:
+            cc = "var(--pos)" if cond_delta > 0 else "var(--neg)"
+            cond_str = f'<div class="pcard-row"><span class="pk">🌦️ Cond Δ</span><span class="pv" style="color:{cc}">{cond_delta:+.1f}</span></div>'
 
         leg_htmls += f"""
 <div class="parlay-leg">
-  <div class="leg-num">Leg {i+1}</div>
+  <div class="leg-num">Leg {i+1} {sbadge}</div>
   <div class="leg-batter">{batter}</div>
-  <div class="leg-meta">{row.get('Team','?')} vs {row.get('Pitcher','?')} {gph}</div>
-  <div class="leg-score" style="color:{col}">{lbl} &nbsp; {score:.1f}</div>
+  <div class="leg-meta">{row.get('Team','?')}) vs {row.get('Pitcher','?')} {gph}</div>
+  <div class="leg-score" style="color:{col_css}">{lbl} &nbsp; {score:.1f}</div>
   <div style="margin-top:.45rem">
-    <div class="pcard-row"><span class="pk">Hit Prob</span><span class="pv">{_safe('total_hit_prob'):.1f}%</span></div>
-    <div class="pcard-row"><span class="pk">1B/XB/HR</span><span class="pv">{_safe('p_1b'):.1f}/{_safe('p_xb'):.1f}/{_safe('p_hr'):.1f}%</span></div>
-    <div class="pcard-row"><span class="pk">K%</span><span class="pv">{_safe('p_k'):.1f}% <span class="{k_cls}">({k_lg:+.1f})</span></span></div>
-    <div class="pcard-row"><span class="pk">BB%</span><span class="pv">{_safe('p_bb'):.1f}% <span class="{bb_cls}">({bb_lg:+.1f})</span></span></div>
+    <div class="pcard-row"><span class="pk">Hit Prob</span><span class="pv">{_s('total_hit_prob'):.1f}%</span></div>
+    <div class="pcard-row"><span class="pk">1B/XB/HR</span><span class="pv">{_s('p_1b'):.1f}/{_s('p_xb'):.1f}/{_s('p_hr'):.1f}%</span></div>
+    <div class="pcard-row"><span class="pk">K%</span><span class="pv">{_s('p_k'):.1f}% <span class="{k_cls}">({k_lg:+.1f})</span></span></div>
     <div class="pcard-row"><span class="pk">HR vs Lg</span><span class="pv {hr_cls}">{hr_lg:+.2f}%</span></div>
-    <div class="pcard-row"><span class="pk">vs Grade</span><span class="pv">{int(_safe('vs Grade'))}</span></div>
-    {hist_row}
+    <div class="pcard-row"><span class="pk">vs Grade</span><span class="pv">{int(_s('vs Grade'))}</span></div>
+    {cond_str}{hist_row}
   </div>
 </div>"""
+        clip_lines.append(f"Leg {i+1}: {batter} ({row.get('Team','?')}) — {lbl} — Score {score:.1f}")
 
-    st.markdown(leg_htmls + '</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="parlay-grid">{leg_htmls}</div>', unsafe_allow_html=True)
 
-    # Game context panel
-    _render_context_panel(combo_batters, pool)
+    clip_text = "\n".join(clip_lines) + f"\nConfidence: {conf:.1f}/100"
+    st.download_button("📋 Export this Parlay (txt)", clip_text,
+                       file_name=f"parlay_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                       mime="text/plain", key=f"parlay_export_{hash(str(combo_batters))}")
+
+    _render_context_panel(list(combo_batters), pool)
 
 
-def _render_context_panel(batters, pool):
     """Show game conditions context for the parlay players."""
 
     gc_cols = ['gc_hr4','gc_hits20','gc_k20','gc_walks8','gc_runs10','gc_qs']
