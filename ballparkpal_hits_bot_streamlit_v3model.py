@@ -57,8 +57,15 @@ CONFIG = {
     'gc_walks8_anchor':     46.5,
     'gc_runs10_anchor':     28.4,
     'gc_qs_anchor':         21.5,
-    'gc_max_mult':           0.07,
-    'gc_cap':                0.12,
+    # ── Game conditions architecture ─────────────────────────────────────────
+    # Hit/Single/XB: game quality sets a ceiling (±40% range).
+    # HR: expanded multiplier ±35%, 4+HR as primary (1.8× weight).
+    # Toggle OFF = 30% of full weight — environment always informs even when "off".
+    'gc_hit_max_range':      0.40,   # ceiling for Hit/Single/XB
+    'gc_hr_max_range':       0.35,   # ceiling for HR
+    'gc_reduced_strength':   0.30,   # Toggle OFF = 30% of full weight
+    'gc_max_mult':           0.40,   # kept for parlay _gc_adjusted_score
+    'gc_cap':                0.40,   # kept for parlay _gc_adjusted_score
     # ── Cache ─────────────────────────────────────────────────────────────────
     'cache_ttl':           900,     # 15 min
     # ── Historical tiebreaker ─────────────────────────────────────────────────
@@ -628,62 +635,81 @@ def merge_game_conditions(df: pd.DataFrame, game_cond, pitcher_qs) -> pd.DataFra
     return df
 
 
-def compute_game_condition_scores(df: pd.DataFrame) -> pd.DataFrame:
+def compute_game_condition_scores(df: pd.DataFrame, use_gc: bool = True) -> pd.DataFrame:
     """
     Compute game-conditions-adjusted score variants (*_gc columns).
 
-    Hybrid approach — each condition affects only the scores it's relevant to:
-      gc_hr4    → HR Score only    (power-friendly game)
-      gc_hits20 → Hit/Single/XB   (contact-friendly game)
-      gc_runs10 → all four scores  (high-run game = everyone benefits)
-      gc_k20    → all four (drag)  (K-heavy = pitching dominant)
-      gc_walks8 → all four (drag)  (walk-heavy = fewer hit ABs)
-      gc_qs     → all four (drag)  (dominant starting pitcher)
+    Architecture (V4.3):
+    ────────────────────
+    Hit / Single / XB  — CEILING approach (±40% range)
+      The game environment is the most complete signal about how this game will go —
+      it captures relievers, late-inning matchups, and full-game context that starter
+      stats cannot. Game conditions set a ceiling on how good any individual matchup
+      can realistically be today.
 
-    All multipliers: linear interpolation from neutral anchor, capped ±gc_max_mult each,
-    combined total capped ±gc_cap so stacking can't run wild.
+      Signal weights (relative importance for contact bets):
+        20+ Hits Prob  ×1.8  — primary: are hitters getting on base across the game?
+        20+ Ks Prob    ×1.5  — primary drag: dominant pitching all game
+        10+ Runs Prob  ×1.0  — supporting: high-run environment
+        8+ Walks Prob  ×0.8  — mild drag: walk-heavy games waste plate appearances
+        QS%            ×1.0  — drag: quality start = starter pitching deep = hard to hit
+
+    HR — EXPANDED MULTIPLIER approach (±35% range)
+      Power is more individually driven, but game environment still matters significantly.
+      4+ HR Prob is the primary signal (1.8×) since that directly captures the park and
+      atmospheric conditions for home runs on this day.
+
+    Toggle OFF = 30% of full weight (not zero).
+      The game environment always provides real information — relievers, late-game context.
+      Turning it "off" reduces its influence to a whisper rather than silence.
     """
     df = df.copy()
-    M   = CONFIG['gc_max_mult']   # ±7% per condition
-    CAP = CONFIG['gc_cap']        # ±12% combined cap
+    gc_cols = ['gc_hr4','gc_hits20','gc_k20','gc_walks8','gc_runs10','gc_qs']
+    has_gc  = all(c in df.columns for c in gc_cols)
 
-    def _mult(series, anchor, rng, direction=1):
-        """Linear multiplier: neutral at anchor, ±M at anchor±rng."""
-        return np.clip((series - anchor) / rng * M * direction, -M, M)
+    if not has_gc:
+        # No game condition data — return base scores as GC scores (neutral)
+        for sc in ['Hit_Score','Single_Score','XB_Score','HR_Score']:
+            df[sc + '_gc'] = df[sc]
+        return df
 
-    # ── Individual condition deltas ────────────────────────────────────────────
-    # Positive delta = boost, negative = drag
-    d_hr4    = _mult(df['gc_hr4'],    CONFIG['gc_hr4_anchor'],    15.0,  +1)  # high = good for HR
-    d_hits20 = _mult(df['gc_hits20'], CONFIG['gc_hits20_anchor'], 12.0,  +1)  # high = good for hits
-    d_runs10 = _mult(df['gc_runs10'], CONFIG['gc_runs10_anchor'], 20.0,  +1)  # high = good all
-    d_k20    = _mult(df['gc_k20'],    CONFIG['gc_k20_anchor'],    20.0,  -1)  # high = bad all
-    d_walks8 = _mult(df['gc_walks8'], CONFIG['gc_walks8_anchor'], 15.0,  -1)  # high = bad all
-    d_qs     = _mult(df['gc_qs'],     CONFIG['gc_qs_anchor'],     15.0,  -1)  # high = bad all
+    # Strength multiplier: full weight when ON, 30% when OFF
+    strength = 1.0 if use_gc else CONFIG['gc_reduced_strength']
 
-    # ── Compose per-score multipliers and apply combined cap ───────────────────
-    def _apply_gc(base_scores_raw, score_col, conditions_delta):
-        """
-        Apply combined game conditions delta to already-normalised scores.
-        We re-scale: score_gc = score * (1 + combined_delta)
-        Then renormalise to 0–100.
-        """
-        combined = np.clip(conditions_delta.sum(axis=1), -CAP, CAP)
-        adjusted = df[score_col] * (1 + combined)
-        return normalize_0_100(adjusted)
+    hits_a = CONFIG['gc_hits20_anchor']   # 18.6
+    k_a    = CONFIG['gc_k20_anchor']      # 23.3
+    runs_a = CONFIG['gc_runs10_anchor']   # 28.4
+    walk_a = CONFIG['gc_walks8_anchor']   # 46.5
+    hr4_a  = CONFIG['gc_hr4_anchor']      # 12.2
+    qs_a   = CONFIG['gc_qs_anchor']       # 21.5
 
-    # Hit Score: hits20 + runs10 + k20 + walks8 + qs (not hr4)
-    hit_cond = pd.DataFrame({'h': d_hits20, 'r': d_runs10, 'k': d_k20, 'w': d_walks8, 'q': d_qs})
-    df['Hit_Score_gc'] = _apply_gc(None, 'Hit_Score', hit_cond)
+    # ── Hit / Single / XB ceiling signals (weighted) ──────────────────────────
+    hits_sig = (df['gc_hits20'] - hits_a) / 15.0 * 1.8
+    k_sig    = -(df['gc_k20']   - k_a)   / 20.0 * 1.5   # invert: high K = drag
+    runs_sig = (df['gc_runs10'] - runs_a) / 20.0 * 1.0
+    walk_sig = -(df['gc_walks8']- walk_a) / 15.0 * 0.8
+    qs_sig   = -(df['gc_qs']    - qs_a)  / 20.0 * 1.0
 
-    # Single Score: same as Hit (hits20 is the key signal; power-game conditions don't apply)
-    df['Single_Score_gc'] = _apply_gc(None, 'Single_Score', hit_cond)
+    hit_combined = (hits_sig + k_sig + runs_sig + walk_sig + qs_sig) * strength
+    HIT_MAX = CONFIG['gc_hit_max_range']   # 0.40
+    hit_ceiling_mult = (1.0 + hit_combined.clip(-HIT_MAX, HIT_MAX))
 
-    # XB Score: hits20 + runs10 + k20 + walks8 + qs
-    df['XB_Score_gc'] = _apply_gc(None, 'XB_Score', hit_cond)
+    df['Hit_Score_gc']    = normalize_0_100(df['Hit_Score']    * hit_ceiling_mult)
+    df['Single_Score_gc'] = normalize_0_100(df['Single_Score'] * hit_ceiling_mult)
+    df['XB_Score_gc']     = normalize_0_100(df['XB_Score']     * hit_ceiling_mult)
 
-    # HR Score: hr4 + runs10 + k20 + walks8 + qs (hits20 NOT included — contact env ≠ HR env)
-    hr_cond = pd.DataFrame({'h': d_hr4, 'r': d_runs10, 'k': d_k20, 'w': d_walks8, 'q': d_qs})
-    df['HR_Score_gc'] = _apply_gc(None, 'HR_Score', hr_cond)
+    # ── HR ceiling signals ─────────────────────────────────────────────────────
+    hr4_sig   = (df['gc_hr4']    - hr4_a) / 15.0 * 1.8   # primary
+    hr_k_sig  = -(df['gc_k20']  - k_a)   / 20.0 * 1.2
+    hr_r_sig  = (df['gc_runs10']- runs_a) / 20.0 * 0.8
+    hr_w_sig  = -(df['gc_walks8']-walk_a) / 15.0 * 0.8
+    hr_qs_sig = -(df['gc_qs']   - qs_a)  / 20.0 * 0.8
+
+    hr_combined = (hr4_sig + hr_k_sig + hr_r_sig + hr_w_sig + hr_qs_sig) * strength
+    HR_MAX = CONFIG['gc_hr_max_range']   # 0.35
+    hr_ceiling_mult = (1.0 + hr_combined.clip(-HR_MAX, HR_MAX))
+
+    df['HR_Score_gc'] = normalize_0_100(df['HR_Score'] * hr_ceiling_mult)
 
     return df
 
@@ -829,17 +855,15 @@ def build_filters(df: pd.DataFrame) -> dict:
 
     st.sidebar.markdown("### 🌦️ Game Conditions")
     filters['use_gc'] = st.sidebar.toggle(
-        "Apply Game Conditions",
-        value=False,
+        "🌦️ Game Conditions (Full Weight)",
+        value=True,
         help=(
-            "ON → Applies game-level multipliers from BallPark Pal game props:\n"
-            "• 4+ HR Prob boosts HR Score\n"
-            "• 20+ Hits Prob boosts Hit/Single/XB Scores\n"
-            "• 10+ Runs Prob mild boost all scores\n"
-            "• 20+ Ks Prob mild drag all scores\n"
-            "• 8+ Walks Prob mild drag all scores\n"
-            "• QS% mild drag all scores\n"
-            "Max effect ±12% combined. Requires game CSVs in repo."
+            "ON → Full game-environment ceiling applied (±40% Hit/Single/XB, ±35% HR).\n"
+            "Game conditions capture the WHOLE game — relievers, late innings, full context.\n"
+            "High 20+K game buries contact hitters. High 4+HR game lifts power hitters.\n"
+            "Yoshida in Red Sox@Reds (51.6% K chance): 91 → ~39 with conditions ON.\n\n"
+            "OFF → 30% of full weight applied (not zero). The game environment always\n"
+            "provides real information — this just reduces its influence."
         )
     )
     if filters['use_gc']:
@@ -1464,7 +1488,7 @@ _LBL_MAP    = {'Hit_Score':'🎯 Hit','Single_Score':'1️⃣ Single',
 _SCORE_CSS  = {'Hit_Score':'var(--hit)','Single_Score':'var(--single)',
                'XB_Score':'var(--xb)','HR_Score':'var(--hr)'}
 
-# Bet-type-aware game condition weights: (hits20, hr4, runs10, k20, walks8)
+# _GC_WEIGHTS kept for reference — actual ceiling logic now in _gc_adjusted_score below
 _GC_WEIGHTS = {
     'Hit_Score':    (1.8, 0.4, 1.0, 1.5, 1.0),
     'Single_Score': (1.8, 0.2, 1.0, 1.5, 1.0),
@@ -1473,28 +1497,66 @@ _GC_WEIGHTS = {
 }
 
 
-def _gc_adjusted_score(pool: pd.DataFrame, sc: str) -> pd.Series:
-    """Re-compute game-conditions adjustment with bet-type-aware weights."""
-    if sc not in pool.columns:
-        return pd.Series(50.0, index=pool.index)
-    gc_cols = ['gc_hr4','gc_hits20','gc_k20','gc_walks8','gc_runs10','gc_qs']
-    if not all(c in pool.columns for c in gc_cols):
-        return pool[sc]
-    base_sc = sc.replace('_gc','')
+def _gc_adjusted_score(pool: pd.DataFrame, sc: str, use_gc: bool = True) -> pd.Series:
+    """
+    Return a game-conditions-adjusted score Series for a given score column.
+
+    Uses the SAME ceiling architecture as compute_game_condition_scores:
+      Hit/Single/XB → ±40% ceiling (hits20 ×1.8, k20 ×1.5 primary signals)
+      HR            → ±35% ceiling (hr4 ×1.8 primary signal)
+      Toggle OFF    → 30% of full weight
+
+    This keeps parlay candidate ranking and the main Predictor in sync —
+    the same player that gets buried in the Predictor (e.g. Yoshida at 39)
+    also gets ranked low in parlay candidate selection.
+
+    If the pool already contains *_gc columns from compute_game_condition_scores,
+    just return those directly — no need to recompute.
+    """
+    base_sc = sc.replace('_gc', '')
+    gc_col  = base_sc + '_gc'
+
+    # Fast path: GC scores already computed on this pool
+    if gc_col in pool.columns:
+        return pool[gc_col]
+
     if base_sc not in pool.columns:
-        base_sc = sc
-    M, CAP = CONFIG['gc_max_mult'], CONFIG['gc_cap']
-    hits_w, hr4_w, runs_w, k_w, walk_w = _GC_WEIGHTS.get(base_sc, (1.0,1.0,1.0,1.0,1.0))
-    def _d(s, anchor, rng, direction=1):
-        return np.clip((s - anchor) / rng * M * direction, -M, M)
-    d_hits = _d(pool['gc_hits20'], CONFIG['gc_hits20_anchor'], 12.0, +1) * hits_w
-    d_hr4  = _d(pool['gc_hr4'],    CONFIG['gc_hr4_anchor'],   15.0, +1) * hr4_w
-    d_runs = _d(pool['gc_runs10'], CONFIG['gc_runs10_anchor'],20.0, +1) * runs_w
-    d_k    = _d(pool['gc_k20'],    CONFIG['gc_k20_anchor'],   20.0, -1) * k_w
-    d_walk = _d(pool['gc_walks8'], CONFIG['gc_walks8_anchor'],15.0, -1) * walk_w
-    d_qs   = _d(pool['gc_qs'],     CONFIG['gc_qs_anchor'],    15.0, -1)
-    combined = (d_hits + d_hr4 + d_runs + d_k + d_walk + d_qs).clip(-CAP, CAP)
-    raw = pool[base_sc] * (1 + combined)
+        return pd.Series(50.0, index=pool.index)
+
+    gc_cols = ['gc_hr4', 'gc_hits20', 'gc_k20', 'gc_walks8', 'gc_runs10', 'gc_qs']
+    if not all(c in pool.columns for c in gc_cols):
+        # No game condition data — return base score unchanged
+        return pool[base_sc]
+
+    strength = 1.0 if use_gc else CONFIG['gc_reduced_strength']
+
+    hits_a = CONFIG['gc_hits20_anchor']
+    k_a    = CONFIG['gc_k20_anchor']
+    runs_a = CONFIG['gc_runs10_anchor']
+    walk_a = CONFIG['gc_walks8_anchor']
+    hr4_a  = CONFIG['gc_hr4_anchor']
+    qs_a   = CONFIG['gc_qs_anchor']
+
+    if base_sc == 'HR_Score':
+        hr4_sig  = (pool['gc_hr4']    - hr4_a) / 15.0 * 1.8
+        k_sig    = -(pool['gc_k20']   - k_a)   / 20.0 * 1.2
+        runs_sig = (pool['gc_runs10'] - runs_a) / 20.0 * 0.8
+        walk_sig = -(pool['gc_walks8']- walk_a) / 15.0 * 0.8
+        qs_sig   = -(pool['gc_qs']    - qs_a)  / 20.0 * 0.8
+        combined = (hr4_sig + k_sig + runs_sig + walk_sig + qs_sig) * strength
+        MAX = CONFIG['gc_hr_max_range']
+    else:
+        # Hit / Single / XB
+        hits_sig = (pool['gc_hits20'] - hits_a) / 15.0 * 1.8
+        k_sig    = -(pool['gc_k20']   - k_a)   / 20.0 * 1.5
+        runs_sig = (pool['gc_runs10'] - runs_a) / 20.0 * 1.0
+        walk_sig = -(pool['gc_walks8']- walk_a) / 15.0 * 0.8
+        qs_sig   = -(pool['gc_qs']    - qs_a)  / 20.0 * 1.0
+        combined = (hits_sig + k_sig + runs_sig + walk_sig + qs_sig) * strength
+        MAX = CONFIG['gc_hit_max_range']
+
+    ceiling_mult = (1.0 + combined.clip(-MAX, MAX))
+    raw = pool[base_sc] * ceiling_mult
     mn, mx = raw.min(), raw.max()
     if mx == mn:
         return pd.Series(50.0, index=pool.index)
@@ -1518,7 +1580,7 @@ def _build_all_combos(pool: pd.DataFrame, leg_bets: list, sgp: bool,
         for sc in leg_bets:
             if sc not in pool.columns:
                 return []
-            gc_sc = _gc_adjusted_score(pool, sc)
+            gc_sc = _gc_adjusted_score(pool, sc, use_gc=env_filter)
             ps = pool.copy()
             ps['_gc_adj'] = gc_sc.values
             if locked:
@@ -1744,7 +1806,7 @@ def _show_parlay_card(combo_batters, combo_scores, leg_bets, conf,
         else:
             sbadge = '<span style="background:#1c0000;color:#f87171;padding:1px 6px;border-radius:10px;font-size:.65rem;font-weight:700">⚠️ WEAK</span>'
 
-        gc_adj = float(_gc_adjusted_score(pool, sc).loc[m2.index[0]])
+        gc_adj = float(_gc_adjusted_score(pool, sc, use_gc=env_filter).loc[m2.index[0]])
         cond_delta = gc_adj - _s(sc)
         cond_str = ""
         if env_filter and abs(cond_delta) >= 0.5:
@@ -2120,7 +2182,7 @@ def main_page():
     df       = merge_game_conditions(df, game_cond, qs_df)
 
     # Compute GC score variants (*_gc columns) — always computed, only activated by toggle
-    df       = compute_game_condition_scores(df)
+    df       = compute_game_condition_scores(df, use_gc=filters.get('use_gc', True))
 
     # When GC toggle is ON, use _gc score for sorting/filtering
     if filters.get('use_gc', False):
@@ -2215,7 +2277,7 @@ def main():
             df = merge_pitcher_data(df, pitcher_df)
             df = compute_scores(df)
             df = merge_game_conditions(df, game_cond, qs_df)
-            df = compute_game_condition_scores(df)
+            df = compute_game_condition_scores(df, use_gc=True)
             excl = st.session_state.get('excluded_players', [])
             if excl:
                 df = df[~df['Batter'].isin(excl)]
