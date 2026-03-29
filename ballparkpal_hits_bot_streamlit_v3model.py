@@ -1778,6 +1778,7 @@ def _show_parlay_card(combo_batters, combo_scores, leg_bets, conf,
     _render_context_panel(list(combo_batters), pool)
 
 
+def _render_context_panel(batters, pool):
     """Show game conditions context for the parlay players."""
 
     gc_cols = ['gc_hr4','gc_hits20','gc_k20','gc_walks8','gc_runs10','gc_qs']
