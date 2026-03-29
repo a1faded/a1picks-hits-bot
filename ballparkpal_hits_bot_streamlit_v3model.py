@@ -54,7 +54,7 @@ st.set_page_config(
 # ─────────────────────────────────────────────────────────────────────────────
 
 CONFIG = {
-    'matchups_url':       'https://a1ballparkpal.tiiny.site/Matchups.csv',
+    'matchups_url':       'https://github.com/a1faded/a1picks-hits-bot/raw/main/Matchups.csv',
     'pitcher_hits_url':   'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_hits.csv',
     'pitcher_hrs_url':    'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_hrs.csv',
     'pitcher_walks_url':  'https://github.com/a1faded/a1picks-hits-bot/raw/main/pitcher_walks.csv',
