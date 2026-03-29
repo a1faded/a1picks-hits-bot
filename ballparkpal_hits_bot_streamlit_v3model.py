@@ -963,12 +963,18 @@ def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     if filters['min_vs'] > -10:
         out = out[pd.to_numeric(out['vs Grade'], errors='coerce').fillna(-10) >= filters['min_vs']]
 
-    sc = filters['score_col']
+    # Use GC score column if available, fall back to base score
+    sc     = filters['score_col']
+    sc_eff = sc if sc in out.columns else filters.get('score_col_base', sc)
+
     if filters.get('best_per_team') and not out.empty:
-        out = out.loc[out.groupby('Team')[sc].idxmax()].copy()
+        out = out.loc[out.groupby('Team')[sc_eff].idxmax()].copy()
         st.info(f"🏟️ Best player from each of {len(out)} teams")
 
     sc_s = filters['sort_col']
+    # If sort column is a _gc variant that doesn't exist, fall back to base
+    if sc_s not in out.columns:
+        sc_s = sc_s.replace('_gc', '') if sc_s.endswith('_gc') else sc_s
     if sc_s in out.columns:
         out[sc_s] = pd.to_numeric(out[sc_s], errors='coerce')
         out = out.sort_values(sc_s, ascending=filters['sort_asc'], na_position='last')
@@ -2198,11 +2204,14 @@ def main_page():
     # Compute GC score variants (*_gc columns) — always computed, only activated by toggle
     df       = compute_game_condition_scores(df, use_gc=filters.get('use_gc', True))
 
-    # When GC toggle is ON, use _gc score for sorting/filtering
+    # When GC toggle is ON, use _gc score for sorting/filtering/ranking
     if filters.get('use_gc', False):
         gc_col = filters['score_col'] + '_gc'
         if gc_col in df.columns:
             filters['score_col'] = gc_col
+            # If user is sorting by Score, upgrade sort column to GC variant too
+            if filters.get('sort_col') == filters.get('score_col_base'):
+                filters['sort_col'] = gc_col
 
     slate_df = get_slate_df(df, filters)
 
