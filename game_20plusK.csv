@@ -1,16 +1,17 @@
-Time,Park,Prob
-7:40,Rate Field,45.80%
-9:38,Angel Stadium,43.60%
-6:40,PNC Park,39.60%
-1:10,Progressive Field,32.80%
-4:10,Petco Park,32.70%
-9:05,Las Vegas Ballpark,29.00%
-7:10,Citi Field,25.90%
-7:07,Rogers Centre,19.50%
-6:35,Oriole Park,17.90%
-6:40,Comerica Park,13.10%
-3:45,Oracle Park,12.20%
-1:10,Tropicana Field,10.90%
-8:40,Coors Field,10.20%
-6:40,LoanDepot Park,4.90%
-7:40,Kauffman Stadium,2.20%
+Team,Name,Park,Prob
+SEA,Bryan Woo,BAL,22.80%
+BAL,Kyle Bradish,BAL,22.40%
+NYM,Christian Scott,NYM,22.40%
+CHW,Anthony Kay,CHW,8.20%
+STL,Hunter Dobbins,NYM,8.00%
+PIT,Mitch Keller,PIT,7.70%
+MIN,Zebby Matthews,DET,7.20%
+CHC,Edward Cabrera,COL,6.80%
+ATL,Martin Perez,CHW,6.50%
+LAD,Justin Wrobleski,PIT,6.40%
+KC,Michael Wacha,KC,5.90%
+MIA,Tyler Phillips,MIA,4.80%
+DET,Keider Montero,DET,3.20%
+COL,Ryan Feltner,COL,2.50%
+TEX,Kumar Rocker,KC,2.30%
+ARI,Merrill Kelly,MIA,1.10%
