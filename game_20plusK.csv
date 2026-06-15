@@ -1,17 +1,11 @@
-Team,Name,Park,Prob
-SEA,Bryan Woo,BAL,22.80%
-BAL,Kyle Bradish,BAL,22.40%
-NYM,Christian Scott,NYM,22.40%
-CHW,Anthony Kay,CHW,8.20%
-STL,Hunter Dobbins,NYM,8.00%
-PIT,Mitch Keller,PIT,7.70%
-MIN,Zebby Matthews,DET,7.20%
-CHC,Edward Cabrera,COL,6.80%
-ATL,Martin Perez,CHW,6.50%
-LAD,Justin Wrobleski,PIT,6.40%
-KC,Michael Wacha,KC,5.90%
-MIA,Tyler Phillips,MIA,4.80%
-DET,Keider Montero,DET,3.20%
-COL,Ryan Feltner,COL,2.50%
-TEX,Kumar Rocker,KC,2.30%
-ARI,Merrill Kelly,MIA,1.10%
+Time,Park,,Prob
+07:10:00 AM,Great American BP,,51.70%
+09:40:00 AM,Sutter Health Park,,30.30%
+06:40:00 AM,Citizens Bank Park,,29.10%
+08:10:00 AM,Daikin Park,,27.00%
+09:40:00 AM,Chase Field,,15.60%
+08:05:00 AM,Wrigley Field,,13.60%
+08:05:00 AM,Globe Life Field,,12.20%
+06:45:00 AM,Nationals Park,,6.50%
+07:45:00 AM,Busch Stadium,,6.40%
+10:10:00 AM,Dodger Stadium,,5.70%
