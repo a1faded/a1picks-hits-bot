@@ -1,11 +1,14 @@
-Time,Park,,Prob
-07:10:00 AM,Great American BP,,51.70%
-09:40:00 AM,Sutter Health Park,,30.30%
-06:40:00 AM,Citizens Bank Park,,29.10%
-08:10:00 AM,Daikin Park,,27.00%
-09:40:00 AM,Chase Field,,15.60%
-08:05:00 AM,Wrigley Field,,13.60%
-08:05:00 AM,Globe Life Field,,12.20%
-06:45:00 AM,Nationals Park,,6.50%
-07:45:00 AM,Busch Stadium,,6.40%
-10:10:00 AM,Dodger Stadium,,5.70%
+Time,Park,Prob
+7:40,Rate Field,49.70%
+7:07,Rogers Centre,49.70%
+9:38,Angel Stadium,47.50%
+7:10,Great American BP,39.00%
+7:10,Citi Field,28.20%
+6:40,Tropicana Field,22.80%
+6:45,Nationals Park,21.50%
+6:10,Comerica Park,18.40%
+10:10,Petco Park,16.70%
+7:40,Target Field,16.00%
+06:40:00 AM,LoanDepot Park,6.70%
+08:40:00 AM,Coors Field,3.90%
+07:45:00 AM,Busch Stadium,1.30%
